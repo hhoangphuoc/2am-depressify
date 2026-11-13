@@ -10,6 +10,10 @@ A wellbeing companion that helps a person stay well at home after depression tre
 A person who has finished TMS treatment and uses the app day to day.
 _Avoid_: User, client
 
+**Demo Patient**:
+A Patient that exists only for testing and demos, whose Signals and history are synthetic.
+_Avoid_: Test account, fake user, mock
+
 **Clinician**:
 A care professional who follows the progress of the Patients linked to them.
 _Avoid_: Doctor, therapist, admin
@@ -17,6 +21,10 @@ _Avoid_: Doctor, therapist, admin
 **Companion**:
 The AI the Patient talks with. It supports and suggests; it never diagnoses or advises on treatment.
 _Avoid_: Voice agent, bot, assistant, therapist
+
+**Visit**:
+An appointment between a Patient and their Clinician. The product exists for the time between Visits.
+_Avoid_: Session, treatment session, appointment
 
 ### Sensing
 
