@@ -70,3 +70,7 @@ tmp/
 # --- Generated media (Gemini outputs, recordings) ---
 generated/
 outputs/
+
+# --- Local-only: Claude Code project config and design prompts ---
+.claude/
+docs/design/
