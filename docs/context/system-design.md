@@ -313,5 +313,5 @@ Stretch: on-phone voice analysis, HealthKit, late-night screen time if not alrea
 - Gemini's terms forbid clinical use; a real product needs a provider or legal review that allows it.
 - Whether wellbeing Suggestions fit the permitted uses of Maps data on a Finnish billing account is a legal reading we have not made.
 - Google permission for Calendar in test mode is limited to 100 listed users.
-- The implementation plan in PR #2 targets an Android-only app with Firebase AI Logic and needs rewriting against this design.
+- The build is broken into tasks in the [implementation plan](../plans/implementation-plan.md). It decides and shows Nudges on the phone, so it does not use Cloud Messaging.
 - Not yet chosen: the Firestore region, the mock crisis number, and the wording of Consent screens.
