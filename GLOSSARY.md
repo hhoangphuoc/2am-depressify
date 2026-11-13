@@ -26,6 +26,10 @@ _Avoid_: Voice agent, bot, assistant, therapist
 An appointment between a Patient and their Clinician. The product exists for the time between Visits.
 _Avoid_: Session, treatment session, appointment
 
+**Phase**:
+The stretch of time between two Visits, or between the end of TMS and the first Visit. Progress is read Phase by Phase.
+_Avoid_: Stage, period, cycle
+
 ### Sensing
 
 **Signal**:
@@ -35,6 +39,14 @@ _Avoid_: Stimuli, metric, data point
 **Context**:
 The current picture of a Patient built from their Signals, Intake and past Check-ins.
 _Avoid_: Profile, state
+
+**Baseline**:
+A Patient's own typical value for a Signal over the previous two weeks. A Signal is only ever compared with that Patient's Baseline.
+_Avoid_: Normal range, average, target
+
+**Brief**:
+The part of the Context given to the Companion at the start of a Check-in.
+_Avoid_: Prompt, memory, preliminary context
 
 **Intake**:
 The clinical report that describes a Patient at the start, supplied once.
