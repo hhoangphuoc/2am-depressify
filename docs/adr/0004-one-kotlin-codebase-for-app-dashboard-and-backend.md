@@ -1,5 +1,7 @@
 # One Kotlin codebase for the patient app, clinician dashboard and backend
 
+Status: superseded by [ADR 0008](0008-firebase-backend-and-plain-web-dashboard.md). The Patient app stays Kotlin Multiplatform; the backend and dashboard do not.
+
 The Patient app (Android and iOS), the Clinician dashboard (web) and the backend live in one Kotlin Multiplatform project and share models. The dashboard uses Compose Multiplatform for web even though it is Beta and Jetpack rates web targets as untested, because it is a few read-only screens and one stack suits the team ([research](../research/kmp-mobile-integration.md)). If Wasm blocks us, the dashboard moves to a separate web frontend against the same backend API.
 
 ## Consequences

@@ -57,8 +57,12 @@ A Patient's explicit permission for one Signal to be collected or for their Clin
 _Avoid_: Permission, opt-in
 
 **Mood rating**:
-A number from 1 to 5 the Patient gives at the end of a Check-in; the only self-reported Signal.
+A number from 1 to 5 the Patient gives for their mood at a Check-in. Energy and sleep quality are rated the same way.
 _Avoid_: Mood score, questionnaire, assessment
+
+**Voice cue**:
+Something the Companion notices in how the Patient sounds, such as a flat tone or hesitation. It is an observation, never a diagnosis.
+_Avoid_: Emotion detection, sentiment, voice biomarker
 
 **Invite**:
 The code a Clinician gives a Patient to link the two. Each Patient has exactly one Clinician.
@@ -88,10 +92,18 @@ _Avoid_: Feedback, result, adherence
 A written account of a Patient's Check-in or period, generated for the Clinician.
 _Avoid_: Report, transcript, notes
 
+**Digest**:
+A short weekly account of one Patient, generated for the Clinician from that week's Summaries and Signals.
+_Avoid_: Weekly report, newsletter
+
+**Questionnaire score**:
+A PHQ-2 or PHQ-9 result the Clinician records at a Visit. The Companion never asks these questions.
+_Avoid_: Screening, assessment, risk score
+
 **Attention flag**:
-A mark on a Patient, on or off and always with written reasons, telling the Clinician this person may need a call. The Clinician clears it after acting.
+A level on a Patient (green, amber or red), always with written reasons and never a number, telling the Clinician whether this person may need a call. The Clinician clears it after acting.
 _Avoid_: Risk score, alert, diagnosis
 
 **Crisis notice**:
-The helpline information shown to the Patient when a Check-in shows signs of self-harm risk.
+The screen shown to the Patient when a Check-in shows signs of self-harm risk, with one-tap buttons to call for help. The Patient places the call; the app never dials.
 _Avoid_: Emergency mode, intervention
