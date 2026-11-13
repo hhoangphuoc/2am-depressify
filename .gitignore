@@ -1,0 +1,72 @@
+# --- Secrets / env (Gemini API keys etc.) ---
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+.config/gemini-api/
+
+# --- OS ---
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# --- Editors ---
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+.idea/
+*.swp
+*.swo
+*~
+
+# --- Agent skills (installed per-person via `npx skills add`) ---
+.agents/
+.claude/skills/
+skills-lock.json
+
+# --- Claude Code personal settings ---
+.claude/settings.local.json
+CLAUDE.local.md
+
+# --- Node / web ---
+node_modules/
+.pnpm-store/
+dist/
+build/
+out/
+.next/
+.nuxt/
+.svelte-kit/
+.vite/
+.turbo/
+.vercel/
+.netlify/
+coverage/
+*.tsbuildinfo
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# --- Python ---
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+env/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.ipynb_checkpoints/
+*.egg-info/
+
+# --- Logs / temp ---
+logs/
+*.log
+tmp/
+.cache/
+
+# --- Generated media (Gemini outputs, recordings) ---
+generated/
+outputs/
