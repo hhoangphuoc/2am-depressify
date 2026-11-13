@@ -742,11 +742,18 @@ private fun today(v: Double?) = DailySnapshot("2026-11-20", mapOf("sleepMinutes"
   - `export function makePatient(profile: "stable"|"improving"|"crisis", name: string, clinicianEmail: string, today: string): { patient, daily: DailyDoc[21], reports: SessionReport[5], interventions: Intervention[], alerts: Alert[] }` (deterministic, `synthetic: true`)
   - `seed.mjs` writes Aino (stable, green), Juhani (improving, green), Laura (crisis, red, with `sleep_collapse` + `crisis` alerts), using firebase-admin. It honors `FIRESTORE_EMULATOR_HOST`. `CLINICIAN_EMAIL` comes from the env.
   - Daily docs include HRV values (covers the "HRV: seeded" case).
+  - Each `patient.intakeSummary` carries real discharge scores from OpenNeuro ds003478 (CC0), hard-coded with a source comment (see `docs/superpowers/specs/2026-11-13-open-data-ds003478-design.md`):
+    - Laura: `sub-081` (BDI 29 · HAM-D 21 · STAI 60, Current MDD)
+    - Juhani: `sub-099` (BDI 20 · HAM-D 6 · STAI 52, Past MDD)
+    - Aino: `sub-001` (BDI 0 · STAI 23, not interviewed)
+
+    Format: `"Discharge scores (open data ds003478 sub-0NN): BDI x · HAM-D y · STAI z"`.
 - [ ] **Step 1: Write failing tests:**
   - `each profile has 21 consecutive daily docs ending today`
   - `crisis profile is red with a crisis alert`
   - `all docs synthetic`
   - `interventions have outcomeScore for ranking`
+  - `each intakeSummary cites ds003478`
 - [ ] **Step 2: Run** `cd firebase/seed && node --test`. Expected: FAIL.
 - [ ] **Step 3: Implement.**
 - [ ] **Step 4: Run.** Expected: PASS. Then `CLINICIAN_EMAIL=... node seed.mjs` → 3 patients visible in the console.
@@ -831,7 +838,7 @@ private fun today(v: Double?) = DailySnapshot("2026-11-20", mapOf("sleepMinutes"
 
   Overrides only ever affect `demoOverride`-flagged docs.
 - [ ] **Step 1: Implement the panel and overrides.**
-- [ ] **Step 2: Write `docs/demo-script.md`** following the spec's 6-step demo script, with the exact taps and lines to say, including the scripted crisis line. Add a pre-demo checklist: phone charged, hotspot ready, dashboard signed in, seed fresh, crisis number verified.
+- [ ] **Step 2: Write `docs/demo-script.md`** following the spec's 6-step demo script, with the exact taps and lines to say, including the scripted crisis line. Add a pre-demo checklist: phone charged, hotspot ready, dashboard signed in, seed fresh, crisis number verified. Add the open-data pitch slide using the claim and caveats in `docs/superpowers/specs/2026-11-13-open-data-ds003478-design.md` (numbers from `docs/research/ds003478/findings.md`).
 - [ ] **Step 3: Run the full demo end to end on the S24+.** Check each spec Verification line:
   - session report on the dashboard ≤ 10 s
   - flat vs animated prosody differs

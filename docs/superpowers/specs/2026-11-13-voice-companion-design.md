@@ -121,6 +121,7 @@ A **fictional** clinical report → Gemini structured output → intake summary.
 Candidate uses: calibrating the prosody and passive-sensing thresholds, and citing evidence in the pitch.
 - Known sources: StudentLife, GLOBEM (phone sensing + depression scores), DAIC-WOZ (depression interviews, licensed), RAVDESS / CREMA-D (open emotional speech).
 - The design doesn't depend on any of them; thresholds start as personal-baseline z-scores.
+- **Evaluated: OpenNeuro ds003478** (resting EEG + BDI/STAI/HAM-D, 122 students, one visit, no treatment). Not in the runtime loop. It's used only for seed realism and one pitch claim ("self-report alone isn't enough"). See `docs/superpowers/specs/2026-11-13-open-data-ds003478-design.md` and `docs/research/ds003478/findings.md`.
 
 ## Demo script (~3 min)
 1. The dashboard shows four patients, with the live one in amber.
