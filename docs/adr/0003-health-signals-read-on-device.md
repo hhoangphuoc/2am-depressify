@@ -7,3 +7,4 @@ Heart rate, HRV, sleep and steps come from Health Connect on Android and HealthK
 - Fresh health Signals arrive only when the app runs; the backend cannot pull them.
 - HRV is RMSSD on Android and SDNN on iOS, and neither store has a sleep score. Values are only comparable within one Patient, never across Patients.
 - The demo uses seeded data alongside real reads.
+- Heart rate, sleep and steps go through the HealthKMP library (one maintainer); HRV is our own code per platform because the library lacks it.

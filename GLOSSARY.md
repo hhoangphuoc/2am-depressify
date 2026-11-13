@@ -33,13 +33,21 @@ The clinical report that describes a Patient at the start, supplied once.
 _Avoid_: Onboarding, clinical report
 
 **Consent**:
-A Patient's explicit, revocable permission for one Signal to be collected or for their Clinician to see their progress.
+A Patient's explicit permission for one Signal to be collected or for their Clinician to see their progress. Withdrawing it stops collection and deletes what was collected.
 _Avoid_: Permission, opt-in
+
+**Mood rating**:
+A number from 1 to 5 the Patient gives at the end of a Check-in; the only self-reported Signal.
+_Avoid_: Mood score, questionnaire, assessment
+
+**Invite**:
+The code a Clinician gives a Patient to link the two. Each Patient has exactly one Clinician.
+_Avoid_: Referral, pairing code
 
 ### Responding
 
 **Check-in**:
-One spoken conversation between a Patient and the Companion.
+One conversation between a Patient and the Companion, spoken or typed, lasting a few minutes.
 _Avoid_: Session, call, chat
 
 **Nudge**:
@@ -50,6 +58,10 @@ _Avoid_: Reminder, proactive call, alert
 A concrete activity the Companion proposes, such as a walk, a class, music or calling someone.
 _Avoid_: Treatment, intervention, recommendation, prescription
 
+**Outcome**:
+What the Patient reports about a past Suggestion: whether they tried it and how it felt.
+_Avoid_: Feedback, result, adherence
+
 ### Clinician view
 
 **Summary**:
@@ -57,7 +69,7 @@ A written account of a Patient's Check-in or period, generated for the Clinician
 _Avoid_: Report, transcript, notes
 
 **Attention flag**:
-A mark on a Patient telling the Clinician this person may need a call.
+A mark on a Patient, on or off and always with written reasons, telling the Clinician this person may need a call. The Clinician clears it after acting.
 _Avoid_: Risk score, alert, diagnosis
 
 **Crisis notice**:

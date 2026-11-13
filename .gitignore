@@ -22,6 +22,7 @@ desktop.ini
 
 # --- Agent skills (installed per-person via `npx skills add`) ---
 .agents/
+agent/
 .claude/skills/
 skills-lock.json
 
