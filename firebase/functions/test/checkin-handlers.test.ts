@@ -26,6 +26,8 @@ import {
   decisionsReply,
   decisionsTimeout,
   failingTextModel,
+  clinicianToken,
+  verifiedToken,
 } from "./fakes";
 
 const SPIKE = join(__dirname, "..", "..", "..", "fixtures", "spike", "interactions");
@@ -34,9 +36,9 @@ const MODEL_JSON: string = recorded.response.body.steps.find((s: { type: string 
 
 const NOW = 1_763_000_000_000;
 const DEMO_ID = "demo-steady";
-const patientAuth: CallerAuth = { uid: PATIENT_ID, token: {} };
-const otherAuth: CallerAuth = { uid: "someone-else", token: {} };
-const clinicianAuth: CallerAuth = { uid: "clinician-uid", token: { email: CLINICIAN_EMAIL } };
+const patientAuth: CallerAuth = { uid: PATIENT_ID, token: verifiedToken("patient-1@example.com") };
+const otherAuth: CallerAuth = { uid: "someone-else", token: verifiedToken("someone-else@example.com") };
+const clinicianAuth: CallerAuth = { uid: "clinician-uid", token: clinicianToken(CLINICIAN_EMAIL) };
 const BRIEF = "Fictional Brief for Alex: ask about the harbour walk, then the three ratings.";
 
 const DRAFT = {
@@ -139,7 +141,7 @@ describe("startCheckIn", () => {
   });
 
   it("refuses a missing Patient with the same answer as another user's", async () => {
-    const missing = await start({ patientId: "no-such-patient", brief: BRIEF }, { uid: "no-such-patient", token: {} }).catch((e: unknown) => e);
+    const missing = await start({ patientId: "no-such-patient", brief: BRIEF }, { uid: "no-such-patient", token: verifiedToken("nobody@example.com") }).catch((e: unknown) => e);
     const other = await start({ patientId: PATIENT_ID, brief: BRIEF }, otherAuth).catch((e: unknown) => e);
     expect(missing).toMatchObject({ code: "permission-denied" });
     expect((missing as Error).message).toBe((other as Error).message);
@@ -165,8 +167,8 @@ describe("startCheckIn", () => {
   it("refuses a start past the hourly cap without minting, and allows it again an hour later", async () => {
     for (let i = 0; i < MAX_CHECK_IN_STARTS_PER_HOUR; i++) await started(DEMO_ID, otherAuth);
     const minted = tokens.requests.length;
-    // The cap is per Patient record, whoever calls: anonymous accounts are free to make.
-    await expect(start({ patientId: DEMO_ID, brief: BRIEF }, { uid: "a-third-user", token: {} })).rejects.toMatchObject({ code: "resource-exhausted" });
+    // The cap is per Patient record, whoever calls.
+    await expect(start({ patientId: DEMO_ID, brief: BRIEF }, { uid: "a-third-user", token: verifiedToken("a-third-user@example.com") })).rejects.toMatchObject({ code: "resource-exhausted" });
     expect(tokens.requests).toHaveLength(minted);
     expect(store.checkIns.size).toBe(MAX_CHECK_IN_STARTS_PER_HOUR);
     // Another Patient is not affected.
@@ -374,7 +376,7 @@ describe("finishCheckIn", () => {
   it("on a Demo Patient lets only the caller who started a Check-in finish it, so seeded Summaries stay", async () => {
     const model = new FakeTextModel(MODEL_JSON);
     const checkInId = await started(DEMO_ID, otherAuth);
-    const stranger: CallerAuth = { uid: "a-third-user", token: {} };
+    const stranger: CallerAuth = { uid: "a-third-user", token: verifiedToken("a-third-user@example.com") };
     await expect(finish({ patientId: DEMO_ID, checkInId, draft: DRAFT }, model, stranger)).rejects.toMatchObject({ code: "permission-denied" });
     // A seeded Check-in: Start Check-in never created it, so nobody finishes it through the shortcut.
     store.checkIns.set(`${DEMO_ID}/checkin-2026-11-13`, { id: "checkin-2026-11-13", startedAtMillis: NOW - 86_400_000, endedAtMillis: NOW - 86_000_000, sharedWithClinician: true });

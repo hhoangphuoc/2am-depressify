@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
-import { DEFAULT_EMULATOR_HOST, DEFAULT_PROJECT, parseAllowCommand, parseCommand } from "../../src/cli.js";
+import { ALLOW_USAGE, DEFAULT_AUTH_EMULATOR_HOST, DEFAULT_EMULATOR_HOST, DEFAULT_PROJECT, parseAllowCommand, parseCommand } from "../../src/cli.js";
 
 test("by default the seed targets the local emulator of the demo project", () => {
   const command = parseCommand([], {});
@@ -122,5 +122,33 @@ describe("allow-clinician", () => {
 
   test("--help needs no email", () => {
     assert.equal(parseAllowCommand(["--help"], {}).help, true);
+  });
+
+  test("takes --uid, the console account the admin vouches for, and none by default", () => {
+    assert.equal(parseAllowCommand(["--email", "a@example.com", "--uid", "abc123"], {}).uid, "abc123");
+    assert.equal(parseAllowCommand(["--email", "a@example.com"], {}).uid, null);
+  });
+
+  test("uses the Auth emulator whenever it uses the Firestore emulator, and neither for a real project", () => {
+    assert.equal(parseAllowCommand(["--email", "a@example.com"], {}).authEmulatorHost, DEFAULT_AUTH_EMULATOR_HOST);
+    assert.equal(
+      parseAllowCommand(["--email", "a@example.com"], { FIRESTORE_EMULATOR_HOST: "127.0.0.1:9180", FIREBASE_AUTH_EMULATOR_HOST: "127.0.0.1:9199" }).authEmulatorHost,
+      "127.0.0.1:9199",
+    );
+    // --project while emulators:exec runs: still the emulators, as for Firestore.
+    assert.equal(
+      parseAllowCommand(["--email", "a@example.com", "--project", "twoam-prod"], { FIRESTORE_EMULATOR_HOST: "127.0.0.1:8080" }).authEmulatorHost,
+      DEFAULT_AUTH_EMULATOR_HOST,
+    );
+    // A real project: no Auth emulator, even if one is set in the environment.
+    assert.equal(
+      parseAllowCommand(["--email", "a@example.com", "--project", "twoam-prod"], { FIREBASE_AUTH_EMULATOR_HOST: "127.0.0.1:9099" }).authEmulatorHost,
+      null,
+    );
+  });
+
+  test("the usage says it sets the Clinician claim and how the Clinician picks it up", () => {
+    assert.match(ALLOW_USAGE, /role "clinician"/);
+    assert.match(ALLOW_USAGE, /signs out and in again/);
   });
 });

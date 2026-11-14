@@ -71,14 +71,26 @@ class FakeConsentStore : ConsentStore {
 /** The Patient's Check-in records in memory, and a fixed Live token. */
 class FakeCheckInGateway : CheckInGateway {
     var days: List<DailyDoc> = emptyList()
+    var failReads = false
     var summaries: List<Summary> = emptyList()
     val suggestions: MutableList<Suggestion> = mutableListOf()
     val flags: MutableList<Flag> = mutableListOf()
     var failWrites: Boolean = false
     var failStart: Boolean = false
     var failFinish: Boolean = false
+    /** What Find places returns; null makes the lookup fail. */
+    var places: List<NearbyPlace>? = emptyList()
+    /** What the weather lookup returns; null makes it fail. */
+    var weather: Weather? = null
+    /** What music generation returns; null makes it fail. */
+    var music: MusicClip? = null
+    /** What cover generation returns; null means none came back. */
+    var cover: ByteArray? = null
     var brief: String? = null
     val finished: MutableList<Pair<String, CheckInDraft>> = mutableListOf()
+
+    /** What Suggest today answers; null makes the call fail. */
+    var today: TodaySuggestions? = null
 
     override suspend fun startCheckIn(patientId: String, brief: String, typed: Boolean): LiveStart {
         if (failStart) throw IllegalStateException("UNAVAILABLE")
@@ -92,8 +104,18 @@ class FakeCheckInGateway : CheckInGateway {
         return Summary(checkInId, 1000, mood = 3, energy = null, sleepQuality = null, sleepLine = "Slept less than usual", themes = listOf("A tired week"), voiceCues = emptyList(), suggestion = "One calm song tonight", previousOutcome = null, quotes = emptyList(), sharedWithClinician = true)
     }
 
-    override suspend fun recentDays(patientId: String, count: Int): List<DailyDoc> = days.take(count)
-    override suspend fun recentSummaries(patientId: String, count: Int): List<Summary> = summaries.take(count)
+    override suspend fun recentDays(patientId: String, count: Int): List<DailyDoc> {
+        check(!failReads)
+        return days.take(count)
+    }
+    override suspend fun findPlaces(patientId: String, query: String, near: PatientLocation): List<NearbyPlace> = places ?: throw IllegalStateException("UNAVAILABLE")
+    override suspend fun weather(patientId: String, near: PatientLocation): Weather = weather ?: throw IllegalStateException("UNAVAILABLE")
+    override suspend fun generateMusic(patientId: String, mood: String): MusicClip = music ?: throw IllegalStateException("UNAVAILABLE")
+    override suspend fun generateMusicCover(patientId: String, mood: String): ByteArray? = cover
+    override suspend fun recentSummaries(patientId: String, count: Int): List<Summary> {
+        check(!failReads)
+        return summaries.take(count)
+    }
     override suspend fun lastSuggestion(patientId: String): Suggestion? = suggestions.lastOrNull()
 
     override suspend fun saveSuggestion(patientId: String, suggestion: Suggestion) {
@@ -105,4 +127,6 @@ class FakeCheckInGateway : CheckInGateway {
         if (failWrites) throw IllegalStateException("UNAVAILABLE")
         flags += flag
     }
+
+    override suspend fun suggestToday(patientId: String): TodaySuggestions = today ?: throw IllegalStateException("UNAVAILABLE")
 }

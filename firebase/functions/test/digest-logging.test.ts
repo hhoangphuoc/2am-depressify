@@ -51,8 +51,10 @@ function idToken(claims: Record<string, unknown>): string {
   return `${part({ alg: "none", typ: "JWT" })}.${part(claims)}.sig`;
 }
 
-const CLINICIAN_TOKEN = idToken({ sub: "clinician-uid", email: "clinician@example.com" });
-const OTHER_TOKEN = idToken({ sub: "other-uid", email: "other-clinician@example.com" });
+/** A Clinician's account as allow-clinician leaves it (ADR 0010). */
+const CLINICIAN_CLAIMS = { email_verified: true, role: "clinician", firebase: { sign_in_provider: "password" } };
+const CLINICIAN_TOKEN = idToken({ sub: "clinician-uid", email: "clinician@example.com", ...CLINICIAN_CLAIMS });
+const OTHER_TOKEN = idToken({ sub: "other-uid", email: "other-clinician@example.com", ...CLINICIAN_CLAIMS });
 
 let server: Server;
 let baseUrl = "";

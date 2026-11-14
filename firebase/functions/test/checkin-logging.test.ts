@@ -62,8 +62,10 @@ function idToken(claims: Record<string, unknown>): string {
   return `${part({ alg: "none", typ: "JWT" })}.${part(claims)}.sig`;
 }
 
-const PATIENT_TOKEN = idToken({ sub: PATIENT_ID, user_id: PATIENT_ID });
-const OTHER_TOKEN = idToken({ sub: "other-uid", user_id: "other-uid" });
+/** The Patient's own verified account (ADR 0010). */
+const VERIFIED = { email_verified: true, firebase: { sign_in_provider: "password" } };
+const PATIENT_TOKEN = idToken({ sub: PATIENT_ID, user_id: PATIENT_ID, ...VERIFIED });
+const OTHER_TOKEN = idToken({ sub: "other-uid", user_id: "other-uid", ...VERIFIED });
 
 let server: Server;
 let baseUrl = "";

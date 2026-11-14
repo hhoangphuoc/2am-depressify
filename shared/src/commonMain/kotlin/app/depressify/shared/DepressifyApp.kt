@@ -106,7 +106,7 @@ private fun AppSheets(vm: PatientViewModel, s: PatientState) {
         }
         Sheet.MapsSources -> CalmSheet("Google Maps sources", close) {
             Txt("Place and weather answers may use Google Maps. Source links appear with results.", DepressifyType.body, c.body)
-            Txt("No Maps lookup has run in this scripted Check-in.", DepressifyType.meta, c.muted)
+            if (!vm.live.isLive) Txt("No Maps lookup has run in this scripted Check-in.", DepressifyType.meta, c.muted)
             SecondaryButton("Back to Check-in", close)
         }
     }

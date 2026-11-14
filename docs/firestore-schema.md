@@ -32,7 +32,7 @@ The mirrors are kept in step by tests. The `core` JVM tests export the Kotlin co
 ## Collections
 
 ```
-patients/{patientId}                 PatientDoc      patientId = the Patient's anonymous auth uid
+patients/{patientId}                 PatientDoc      patientId = the Patient's auth uid
   daily/{date}                       DailyDoc        date = yyyy-MM-dd
   consents/{subject}                 Consent         subject = a Signal key or a ConsentPurpose
   checkIns/{checkInId}               CheckIn
@@ -55,17 +55,20 @@ patientLimits/{patientId}            PatientLimits   hourly caps and who started
 | `intakeHighlights` | string | `""` | Extracted from the Intake, at most 120 words, reviewed by the Clinician. Written only by the `saveIntake` function (Clinician only); no client writes it. The report itself is never stored. |
 | `tmsEndDate` | date string or null | `null` | Set by the Clinician. Week 1 starts the day after. |
 | `flagLevel` | FlagLevel | `green` | The highest uncleared flag stamped `sharedWithClinician: true`. A flag raised while the Patient was not sharing never counts. Never shown to the Patient. |
-| `flagReasons` | string[] | `[]` | The reasons of those flags, highest level first, then newest. Plain sentences, never a number. |
+| `flagReasons` | string[] | `[]` | The reasons of those flags, highest level first, then newest. Plain sentences: never a score or a decimal number (a plain duration such as "under 3 hours" is fine). |
 | `quietHoursStart` | int 0..23 | `21` | No Nudges inside quiet hours; the window may cross midnight. |
 | `quietHoursEnd` | int 0..23 | `9` | |
-| `lastSeenAtMillis` | int or null | `null` | Last sign of life from the phone. The hourly silence check (`silenceCheck`, #28) reads it: older than 24 hours on a sharing, non-synthetic Patient raises red `silent`. `null` (never seen) is not silent. Finish Check-in moves it to the time of the finish (never back). |
+| `lastSeenAtMillis` | int or null | `null` | Last sign of life from the phone. The hourly silence check (`silenceCheck`, #28) reads it: older than 24 hours on a sharing, non-synthetic Patient raises red `silent`. `null` (never seen) is not silent. Finish Check-in moves it to the time of the finish, and the phone's daily job (#26) to the time of each run (never back). |
 | `lastCheckInAtMillis` | int or null | `null` | The end of the latest finished Check-in. Finish Check-in moves it forward (never back). `null` means no Check-in has finished yet: Start Check-in then adds the first-Check-in AI disclosure to the token's instruction. |
 | `healthSource` | HealthSource | `device` | Exactly one source per Patient. |
 | `synthetic` | boolean | `false` | `true` for Demo Patients. |
 | `sharingConsent` | SharingConsent | `undecided` | The Patient's Consent for the Clinician's view. Only `granted` lets the Clinician see anything; see [Sharing Consent](#sharing-consent). |
 | `sharingChangedAtMillis` | int or null | `null` | When `sharingConsent` last changed. Written with every change. |
+| `location` | PatientLocation or null | `null` | `{label, latitude, longitude}`: where the `suggestToday` function looks for places near the Patient. Only Demo Patients have one, an example address written by the seed. A live Patient's location stays on their phone, so theirs is `null` and their Suggestions come without places. No client writes it. |
 
 ### `daily/{date}`: DailyDoc
+
+Written by the phone's daily job (#26): the decision is `DailyJob.run` in `core` (`app.depressify.core.daily`), and the app writes its result. Every run rewrites today's record whole, keeping the stamp it was created with. A record a demo control wrote (`demoOverride: true`) keeps its values on later device runs.
 
 | Field | Type | Notes |
 |---|---|---|
@@ -73,7 +76,7 @@ patientLimits/{patientId}            PatientLimits   hourly caps and who started
 | `values` | map of Signal key to number or null | Holds every Signal key; `null` where there is no value. |
 | `vsBaseline` | map of Signal key to number or null | Today's distance from the Patient's own Baseline, in units of their spread. `null` with fewer than 5 valid prior days or no value today. |
 | `composite` | number or null | Mean of the oriented comparisons that exist; `null` if none. |
-| `demoOverride` | boolean | `true` when a demo control wrote this record. Overrides only ever touch these. |
+| `demoOverride` | boolean | `true` when a demo control wrote this record. Overrides only ever touch these. The live demo Patient's seeded history sets it on every daily record it writes, and `--reset` deletes exactly those (see [Live demo Patient](#live-demo-patient)). The app writes `false`. |
 | `sharedWithClinician` | boolean | The sharing stamp. A record rewritten later in the day keeps the stamp it was created with. |
 
 #### Baseline
@@ -87,7 +90,7 @@ vsBaseline = (today - median) / spread
 
 The floor keeps a constant history from dividing by zero. `vsBaseline` keeps the sign as measured; the oriented comparison negates it for `lower_is_better` Signals, so negative always means worse, and is `null` for Signals with direction `none`. `composite` is the mean of the oriented comparisons that are not `null`.
 
-The rule is pinned by a shared fixture, [`fixtures/baseline/baseline-cases.json`](../fixtures/baseline/baseline-cases.json): inputs and expected comparisons, oriented values and composites, including fewer than 5 valid days, null days, a constant series and both directions. The JavaScript rule lives once, in the dashboard's `firebase/hosting/js/lib/baseline.js`; the seed re-exports it (`firebase/seed/src/baseline.js`). The functions keep a TypeScript copy, `firebase/functions/src/baseline.ts` (functions are built from `src` alone), which Finish Check-in uses for an Outcome's `objectiveChange` (#21). The seed tests, the dashboard tests (`firebase/hosting/test/baseline.test.mjs`) and the functions tests (`firebase/functions/test/baseline.test.ts`) run the fixture through their copy, and core's Kotlin Baseline tests read the same file. Change the rule only by changing the fixture and every copy together.
+The rule is pinned by a shared fixture, [`fixtures/baseline/baseline-cases.json`](../fixtures/baseline/baseline-cases.json): inputs and expected comparisons, oriented values and composites, including fewer than 5 valid days, null days, a constant series and both directions. The JavaScript rule lives once, in the dashboard's `firebase/hosting/js/lib/baseline.js`; the seed re-exports it (`firebase/seed/src/baseline.js`). The functions keep a TypeScript copy, `firebase/functions/src/baseline.ts` (functions are built from `src` alone), which Finish Check-in uses for an Outcome's `objectiveChange` (#21). The seed tests, the dashboard tests (`firebase/hosting/test/baseline.test.mjs`) and the functions tests (`firebase/functions/test/baseline.test.ts`) run the fixture through their copy, and in `core`, `BaselineFixtureTest` runs every case on the JVM through `SignalBaseline` (`app.depressify.core.daily`), the Kotlin rule. (The screens' older `app.depressify.core.Baseline` has no spread floor; moving the screens to `SignalBaseline` is #16.) Change the rule only by changing the fixture and every copy together.
 
 ### `consents/{subject}`: Consent
 
@@ -186,6 +189,8 @@ A proposed or declined Suggestion never gets an Outcome, so "declined" (`status`
 
 **The silence check's flags.** `silenceCheck` (#28, hourly) writes red `silent` flags with the id `silent-<lastSeenAtMillis>`: one id per silence, so a retried or overlapping run never writes a second flag for the same silence, and a silence whose flag the Clinician has cleared is not flagged again until the phone has been seen and gone quiet once more. It writes only for a Patient who is sharing (`isSharingActive`), is not synthetic, and whose `lastSeenAtMillis` is more than 24 hours old (exactly 24 hours, `null` and a time in the future are not silent), and only when no uncleared `silent` flag with the same stamp is open. In the same transaction it raises the Patient's `flagLevel` to `red` and puts the reason first in `flagReasons`, keeping the other reasons; nothing else on the record changes. The flag is stamped with `sharingStamp(patient)`, which is `true` there. The reason is always "The phone has been quiet: it has not connected for over 24 hours." It says nothing about mood or self-harm.
 
+**The daily job's flags.** The phone's daily job (#26, `FlagWriteRules` in `core`) raises `sleep_collapse`, `inactive`, `poor_sleep`, `low_mood` and `drift` with the id `<kind>-<date>` (the seed's format), or `<kind>-<date>-unshared` when stamped `false`, so a repeated run the same day computes the same id and a kind is raised at most once a day per stamp. It creates them uncleared and stamped with `sharingStamp()`, skips a kind with an uncleared flag of the same stamp, and skips a `low_mood` whose three Check-ins an earlier flag of that kind already covered. Only flags stamped `true` change the record: the level only rises and every existing reason is kept, as in `raisedAttention`. It never writes Suggestions: `objectiveChange` and `outcomeScore` are Finish Check-in's (#21).
+
 **Finish Check-in's flags (#20).** Finish Check-in asks the Decisions API three yes/no questions about the Check-in (crisis, marked hopelessness or decline, tried the last Suggestion) and routes the answers with the spec's starting thresholds (`DECISION_THRESHOLDS` in `firebase/functions/src/decisions.ts`): crisis at or above 0.5, or the draft's crisis marker, gives red `crisis`; decline at or above 0.6 gives amber `decline`; a safety refusal (HTTP 400 with a documented safety code) gives amber `unassessed`; a timeout or any other failure gives no flag and `assessment: "unavailable"` on the Check-in. The flag id is `<kind>-<checkInId>`, so a retried finish never writes a second one, and a flag the Clinician cleared is not raised again by the same Check-in. No flag is written when an uncleared flag of that kind with the same stamp is open (the phone's own `crisis-<millis>` counts). Flags are stamped like the Summary: `true` only when the Check-in was started while sharing and the Patient still shares. In the same transaction as the Summary, a flag stamped `true` raises the Patient's `flagLevel` (never lowers it) and adds its reason (`raisedAttention` in `src/flags.ts`, shared with the silence check). When the text model fails in a way that may pass (Finish Check-in answers `unavailable` and saves no Summary), the flags are still written in their own transaction, so a crisis is not lost if the phone never retries. The reasons are fixed sentences with no number and nothing the Patient said:
 
 | Kind | Level | Reason |
@@ -260,7 +265,7 @@ Each run logs one line: the Patient and flag ids, the flag's kind (a `FlagKind`,
 
 ### `clinicians/{email}`: allowlist
 
-The Clinicians a new Patient may link to, one document per email. The document id is the email in lower case, exactly as the Clinician's sign-in token carries it and as the app writes `clinicianEmail`. The rules only check that the document exists. No client may read or write the collection; it is written with the Admin SDK by `npm run allow-clinician -- --email <addr>` and by the seed (for the Clinician it seeds for). This keeps the real Clinician's email out of the repository. Removing a document stops new Patients linking to that Clinician; Patients already linked keep their link.
+The Clinicians a new Patient may link to, one document per email. The document id is the email in lower case, exactly as the Clinician's sign-in token carries it and as the app writes `clinicianEmail`. The rules only check that the document exists. No client may read or write the collection; it is written with the Admin SDK by `npm run allow-clinician -- --email <addr>` and by the seed (for the Clinician it seeds for). Being on the allowlist does not make an account a Clinician: that is the `role: "clinician"` custom claim on the Auth account, which `allow-clinician` also sets (see [Security rules](#security-rules)). This keeps the real Clinician's email out of the repository. Removing a document stops new Patients linking to that Clinician; Patients already linked keep their link.
 
 | Field | Type | Notes |
 |---|---|---|
@@ -288,6 +293,7 @@ What the functions count per Patient record (`firebase/functions/src/limits.ts`)
 | Clear after follow-up | `patients/{id}/flags` where `sharedWithClinician == true`, then the reviewed flags by id in a transaction | none |
 | Digest functions | `summaries` by `createdAtMillis` range, `daily` by `date` range (Admin SDK); the stamp is filtered in code | single field (automatic) |
 | Seed reset | `patients` where `synthetic == true` (Admin SDK) | single field (automatic) |
+| Live demo Patient reset | every document of one Patient's `daily`, `checkIns`, `summaries`, `suggestions`, `flags` and `visits`, filtered in code by the seeded markers (Admin SDK) | none |
 | Finish Check-in | in the finish transaction, `patients/{id}/flags` where `kind in ["crisis", "decline", "unassessed"]` (Admin SDK) | single field (automatic) |
 | Silence check | all `patients`, selecting `sharingConsent`, `synthetic` and `lastSeenAtMillis` only; then, in each silent Patient's transaction, `patients/{id}/flags` where `kind == "silent"` (Admin SDK) | single field (automatic) |
 
@@ -297,19 +303,37 @@ The list query must carry the sharing filter (built by `clinicianListFilters` in
 
 `firebase/seed` writes three Demo Patients with the Admin SDK: `demo-steady` (green), `demo-declining` (amber flags, then red in the last two days) and `demo-sparse` (seven Check-ins at most, days of missing Signals, amber for low mood). Each has `synthetic: true`, `healthSource: "synthetic"`, `sharingConsent: "granted"`, the seeded Clinician (`--clinician` or `CLINICIAN_EMAIL`, also added to `clinicians`), an Intake that begins "Synthetic demo data", 42 daily records ending today, a TMS end date 42 days ago, one Visit 21 days ago with a PHQ-9 score, every Consent granted, and Check-ins with Summaries and Suggestions (most with an Outcome score). Every value is invented. Flags sit on the first morning the spec's starting thresholds hold. Every stamped document is `sharedWithClinician: true`, except that `demo-steady` stopped sharing from 06:00 30 days ago to 06:00 27 days ago: its three daily records, Check-ins, Summaries and Suggestions from that time are stamped `false`, so the dashboard shows a three-day gap; its `sharingChangedAtMillis` and `consents/sharing` are the time it shared again. Seeded Check-ins carry `assessment: "assessed"` and, when the previous Suggestion was accepted, `previousTried` equal to its `tried`; that Suggestion's Outcome is scored by the shared Outcome rule and its `outcomeCheckInId` is that Check-in. Document ids are stable: daily records by date, `checkin-<date>` (also the Summary id), `suggestion-<date>`, `<kind>-<date>` for flags and `visit-<date>`.
 
+## Live demo Patient
+
+`npm run seed-live-patient` in `firebase/seed` gives one real account (found or created in Firebase Auth by `--email`) six weeks of invented history under `patients/<uid>`. The record is a normal Patient's: `synthetic: false`, so only the owner and their Clinician read it and alerts apply, with `healthSource: "synthetic"` to label the data, `sharingConsent: "granted"` and the given Clinician. The history comes from the same generator as the Demo Patients (profile `live` in `firebase/seed/src/live-profile.js`). The README lists what it contains.
+
+The contract has no marker field on most documents, so the seeded history is marked with what the contract already has:
+
+| Collection | Marker | Why it is safe |
+|---|---|---|
+| `daily` | `demoOverride: true` (the id is the date) | The daily job writes `false`, so a date it has written (`demoOverride: false`) is skipped and its record wins. A demo control (#31) also writes `true`; `--reset` deletes those too, since they hold demo values as well. On the day of seeding the phone keeps today's seeded values (the daily job keeps a `demoOverride` record's values), so that day's demo shows the seeded drift. |
+| `checkIns`, `summaries`, `suggestions`, `flags`, `visits` | id starts with `demo-`: `demo-checkin-<date>` (also the Summary id), `demo-suggestion-<date>`, `demo-<kind>-<date>`, `demo-visit-<date>` | Start Check-in uses random ids, the app's crisis flag is `crisis-<millis>`, the silence check's is `silent-<millis>`, Finish Check-in's flags are `<kind>-<checkInId>` (and it never finishes a seeded Check-in), and the app's Suggestion ids are `s<millis>`. Visits the Clinician writes (no dashboard screen yet) must not use `demo-` ids. |
+| `consents` | none: one document per subject | Rewritten (all granted) on every run, never deleted. A run refuses a Patient who declined sharing or withdrew a Consent in the app, so the seed never undoes their choice. |
+| the record | none | Rewritten on every run (merged), with `flagLevel` and `flagReasons` from every open flag stamped `sharedWithClinician`, the app's included, and `lastCheckInAtMillis` the later of the seeded history's and the app's. |
+| `digests` | not written | The Digest function's. A Digest it made from seeded Summaries stays after a reset. |
+
+Without `--reset`, a Patient who already has seeded history is refused. With it, the documents with these markers are deleted and the history written again; nothing else is deleted. `npm run seed` never touches this Patient (it deletes only `synthetic == true`).
+
 
 ## Security rules
 
-[`firebase/firestore.rules`](../firebase/firestore.rules) encodes who may see a Patient's progress: the Patient themselves, their Clinician, and, as a demo shortcut, any signed-in user for a Patient marked `synthetic`. The tests are in [`firebase/functions/test/rules/`](../firebase/functions/test/rules/firestore-rules.test.ts). Functions and the seed use the Admin SDK, which bypasses the rules.
+[`firebase/firestore.rules`](../firebase/firestore.rules) encodes who may see a Patient's progress: the Patient themselves, their Clinician, and, as a demo shortcut, any verified account for a Patient marked `synthetic`. The tests are in [`firebase/functions/test/rules/`](../firebase/functions/test/rules/firestore-rules.test.ts). Functions and the seed use the Admin SDK, which bypasses the rules.
 
-- **Patient**: the anonymous auth uid equal to `patientId`.
-- **Clinician**: a signed-in user whose token email equals the record's `clinicianEmail`, while the record's `sharingConsent` is `granted`. A new record may only name a Clinician in the `clinicians` allowlist. The demo does not require `email_verified` because emulator accounts are unverified; production must.
-- **Demo shortcut**: on a record with `synthetic == true`, any signed-in user has the Patient's access, with the Patient's limits.
+Accounts ([ADR 0010](adr/0010-patients-sign-in-with-their-own-account.md)): a *verified account* has a `sign_in_provider` other than `anonymous` and `email_verified == true` (Google accounts at once, email and password accounts after the verification link).
 
-| | Patient (or anyone on a Demo Patient) | Clinician of the Patient, while sharing is granted | Anyone else signed in | Signed out |
+- **Patient**: the auth uid equal to `patientId`. Creating the record needs a verified account. An existing record stays its owner's whatever the account, so Patients who signed in anonymously before ADR 0010 keep their records (and upgrading with `linkWithCredential` keeps the uid).
+- **Clinician**: a verified account with the custom claim `role == "clinician"` (set only by the Admin, with `npm run allow-clinician`) whose token email equals the record's `clinicianEmail`, while the record's `sharingConsent` is `granted`. A Patient's account never has the claim, so a matching email alone reads nothing. A new record may only name a Clinician in the `clinicians` allowlist. The claim reaches the token at the next sign-in or token refresh.
+- **Demo shortcut**: on a record with `synthetic == true`, any verified account has the Patient's access, with the Patient's limits. Anonymous and unverified accounts have none.
+
+| | Patient (or any verified account on a Demo Patient) | Clinician of the Patient (claim and verified email), while sharing is granted | Anyone else signed in, including a matching email without the claim | Signed out |
 |---|---|---|---|---|
 | Patient record: read | yes | yes | no | no |
-| Patient record: create | own id only, `clinicianEmail` a Clinician in `clinicians`, `synthetic` false, `tmsEndDate` null, `intakeHighlights` empty | no | no | no |
+| Patient record: create | own id only, from a verified account (not anonymous, email verified), `clinicianEmail` a Clinician in `clinicians`, `synthetic` false, `tmsEndDate` null, `intakeHighlights` empty | no | no | no |
 | Patient record: update | `quietHoursStart`, `quietHoursEnd`, `lastSeenAtMillis`, `lastCheckInAtMillis`, `healthSource`, `sharingConsent` (to `granted` or `declined`, always with a new `sharingChangedAtMillis`), `sharingChangedAtMillis`; `flagLevel` and `flagReasons` only to raise (level never lower, reasons kept) | `displayName`, `tmsEndDate`, and a reset of `flagLevel` and `flagReasons` | no | no |
 | Patient record: delete | no | no | no | no |
 | `daily` | read, write (create stamped as now; the stamp never changes) | read documents stamped `true` | no | no |
@@ -345,5 +369,5 @@ Re-consent shares future records only. Every document in `daily`, `checkIns`, `s
 - **Rules.** On a client create the stamp must equal `patient.sharingConsent == 'granted'` as it stands before the write; on a client update it must not change (nor be dropped). The Clinician reads a stamped document only when `clinicianCanRead` holds and the document is stamped `true`, and clears only flags stamped `true`. The Patient, and the demo shortcut, read everything.
 - **Writers.** The app stamps with `PatientDoc.sharingStamp()` (core) and functions with `sharingStamp(patient)` (`firebase/functions/src/sharing.ts`); the Admin SDK bypasses the rules, so every function writer must call it: the Digest functions and the silence check (#28) today, and Finish Check-in (#14) and any other writer of these collections later. A writer that rewrites an existing document (the daily job's later runs, a retried finish) keeps the stamp the document has; it never deletes and recreates a document to change it.
 - **Flags and the Patient's level.** The Clinician can read only flags stamped `true`, so the record's `flagLevel` and `flagReasons` count only those: a flag raised while not sharing is stamped `false`, leaves the level and reasons alone, and does not block raising a shared flag of the same kind later. That keeps the record free of reasons the Clinician must not see, and lets "Clear after follow-up" recompute the level from all the flags that make it. The dashboard shows the level and reasons from the visible open flags once they load (`shownAttention` in `firebase/hosting/js/lib/clear.js`), and from the record only until then.
-- **Dashboard.** Every query on a stamped collection goes through `patientCollectionQuery` (`firebase/hosting/js/lib/sharing.js`). On a Demo Patient any signed-in user has the Patient's access, so there the rules do not hide unshared documents; the dashboard's filter does.
+- **Dashboard.** Every query on a stamped collection goes through `patientCollectionQuery` (`firebase/hosting/js/lib/sharing.js`). On a Demo Patient any verified account has the Patient's access, so there the rules do not hide unshared documents; the dashboard's filter does.
 - **Not stamped.** `consents` (the current permissions the dashboard needs), `visits` (written by the Clinician) and the Patient record. The record's `lastSeenAtMillis` and `lastCheckInAtMillis` are current values, not records: after sharing again, `lastCheckInAtMillis` can be the time of a Check-in saved while not sharing.

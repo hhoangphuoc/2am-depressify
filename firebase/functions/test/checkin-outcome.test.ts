@@ -8,7 +8,7 @@ import type { CallerAuth } from "../src/clinician";
 import { NOT_TRIED_SCORE, outcomeDay } from "../src/outcomes";
 import { newPatientDoc, type Suggestion } from "../src/types";
 import { whatHelps, whatHelpsWindow } from "../../hosting/js/lib/what-helps.js";
-import { CLINICIAN_EMAIL, FakeCheckInStore, FakeDecisions, FakeLiveTokens, FakeTextModel, PATIENT_ID, decisionsReply, decisionsTimeout, failingTextModel } from "./fakes";
+import { CLINICIAN_EMAIL, FakeCheckInStore, FakeDecisions, FakeLiveTokens, FakeTextModel, PATIENT_ID, decisionsReply, decisionsTimeout, failingTextModel, verifiedToken } from "./fakes";
 
 const SPIKE = join(__dirname, "..", "..", "..", "fixtures", "spike", "interactions");
 const recorded = JSON.parse(readFileSync(join(SPIKE, "finish-checkin-structured-v1.json"), "utf8"));
@@ -18,7 +18,7 @@ const reply = (overrides: Record<string, unknown> = {}) => new FakeTextModel(JSO
 
 const NOW = 1_763_000_000_000;
 const DAY = 86_400_000;
-const auth: CallerAuth = { uid: PATIENT_ID, token: {} };
+const auth: CallerAuth = { uid: PATIENT_ID, token: verifiedToken("patient-1@example.com") };
 const DRAFT = {
   turns: [
     { speaker: "companion", text: "Hi Alex. Did you try the walk by the harbour?" },

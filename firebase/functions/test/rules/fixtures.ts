@@ -30,11 +30,11 @@ export const OTHER_CLINICIAN = "other-clinician@example.com";
 /** An allowlist document, `clinicians/{email}`, as the Admin SDK writes it. */
 export const allowlisted = (email: string) => ({ email });
 
-/** Patient ids. A Patient's id is their anonymous auth uid. */
+/** Patient ids. A Patient's id is their auth uid. */
 export const ALICE = "alice"; // linked to CLINICIAN, sharing granted, amber with one open flag
 export const BOB = "bob"; // linked to OTHER_CLINICIAN
 export const DEMO = "demo-declining"; // a synthetic Demo Patient linked to CLINICIAN
-export const STRANGER = "stranger"; // a signed-in user with no record and no email
+export const STRANGER = "stranger"; // a verified account with no record
 
 export const AMBER_REASON = "Sleep has been worse than usual on each of the last three nights.";
 export const CRISIS_REASON = "Signs of self-harm risk came up during a Check-in.";
@@ -210,12 +210,48 @@ export async function seed(env: RulesTestEnvironment): Promise<void> {
   });
 }
 
-/** A signed-in Patient: anonymous auth, so the token has no email. */
+/** A Patient's email in these tests: `<uid>@example.com`. */
+export const patientEmail = (uid: string) => `${uid}@example.com`;
+
+/** A signed-in Patient: an email and password account whose email is verified (ADR 0010). */
 export const asPatient = (env: RulesTestEnvironment, uid: string) =>
+  env.authenticatedContext(uid, { email: patientEmail(uid), email_verified: true, firebase: { sign_in_provider: "password" } }).firestore();
+
+/** A Patient signed in with Google: the token arrives with the email verified. */
+export const asGooglePatient = (env: RulesTestEnvironment, uid: string) =>
+  env.authenticatedContext(uid, { email: patientEmail(uid), email_verified: true, firebase: { sign_in_provider: "google.com" } }).firestore();
+
+/** An email and password account before the Patient opens the verification link. */
+export const asUnverifiedPatient = (env: RulesTestEnvironment, uid: string) =>
+  env.authenticatedContext(uid, { email: patientEmail(uid), email_verified: false, firebase: { sign_in_provider: "password" } }).firestore();
+
+/** Anonymous auth, as the app signed in before ADR 0010: no email. */
+export const asAnonymousPatient = (env: RulesTestEnvironment, uid: string) =>
   env.authenticatedContext(uid, { firebase: { sign_in_provider: "anonymous" } }).firestore();
 
-/** A signed-in Clinician: email and password, so the token carries the email (unverified in the emulator). */
+/**
+ * A signed-in Clinician: email and password, the email verified and the `role: "clinician"` claim,
+ * as `npm run allow-clinician` leaves the account.
+ */
 export const asClinician = (env: RulesTestEnvironment, email: string) =>
-  env.authenticatedContext(`clinician-${email}`, { email, firebase: { sign_in_provider: "password" } }).firestore();
+  env.authenticatedContext(`clinician-${email}`, {
+    email,
+    email_verified: true,
+    role: "clinician",
+    firebase: { sign_in_provider: "password" },
+  }).firestore();
+
+/** Signed in with the Clinician's email, verified, but without the claim: a Patient's account, say. */
+export const asAccountWithoutClaim = (env: RulesTestEnvironment, email: string) =>
+  env.authenticatedContext(`no-claim-${email}`, { email, email_verified: true, firebase: { sign_in_provider: "password" } }).firestore();
+
+/** The claim, but the email is not verified. */
+export const asUnverifiedClinician = (env: RulesTestEnvironment, email: string) =>
+  env.authenticatedContext(`unverified-${email}`, {
+    email,
+    email_verified: false,
+    role: "clinician",
+    firebase: { sign_in_provider: "password" },
+  }).firestore();
 
 export const signedOut = (env: RulesTestEnvironment) => env.unauthenticatedContext().firestore();
