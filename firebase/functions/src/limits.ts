@@ -16,6 +16,9 @@ export const MAX_CHECK_IN_STARTS_PER_HOUR = 10;
 /** Red flag emails one Patient record may cause per hour. Flags past the cap are still recorded. */
 export const MAX_RED_FLAG_EMAILS_PER_HOUR = 5;
 
+/** How long a start is kept for the finish check: a finish retried hours later still finds its caller. */
+export const START_RECORD_KEEP_MS = 24 * 60 * 60 * 1000;
+
 /** One Check-in Start Check-in created: its id, the caller and the server time. */
 export interface CheckInStart {
   checkInId: string;
@@ -40,12 +43,14 @@ export function storedStarts(value: unknown): CheckInStart[] {
 }
 
 /**
- * The starts to store after one more, or null when the Patient has reached the hourly cap. Starts
- * older than an hour are dropped here, so the document never grows past the cap.
+ * The starts to store after one more, or null when the Patient has reached the hourly cap. Only the
+ * last hour counts toward the cap; starts older than a day are dropped here, so the document stays
+ * small (at most the cap per hour for a day).
  */
 export function withStart(stored: unknown, start: CheckInStart): CheckInStart[] | null {
-  const recent = storedStarts(stored).filter((s) => s.startedAtMillis > start.startedAtMillis - LIMIT_WINDOW_MS);
-  return recent.length >= MAX_CHECK_IN_STARTS_PER_HOUR ? null : [...recent, start];
+  const kept = storedStarts(stored).filter((s) => s.startedAtMillis > start.startedAtMillis - START_RECORD_KEEP_MS);
+  const recent = kept.filter((s) => s.startedAtMillis > start.startedAtMillis - LIMIT_WINDOW_MS);
+  return recent.length >= MAX_CHECK_IN_STARTS_PER_HOUR ? null : [...kept, start];
 }
 
 /** The email times to store after one more, or null when the Patient has reached the hourly cap. */

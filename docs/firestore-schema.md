@@ -237,7 +237,7 @@ What the functions count per Patient record (`firebase/functions/src/limits.ts`)
 
 | Field | Type | Notes |
 |---|---|---|
-| `checkInStarts` | list of `{checkInId, uid, startedAtMillis}` | One entry per Check-in Start Check-in created in the last hour (older entries are dropped on the next start). Start Check-in refuses the 11th start in an hour with `resource-exhausted`, before minting a token. Finish Check-in reads `uid`: a caller who is not the Patient (the Demo Patient shortcut) may finish only a Check-in they started. |
+| `checkInStarts` | list of `{checkInId, uid, startedAtMillis}` | One entry per Check-in Start Check-in created in the last day (older entries are dropped on the next start). Start Check-in refuses the 11th start in an hour with `resource-exhausted`, before minting a token; only the last hour counts. Finish Check-in reads `uid`: a caller who is not the Patient (the Demo Patient shortcut) may finish only a Check-in they started, also when the finish is retried hours later. |
 | `redFlagEmailsAtMillis` | list of integers | When `redFlagAlert` wrote each email in the last hour. The 6th in an hour is skipped (`capped`). |
 
 ## Queries
