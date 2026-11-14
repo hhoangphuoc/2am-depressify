@@ -37,6 +37,7 @@ import app.depressify.core.Outcome
 import app.depressify.core.SignalId
 import app.depressify.core.SuggestionKind
 import app.depressify.shared.voice.*
+import app.depressify.shared.voice.live.CompanionTools
 import app.depressify.shared.voice.live.ToolCard
 import androidx.compose.ui.platform.LocalUriHandler
 import kotlinx.coroutines.delay
@@ -153,7 +154,8 @@ private fun ToolCardView(card: ToolCard) {
             is ToolCard.Places -> {
                 Txt("A place nearby", DepressifyType.meta, c.muted)
                 Txt(card.query, DepressifyType.bodyStrong, c.ink)
-                TextLink("Open in Google Maps", { uri.openUri(card.url) })
+                card.places.forEach { p -> TextLink(p.name + " · " + CompanionTools.distanceLabel(p.distanceMeters) + " away", { uri.openUri(p.mapsUrl) }) }
+                TextLink(if (card.places.isEmpty()) "Open in Google Maps" else "See more in Google Maps", { uri.openUri(card.url) })
                 Txt("Results come from Google Maps", DepressifyType.small, c.muted)
             }
         }

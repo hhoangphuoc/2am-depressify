@@ -9,6 +9,7 @@ import { adminDigestStore, createDigestFunctions } from "./digestFunctions";
 import { healthStatus } from "./health";
 import { adminPatientStore, createIntakeFunctions } from "./intakeFunctions";
 import { fetchLiveTokenClient } from "./live";
+import { MAPS_API_KEY, createPlacesFunctions, fetchPlacesClient } from "./places";
 import { REGION } from "./region";
 import { adminSilenceStore, createSilenceFunctions } from "./silenceFunctions";
 
@@ -71,4 +72,10 @@ export const { startCheckIn, finishCheckIn } = createCheckInFunctions({
   store: () => adminCheckInStore(adminDb()),
   textModel: () => genaiTextClient(GEMINI_API_KEY.value()),
   liveTokens: () => fetchLiveTokenClient(GEMINI_API_KEY.value()),
+});
+
+/** Find places (the Patient, or anyone signed in on a Demo Patient): real places near the location the phone sends. */
+export const { findPlaces } = createPlacesFunctions({
+  store: () => adminCheckInStore(adminDb()),
+  places: () => fetchPlacesClient(MAPS_API_KEY.value()),
 });

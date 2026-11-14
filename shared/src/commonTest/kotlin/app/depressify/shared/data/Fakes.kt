@@ -77,6 +77,8 @@ class FakeCheckInGateway : CheckInGateway {
     var failWrites: Boolean = false
     var failStart: Boolean = false
     var failFinish: Boolean = false
+    /** What Find places returns; null makes the lookup fail. */
+    var places: List<NearbyPlace>? = emptyList()
     var brief: String? = null
     val finished: MutableList<Pair<String, CheckInDraft>> = mutableListOf()
 
@@ -93,6 +95,7 @@ class FakeCheckInGateway : CheckInGateway {
     }
 
     override suspend fun recentDays(patientId: String, count: Int): List<DailyDoc> = days.take(count)
+    override suspend fun findPlaces(patientId: String, query: String, near: PatientLocation): List<NearbyPlace> = places ?: throw IllegalStateException("UNAVAILABLE")
     override suspend fun recentSummaries(patientId: String, count: Int): List<Summary> = summaries.take(count)
     override suspend fun lastSuggestion(patientId: String): Suggestion? = suggestions.lastOrNull()
 

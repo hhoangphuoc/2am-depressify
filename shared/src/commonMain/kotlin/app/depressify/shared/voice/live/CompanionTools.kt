@@ -8,6 +8,8 @@ import app.depressify.core.model.Suggestion
 import app.depressify.core.model.SuggestionKind
 import app.depressify.core.model.sharingStamp
 import app.depressify.shared.data.CheckInGateway
+import app.depressify.shared.data.NearbyPlace
+import app.depressify.shared.data.PatientLocation
 import app.depressify.shared.data.PatientStore
 import kotlinx.coroutines.CancellationException
 import kotlinx.serialization.json.JsonObject
@@ -25,8 +27,8 @@ sealed interface ToolCard {
     /** A music idea; [url] opens a search in the Patient's own music app or browser. */
     data class Music(val query: String, val url: String) : ToolCard
 
-    /** A kind of place to go; [url] opens the search in Google Maps. No place data is fetched or stored. */
-    data class Places(val query: String, val url: String) : ToolCard
+    /** A kind of place to go; [url] opens the search in Google Maps. [places] are the results found, shown and never stored. */
+    data class Places(val query: String, val url: String, val places: List<NearbyPlace> = emptyList()) : ToolCard
 }
 
 /** What a tool call changes on screen. Called on the session's coroutine. */
@@ -48,6 +50,7 @@ class CompanionTools(
     private val patientId: String,
     private val nowMillis: () -> Long,
     private val effects: ToolEffects,
+    private val location: PatientLocation = PatientLocation.Sample,
 ) {
     suspend fun dispatch(name: String, args: JsonObject): JsonObject = try {
         when (name) {
@@ -57,7 +60,7 @@ class CompanionTools(
             "get_last_suggestion" -> lastSuggestion()
             "record_suggestion" -> recordSuggestion(args.string("kind"), args.string("details"))
             "suggest_music" -> search(args.string("query")) { q -> ToolCard.Music(q, "https://music.youtube.com/search?q=" + q.encode()) }
-            "find_places" -> search(args.string("query")) { q -> ToolCard.Places(q, "https://www.google.com/maps/search/?api=1&query=" + q.encode()) }
+            "find_places" -> findPlaces(args.string("query"))
             "wrap_up" -> ok().also { effects.wrapUp() }
             "raise_crisis" -> raiseCrisis()
             else -> error("unknown_tool")
@@ -74,6 +77,7 @@ class CompanionTools(
             put("background", patient?.intakeHighlights?.ifBlank { null } ?: "none yet")
             put("first_check_in", patient?.lastCheckInAtMillis == null && checkIns.recentSummaries(patientId, 1).isEmpty())
             patient?.tmsEndDate?.let { put("treatment_course_ended_on", it) }
+            put("currently_near", location.label)
         }
     }
 
@@ -152,6 +156,33 @@ class CompanionTools(
         return buildJsonObject { put("ok", true); put("shown", "a card that opens this search for the person") }
     }
 
+    private suspend fun findPlaces(query: String?): JsonObject {
+        if (query.isNullOrBlank()) return error("invalid_args")
+        val q = query.trim()
+        // A failed lookup still leaves the card that opens the search, and the Check-in goes on.
+        val places = try {
+            checkIns.findPlaces(patientId, q, location)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            null
+        }
+        effects.show(ToolCard.Places(q, "https://www.google.com/maps/search/?api=1&query=" + q.encode(), places.orEmpty()))
+        return buildJsonObject {
+            when {
+                places == null -> put("error", "lookup_failed")
+                places.isEmpty() -> put("status", "none_found")
+                else -> {
+                    put("near", location.label)
+                    put("places_from_google_maps", buildJsonArray {
+                        places.forEach { p -> add(buildJsonObject { put("name", p.name); put("straight_line_distance", distanceLabel(p.distanceMeters)) }) }
+                    })
+                }
+            }
+            put("shown", "a card with links that open in Google Maps")
+        }
+    }
+
     private suspend fun raiseCrisis(): JsonObject {
         // The Crisis notice first, before any network call.
         effects.crisis()
@@ -185,6 +216,10 @@ class CompanionTools(
     }
 
     companion object {
+        /** "350 m" or "1.2 km". */
+        fun distanceLabel(meters: Int): String =
+            if (meters < 1000) meters.toString() + " m" else (meters / 1000).toString() + "." + (meters % 1000 / 100) + " km"
+
         /** A short line for the screen while a tool runs. */
         fun label(name: String): String = when (name) {
             "get_patient_context" -> "Remembering your background"
