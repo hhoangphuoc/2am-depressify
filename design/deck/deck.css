@@ -1,0 +1,13 @@
+@page{size:1600px 900px;margin:0}
+*{box-sizing:border-box}html{scroll-snap-type:y mandatory;background:#e9ece9}body{margin:0;font:400 16px/1.5 system-ui,-apple-system,sans-serif;color:#233c4c;-webkit-font-smoothing:antialiased}
+.slide{width:1600px;height:900px;margin:0 auto 24px;background:#fafaf7;padding:56px 72px;display:flex;flex-direction:column;gap:28px;overflow:hidden;scroll-snap-align:center;break-after:page;page-break-after:always}
+@media print{html{background:none}.slide{margin:0}}
+.slide header{display:flex;flex-direction:column;gap:8px;max-width:1100px}.slide h2{margin:0;font-size:34px;line-height:1.15;letter-spacing:-.02em;font-weight:620}.slide header p{margin:0;font-size:18px;color:#59656b;text-wrap:pretty}
+.cover,.divider{justify-content:center;gap:20px}.cover{background:#233c4c;color:#f2f5f3}.cover .lede,.cover .meta{color:#c4d0d2}.kicker{margin:0;font-size:15px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:#326b73}.cover .kicker{color:#9cc8c8}
+.slide h1{margin:0;font-size:72px;line-height:1.02;letter-spacing:-.035em;font-weight:680}.lede{margin:0;font-size:24px;max-width:900px;color:#59656b}.meta{margin:0;font-size:16px;color:#59656b}
+.phones{flex:1;min-height:0;display:flex;gap:28px;justify-content:center;align-items:flex-start}.phones figure{margin:0;display:flex;flex-direction:column;gap:12px;align-items:center;height:100%}.phones img{height:calc(100% - 64px);width:auto;display:block;mix-blend-mode:multiply}
+.phones figcaption{display:flex;flex-direction:column;align-items:center;text-align:center;max-width:300px}.phones figcaption strong{font-size:16px;font-weight:600}.phones figcaption span{font-size:14px;color:#59656b}
+.phones.wide img{border-radius:12px;box-shadow:0 0 0 1px #d7dde0}.phones.compare figure:first-child img{height:auto;max-width:880px;border-radius:12px;box-shadow:0 0 0 1px #d7dde0}
+.desk{flex:1;min-height:0;display:flex;justify-content:center}.desk img{height:100%;width:auto;max-width:100%;object-fit:contain;object-position:top;border-radius:10px;box-shadow:0 0 0 1px #d7dde0,0 12px 32px rgba(35,60,76,.08)}
+.map{border-collapse:collapse;font-size:17px;width:100%}.map th,.map td{text-align:left;padding:12px 16px;border-bottom:1px solid #d7dde0;vertical-align:top}.map th{font-size:14px;color:#59656b;font-weight:600}.map td:first-child{font-weight:600;white-space:nowrap}
+.phones.compare figure.flat img{height:calc(100% - 64px);width:auto;max-width:none;border-radius:16px;box-shadow:0 0 0 1px #d7dde0;mix-blend-mode:normal}
