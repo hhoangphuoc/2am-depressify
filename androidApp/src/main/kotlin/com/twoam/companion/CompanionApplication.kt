@@ -1,7 +1,9 @@
 package com.twoam.companion
 
 import android.app.Application
+import com.twoam.companion.config.DemoConfig
 import com.twoam.companion.data.firebase.FirebaseEmulators
+import com.twoam.companion.di.configModule
 import com.twoam.companion.di.sharedModule
 import dev.gitlive.firebase.Firebase
 import dev.gitlive.firebase.FirebaseOptions
@@ -10,14 +12,14 @@ import dev.gitlive.firebase.initialize
 import org.koin.android.ext.koin.androidContext
 import org.koin.core.context.startKoin
 
-/** Composition root for Android: Firebase first, then Koin. */
+/** Composition root for Android: Firebase first, then Koin with the configuration from BuildConfig. */
 class CompanionApplication : Application() {
     override fun onCreate() {
         super.onCreate()
         initFirebase()
         startKoin {
             androidContext(this@CompanionApplication)
-            modules(sharedModule)
+            modules(sharedModule, configModule(DemoConfig(BuildConfig.CLINICIAN_EMAIL)))
         }
     }
 

@@ -15,7 +15,8 @@ import kotlin.test.assertNull
 class PatientSessionTest {
     private val auth = FakeAuthGateway(newUid = "patient-1")
     private val store = FakePatientStore()
-    private val session = PatientSession(auth, store, DemoConfig.CLINICIAN_EMAIL, DemoConfig.LIVE_PATIENT_DISPLAY_NAME)
+    private val clinician = DemoConfig.EMULATOR_CLINICIAN_EMAIL
+    private val session = PatientSession(auth, store, clinician, DemoConfig.LIVE_PATIENT_DISPLAY_NAME)
 
     @Test
     fun firstOpenSignsInAnonymouslyAndCreatesThePatientLinkedToTheDemoClinician() = runTest {
@@ -25,7 +26,7 @@ class PatientSessionTest {
         assertEquals(store.records.getValue("patient-1"), started.patient)
         assertEquals(1, auth.signInCalls)
         val record = store.records.getValue("patient-1")
-        assertEquals(DemoConfig.CLINICIAN_EMAIL, record.clinicianEmail)
+        assertEquals(clinician, record.clinicianEmail)
         assertEquals(DemoConfig.LIVE_PATIENT_DISPLAY_NAME, record.displayName)
         assertEquals(FlagLevel.green, record.flagLevel)
         assertEquals(HealthSource.device, record.healthSource)
@@ -57,6 +58,6 @@ class PatientSessionTest {
 
         assertEquals("returning", session.start().patientId)
         assertEquals(0, auth.signInCalls)
-        assertEquals(DemoConfig.CLINICIAN_EMAIL, store.records.getValue("returning").clinicianEmail)
+        assertEquals(clinician, store.records.getValue("returning").clinicianEmail)
     }
 }

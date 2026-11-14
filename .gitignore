@@ -80,6 +80,7 @@ docs/design/
 google-services.json
 GoogleService-Info.plist
 secrets.properties
+iosApp/iosApp/Secrets.plist
 local.properties
 
 # --- Gradle / Kotlin ---

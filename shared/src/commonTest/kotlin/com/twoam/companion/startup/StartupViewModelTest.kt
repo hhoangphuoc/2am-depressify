@@ -33,10 +33,10 @@ class StartupViewModelTest {
     @AfterTest
     fun tearDown() = Dispatchers.resetMain()
 
-    private fun viewModel() = StartupViewModel(PatientSession(auth, store, DemoConfig.CLINICIAN_EMAIL, "Live patient"))
+    private fun viewModel() = StartupViewModel(PatientSession(auth, store, DemoConfig.EMULATOR_CLINICIAN_EMAIL, "Live patient"))
 
     private val ready = StartupState.Ready(
-        StartedPatient("patient-1", PatientDoc(displayName = "Live patient", clinicianEmail = DemoConfig.CLINICIAN_EMAIL)),
+        StartedPatient("patient-1", PatientDoc(displayName = "Live patient", clinicianEmail = DemoConfig.EMULATOR_CLINICIAN_EMAIL)),
     )
 
     @Test
