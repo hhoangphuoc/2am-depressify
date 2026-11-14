@@ -45,7 +45,6 @@ class NudgeDecisionTest {
         lastCheckInAt: Instant? = null,
         calendar: CalendarAvailability = CalendarAvailability.Unknown,
         weather: WeatherOutlook = WeatherOutlook.Unknown,
-        staleAfterDays: Int = NudgeThresholds.STALE_AFTER_DAYS,
     ) = NudgeInput(
         now = now,
         timeZone = zone,
@@ -56,7 +55,6 @@ class NudgeDecisionTest {
         lastCheckInAt = lastCheckInAt,
         calendar = calendar,
         weather = weather,
-        staleAfterDays = staleAfterDays,
     )
 
     private val roughNudge = NudgeOutcome.Nudge(NudgeReason.RoughNights)
@@ -206,11 +204,9 @@ class NudgeDecisionTest {
         // Two rough nights, but the newest record is from 3 and 4 days ago.
         val stale = listOf(day("2026-11-10", -2.0, home = 2.0), day("2026-11-11", -2.0, home = 2.0))
         assertEquals(nothing, NudgeDecision.decide(input(days = stale)))
-        // No record today: yesterday and the day before are beyond the 1-day limit...
+        // No record today: the day before yesterday is beyond the 1-day limit.
         val noToday = listOf(day("2026-11-12", -2.0, home = 2.0), day(YESTERDAY, -2.0, home = 2.0))
         assertEquals(nothing, NudgeDecision.decide(input(days = noToday)))
-        // ...and count when the limit allows 2 days.
-        assertEquals(roughNudge, NudgeDecision.decide(input(days = noToday, staleAfterDays = 2)))
     }
 
     @Test

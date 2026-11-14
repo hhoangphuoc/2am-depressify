@@ -29,27 +29,23 @@ sealed interface QuietHoursCheck {
 object QuietHoursRules {
     private const val MINUTES_PER_HOUR = 60
 
-    /** 21:00 to 09:00, the same as the Patient record's defaults. */
-    val Default: QuietHours = QuietHours.Default
-
     /** Accepts any two different whole-hour times, including an overnight range such as 21:00 to 09:00. */
     fun validate(start: LocalMinutes, end: LocalMinutes): QuietHoursCheck = when {
-        start == end -> QuietHoursCheck.Invalid(QuietHoursProblem.SameStartAndEnd)
+        !QuietHours(start, end).isValid -> QuietHoursCheck.Invalid(QuietHoursProblem.SameStartAndEnd)
         start.value % MINUTES_PER_HOUR != 0 || end.value % MINUTES_PER_HOUR != 0 ->
             QuietHoursCheck.Invalid(QuietHoursProblem.NotOnTheHour)
         else -> QuietHoursCheck.Valid(QuietHours(start, end))
     }
 
-    /** True when the window runs past midnight, like 21:00 to 09:00. */
-    fun crossesMidnight(quietHours: QuietHours): Boolean = quietHours.start.value > quietHours.end.value
-
     /**
      * Reads `quietHoursStart` and `quietHoursEnd` from the Patient record. Hours outside 0..23 or
-     * identical endpoints can't be quiet hours, so they give the default.
+     * identical endpoints can't be quiet hours, so they give [QuietHours.Default] (21:00 to 09:00, the
+     * record's own defaults).
      */
-    fun fromContract(startHour: Int, endHour: Int): QuietHours {
-        if (startHour !in 0..23 || endHour !in 0..23 || startHour == endHour) return Default
-        return QuietHours(LocalMinutes(startHour * MINUTES_PER_HOUR), LocalMinutes(endHour * MINUTES_PER_HOUR))
+    fun fromContract(stored: ContractQuietHours): QuietHours {
+        if (stored.startHour !in 0..23 || stored.endHour !in 0..23) return QuietHours.Default
+        return QuietHours(LocalMinutes(stored.startHour * MINUTES_PER_HOUR), LocalMinutes(stored.endHour * MINUTES_PER_HOUR))
+            .takeIf { it.isValid } ?: QuietHours.Default
     }
 
     /** The values to write to the Patient record, or null when [quietHours] doesn't pass [validate]. */

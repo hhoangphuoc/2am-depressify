@@ -7,9 +7,7 @@ import kotlin.test.assertFalse
 class NudgeNotificationTest {
 
     @Test
-    fun everyReasonGivesTheSameGenericInvitation() {
-        val texts = NudgeReason.entries.map { NudgeNotification.forNudge(NudgeOutcome.Nudge(it)) }.toSet()
-        assertEquals(setOf(NudgeNotification.Invitation), texts)
+    fun theInvitationIsTheInterfaceDesignsCopy() {
         // The copy from the interface design.
         assertEquals("A moment for you?", NudgeNotification.Invitation.title)
         assertEquals("Your Check-in is here when you want it.", NudgeNotification.Invitation.body)
@@ -25,11 +23,9 @@ class NudgeNotificationTest {
             "health", "mood", "signal", "baseline", "usual", "worse", "low", "flag", "amber", "red",
             "alert", "risk", "crisis", "depress", "concern", "worried", "clinician",
         )
-        for (reason in NudgeReason.entries) {
-            val n = NudgeNotification.forNudge(NudgeOutcome.Nudge(reason))
-            val text = (n.title + " " + n.body).lowercase()
-            for (word in reasonWords) assertFalse(word in text, "'$word' leaked into the Nudge for $reason: $text")
-            for (name in NudgeReason.entries) assertFalse(name.name.lowercase() in text.replace(" ", ""))
-        }
+        val n = NudgeNotification.Invitation
+        val text = (n.title + " " + n.body).lowercase()
+        for (word in reasonWords) assertFalse(word in text, "'$word' leaked into the Nudge: $text")
+        for (name in NudgeReason.entries) assertFalse(name.name.lowercase() in text.replace(" ", ""))
     }
 }

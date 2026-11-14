@@ -17,7 +17,7 @@ Kept up to date as PRs are opened and merged. Each PR also updates its own rows 
 | #56 | `docs/cloud-setup-on-49` | Firebase and Google Cloud setup record | Open |
 | #57 | `feat/14-typed-checkin-on-49` (on #50, merges #52) | #14, backend: `startCheckIn`, `finishCheckIn`, and `LiveProtocol` in `core` | Open; tested (functions 249, core 39, emulators 87 + 14). Not deployed. |
 | #69 | `feat/26-daily-job-rules` (from `main`) | #26, `core` only: the daily job's pure pipeline (daily record, Baseline, sign of life, Signal flag rules, write plan) | Tested (core 105, seed 91); the app's background work, debug action and device check are still to do |
-| #68 | `feat/27-nudge-rules` → `feat/26-daily-job-rules` (stacked on #69) | #27, `core` part: Nudge rules, Nudge text, quiet hours, and the `core` purity check | Open; tested (core CORE68) |
+| #68 | `feat/27-nudge-rules` → `feat/26-daily-job-rules` (stacked on #69) | #27, `core` part: Nudge rules, Nudge text, quiet hours, and the `core` purity check | Open; tested (core 142) |
 | — | — | #20 (Decisions into flags), then #21 (Outcomes) | Next, after #14 |
 | — | — | #18 (Map tool) | Waits on enabling `mapstools.googleapis.com` and the #17 tool catalog |
 
@@ -166,29 +166,31 @@ Write plan, mirroring `raisedAttention` and `hasOpenFlag` in the functions:
 **Built** in `app.depressify.core.nudge`, pure common Kotlin with tests. Nothing in the data contract changed.
 
 - **`NudgeDecision.decide(NudgeInput): NudgeOutcome`**: `None(NoNudgeReason)` or `Nudge(NudgeReason)`.
-  - Inputs: `now` and the Patient's `timeZone`, `nudgesEnabled`, `lastNudgeAt`, `quietHours`, `recentDays` (daily records with their stored `vsBaseline`), `lastCheckInAt`, `calendar` (`Busy`, `Free`, `Unknown`), `weather` (`Good`, `Bad`, `Unknown`), `staleAfterDays`.
+  - Inputs: `now` and the Patient's `timeZone`, `nudgesEnabled`, `lastNudgeAt`, `quietHours`, `recentDays` (daily records with their stored `vsBaseline`), `lastCheckInAt`, `calendar` (`Busy`, `Free`, `Unknown`), `weather` (`Good`, `Bad`, `Unknown`).
   - No Nudge, in this order: Nudges off; one already sent today (local date); inside quiet hours (overnight windows included; invalid quiet hours count as the default); calendar busy.
   - Otherwise the first that applies:
-    1. `RoughNights`: the newest record not dated in the future and the record for the day before, both no older than the staleness limit and both with sleep at or below −1, and time at home or late-night screen time above +1 on either day.
+    1. `RoughNights`: the newest record not dated in the future and the record for the day before, both no older than 1 day (`STALE_AFTER_DAYS`) and both with oriented sleep (`SignalBaseline.oriented`, #26) at or below −1, and time at home or late-night screen time above +1 on either day.
     2. `FreeHourGoodWeather`: `Free` and `Good`.
     3. `NoCheckInByEvening`: 17:00 or later with no Check-in today.
   - Unknown calendar or weather never counts as free or good. A missing night never counts. Stale or future-dated records are never evidence.
 - **`NudgeThresholds`**: every threshold and time, all starting values. Sleep −1, "more than usual" above +1, 17:00, a 60-minute window, records stale after 1 day.
 - **`CalendarAvailability.forWindow(busy, now)`**: turns free/busy intervals into `Busy` or `Free` for the next hour. No reading gives `Unknown`.
-- **`NudgeNotification.forNudge(nudge)`**: the interface design's copy, "A moment for you?" / "Your Check-in is here when you want it.", for every reason.
+- **`NudgeNotification.Invitation`**: the interface design's copy, "A moment for you?" / "Your Check-in is here when you want it.", the same for every reason, so no reason can leak into it.
 - **`QuietHoursRules`**, on top of `QuietHours` / `LocalMinutes` in `Schedule.kt`:
-  - `Default` is 21:00 to 09:00. `validate` accepts overnight ranges and rejects identical endpoints and times off the hour.
-  - `fromContract` / `toContract` map to the Patient record's whole-hour `quietHoursStart` / `quietHoursEnd`. A broken stored record reads as the default.
+  - `QuietHours.Default` is 21:00 to 09:00. `validate` accepts overnight ranges and rejects identical endpoints and times off the hour.
+  - `fromContract` / `toContract` map to and from `ContractQuietHours`, the Patient record's whole-hour `quietHoursStart` / `quietHoursEnd`. A broken stored record reads as the default.
   - `display` shows the time zone: `21:00–09:00 (Europe/Helsinki)`.
 - **Kept on the phone, not in Firestore:** the last Nudge time and the Nudge on/off choice. Nudges are local notifications decided on the phone, so nothing else reads them. A reinstall forgets them, which allows at most one extra Nudge that day.
 - **The app team wires up:**
-  - Calling `decide` from the daily job, after today's daily record is built.
+  - Calling `decide` after each daily job run (once today's daily record is built), **and hourly from 17:00 until quiet hours start**. The daily job runs about every six hours, so on its own it can miss the 17:00–21:00 window entirely (runs at 09:00, 15:00 and 21:00), or lose the evening to one busy calendar reading. `decide` is pure and cheap, and `AlreadySentToday` keeps it to one Nudge a day.
   - Recording `lastNudgeAt` when it posts.
   - The calendar and weather reads.
   - The notification, its channel, the permission (denied gives `nudgesEnabled = false`), and the tap into a ready-to-start Check-in without the microphone.
   - The quiet-hours screen through `QuietHoursRules`, and its Compose UI tests.
   - The S24+ check.
-- **Open:** the quiet-hours screen steps by 30 minutes, but the Patient record stores whole hours. Either the stepper moves by an hour, or the contract moves to minutes.
+- **Open:**
+  - The quiet-hours screen steps by 30 minutes, but the Patient record stores whole hours. Either the stepper moves by an hour, or the contract moves to minutes.
+  - "Busy" is any busy time in the next hour (the free hour needs the same window), so it also holds back the evening invitation: a meeting at 17:45 delays it to the first hourly check after the meeting. The alternative is "busy now" for suppression.
 
 ### Seed (`firebase/seed`)
 
@@ -264,7 +266,7 @@ Results on `feat/14-typed-checkin-on-49` (on #50, with #52's spike fixtures merg
 
 | Suite | Command | Result |
 |---|---|---|
-| Kotlin `core` (contract, `CoreRulesTest`, `LiveProtocolTest`, `LiveProtocolFixturesTest`, and on `feat/26-daily-job-rules` the daily pipeline, `BaselineFixtureTest` and `SignalRulesFixtureTest`) | `./gradlew :core:jvmTest` | 39 pass; 105 on `feat/26-daily-job-rules` (66 new). The exported contract is unchanged |
+| Kotlin `core` (contract, `CoreRulesTest`, `LiveProtocolTest`, `LiveProtocolFixturesTest`, and on `feat/26-daily-job-rules` the daily pipeline, `BaselineFixtureTest` and `SignalRulesFixtureTest`; on `feat/27-nudge-rules` also the Nudge and quiet-hours tests) | `./gradlew :core:jvmTest` | 39 pass; 105 on `feat/26-daily-job-rules` (66 new); 142 on `feat/27-nudge-rules` (37 more for #27). The exported contract is unchanged |
 | Kotlin `shared` (session and view model wiring, with fakes) | `./gradlew :shared:testAndroidHostTest` | 10 pass; 16 on `feat/26-daily-job-rules` (from `main`) |
 | Android build | `./gradlew :androidApp:assembleDebug` | APK builds |
 | iOS build | `xcodegen generate`, then `xcodebuild` for the arm64 simulator | Builds and links with the Firebase iOS SDK |

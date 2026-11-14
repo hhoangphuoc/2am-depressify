@@ -2,9 +2,9 @@ package app.depressify.core.nudge
 
 import app.depressify.core.LocalMinutes
 import app.depressify.core.QuietHours
+import app.depressify.core.daily.SignalBaseline
 import app.depressify.core.model.DailyDoc
 import app.depressify.core.model.Signal
-import app.depressify.core.model.SignalDirection
 import kotlinx.datetime.DateTimeUnit
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.TimeZone
@@ -64,10 +64,9 @@ enum class CalendarAvailability {
         fun forWindow(
             busy: List<OpenEndRange<Instant>>?,
             now: Instant,
-            windowMinutes: Int = NudgeThresholds.FREE_WINDOW_MINUTES,
         ): CalendarAvailability {
             if (busy == null) return Unknown
-            val end = now + windowMinutes.minutes
+            val end = now + NudgeThresholds.FREE_WINDOW_MINUTES.minutes
             return if (busy.any { it.start < end && it.endExclusive > now }) Busy else Free
         }
     }
@@ -133,7 +132,6 @@ sealed interface NudgeOutcome {
  * @property lastCheckInAt the end of the last Check-in, or null if none (`PatientDoc.lastCheckInAtMillis`).
  * @property calendar the calendar for the coming window; see [CalendarAvailability.forWindow].
  * @property weather the weather for the coming window.
- * @property staleAfterDays a daily record older than this many days is never used as evidence.
  */
 data class NudgeInput(
     val now: Instant,
@@ -145,7 +143,6 @@ data class NudgeInput(
     val lastCheckInAt: Instant?,
     val calendar: CalendarAvailability,
     val weather: WeatherOutlook,
-    val staleAfterDays: Int = NudgeThresholds.STALE_AFTER_DAYS,
 )
 
 object NudgeDecision {
@@ -170,7 +167,7 @@ object NudgeDecision {
         if (suppressed != null) return NudgeOutcome.None(suppressed)
 
         val reason = when {
-            roughNights(input.recentDays, today, input.staleAfterDays) -> NudgeReason.RoughNights
+            roughNights(input.recentDays, today) -> NudgeReason.RoughNights
             input.calendar == CalendarAvailability.Free && input.weather == WeatherOutlook.Good -> NudgeReason.FreeHourGoodWeather
             time.value >= NudgeThresholds.EVENING_FROM.value &&
                 (input.lastCheckInAt == null || input.lastCheckInAt.localDate(input.timeZone) < today) -> NudgeReason.NoCheckInByEvening
@@ -181,22 +178,22 @@ object NudgeDecision {
 
     /**
      * The last two nights are the newest daily record that is not dated in the future, and the record for
-     * the day before it. Both records must be there, both no older than [staleAfterDays], both with an
+     * the day before it. Both records must be there, both no older than [NudgeThresholds.STALE_AFTER_DAYS], both with an
      * oriented sleep comparison at or below [NudgeThresholds.ROUGH_NIGHT_SLEEP_AT_OR_BELOW]; and on either
      * of those two days, time at home or late-night screen time must be above
      * [NudgeThresholds.MORE_THAN_USUAL_ABOVE]. A missing value never counts.
      */
-    private fun roughNights(days: List<DailyDoc>, today: LocalDate, staleAfterDays: Int): Boolean {
+    private fun roughNights(days: List<DailyDoc>, today: LocalDate): Boolean {
         val byDate = days
             .mapNotNull { doc -> runCatching { LocalDate.parse(doc.date) }.getOrNull()?.let { it to doc } }
             .filter { (date, _) -> date <= today }
             .toMap()
         val lastNight = byDate.keys.maxOrNull() ?: return false
         val nightBefore = lastNight.minus(1, DateTimeUnit.DAY)
-        if (nightBefore.daysUntil(today) > staleAfterDays) return false
+        if (nightBefore.daysUntil(today) > NudgeThresholds.STALE_AFTER_DAYS) return false
         val nights = listOf(nightBefore, lastNight).map { byDate[it] ?: return false }
         val bothRough = nights.all { night ->
-            val sleep = night.oriented(Signal.SLEEP_MINUTES)
+            val sleep = SignalBaseline.oriented(Signal.SLEEP_MINUTES, night.vsBaseline[Signal.SLEEP_MINUTES.key])
             sleep != null && sleep <= NudgeThresholds.ROUGH_NIGHT_SLEEP_AT_OR_BELOW
         }
         val moreThanUsual = nights.any { day ->
@@ -206,16 +203,6 @@ object NudgeDecision {
             }
         }
         return bothRough && moreThanUsual
-    }
-
-    /** The comparison with negative always meaning worse (docs/firestore-schema.md, Baseline). */
-    private fun DailyDoc.oriented(signal: Signal): Double? {
-        val vs = vsBaseline[signal.key] ?: return null
-        return when (signal.direction) {
-            SignalDirection.higher_is_better -> vs
-            SignalDirection.lower_is_better -> -vs
-            SignalDirection.none -> null
-        }
     }
 
     private fun Instant.localDate(zone: TimeZone): LocalDate = toLocalDateTime(zone).date
