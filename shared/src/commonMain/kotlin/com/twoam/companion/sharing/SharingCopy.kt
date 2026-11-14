@@ -48,11 +48,16 @@ object SharingCopy {
     }
     const val STOP_SHARING: String = "Stop sharing"
     const val SHARE_AGAIN: String = "Share again"
+    /**
+     * Re-consent shares future records only: what is saved while not sharing is stamped so the
+     * Clinician never sees it, and what was shared before becomes visible again.
+     */
     fun shareAgainNote(clinicianEmail: String): String =
-        "If you share again, $clinicianEmail can see your progress again, including what was saved while you weren't sharing."
+        "If you share again, $clinicianEmail sees what you save from then on, and what you shared before. " +
+            "Check-ins, Summaries and Signals saved while you weren't sharing stay hidden from them."
     fun confirmWithdrawalTitle(clinicianEmail: String): String = "Stop sharing with $clinicianEmail?"
     const val CONFIRM_WITHDRAWAL_BODY: String =
-        "They will stop seeing your Summaries, your ratings, your Signal trends and when you last checked in, and they won't get heads-ups about you. Your Check-ins carry on as before."
+        "They will stop seeing your Summaries, your ratings, your Signal trends and when you last checked in, and they won't get heads-ups about you. Your Check-ins carry on as before, and what you save while you're not sharing stays hidden from them, even if you share again later."
     const val CONFIRM_STOP: String = "Yes, stop sharing"
     const val KEEP_SHARING: String = "Keep sharing"
 

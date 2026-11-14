@@ -61,6 +61,23 @@ class SharingCopyTest {
     }
 
     @Test
+    fun sharingAgainSharesWhatComesNextAndNeverTheTimeWithoutSharing() {
+        val note = SharingCopy.shareAgainNote(clinician)
+        assertTrue(note.contains(clinician))
+        assertTrue(note.contains("from then on"))
+        assertTrue(note.contains("what you shared before"))
+        assertTrue(note.contains("saved while you weren't sharing stay hidden from them"))
+        // The old promise that the Clinician would see the time without sharing must not come back.
+        val revealsTheGap = Regex("including what was saved while|see .* while you weren't sharing", RegexOption.IGNORE_CASE)
+        everything.forEach { assertFalse(revealsTheGap.containsMatchIn(it), "\"$it\"") }
+    }
+
+    @Test
+    fun withdrawingSaysTheTimeWithoutSharingStaysHiddenEvenAfterSharingAgain() {
+        assertTrue(SharingCopy.CONFIRM_WITHDRAWAL_BODY.contains("stays hidden from them, even if you share again"))
+    }
+
+    @Test
     fun aFailedSaveSaysWhyAndWhatStillHolds() {
         assertTrue(SharingCopy.saveFailed(SharingConsent.granted, clinician).contains("couldn't reach the server"))
         assertTrue(SharingCopy.saveFailed(SharingConsent.granted, clinician).contains("still sharing with $clinician"))
