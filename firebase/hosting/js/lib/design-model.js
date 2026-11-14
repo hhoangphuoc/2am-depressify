@@ -855,7 +855,8 @@ export function orderRoster(patients) {
  * What the roster shows for a search and a level filter: the filtered Patients, the counts per
  * level (before filtering), the red banner (from every Patient, so filters never hide it) and the
  * line under the controls.
- * @param {{ patients: ReturnType<typeof designPatient>[] }} roster
+ * @param {{ patients: (ReturnType<typeof designPatient> | ReturnType<typeof designRosterPatient>)[] }} roster
+ *   design patient objects or the roster's light rows (`designRosterPatient`)
  * @param {{ search?: string, filter?: "all" | "red" | "amber" | "unknown" | "green" | "hidden" }} [options]
  */
 export function rosterView(roster, { search = "", filter = "all" } = {}) {
