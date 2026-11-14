@@ -73,6 +73,12 @@ export const DESIGN_SIGNALS = Object.freeze([
 /** The most days of daily rows a Patient object carries. */
 export const MAX_DAILY_DAYS = 120;
 
+/** The roster reads this many of each Patient's latest daily records: 14 for the sparkline, 14 for its Baseline. */
+export const ROSTER_DAILY_DAYS = 28;
+
+/** The Signal the roster's sparkline shows; its Consent is `consents/sleepMinutes`. */
+export const ROSTER_SIGNAL = "sleepMinutes";
+
 /** A file the Intake accepts: text, at most this many bytes (the functions take 100,000 characters). */
 export const INTAKE_FILE_MAX_BYTES = 100_000;
 
@@ -88,9 +94,11 @@ export const DESIGN_COPY = Object.freeze({
     demo: "No email (Demo Patient)",
     requested: "Email requested · delivery is not shown on the dashboard",
   }),
-  visitBeforeTms: "The Visit must be on or after the TMS end date.",
+  // Week 1 and Phase 1 start the day after TMS ends (timeline.js), so a Visit on that day would
+  // belong to no Phase: a Visit is strictly after the TMS end date.
+  visitBeforeTms: "The Visit must be after the TMS end date.",
   visitSameDate: "A Visit is already recorded on that date. Choose another date.",
-  tmsAfterVisit: "TMS must end on or before the first recorded Visit.",
+  tmsAfterVisit: "TMS must end before the first recorded Visit.",
   intakeFile: "Choose a .txt or .md report under 100 KB, or paste the text.",
   noUnknown: "No Patient has an unavailable assessment right now.",
   noHidden: "No Patient has withdrawn sharing in this session.",
@@ -336,11 +344,11 @@ export function dailyRange({ daily, tmsEndDate, today, maxDays = MAX_DAILY_DAYS 
 
 /**
  * Consent for each Signal: `granted !== true` hides its values (`signalState` "no_consent").
- * A list without Consents (not loaded) hides nothing.
+ * Consents not loaded (null) hide everything: an unknown Consent is never treated as granted.
  * @param {{ id?: string, subject?: string, granted?: unknown }[] | null | undefined} consents
  */
 function consentLookup(consents) {
-  if (!Array.isArray(consents)) return () => ({ granted: true });
+  if (!Array.isArray(consents)) return () => null;
   /** @type {Map<string, { granted?: unknown }>} */
   const bySubject = new Map();
   for (const c of consents) bySubject.set(String(c?.subject ?? c?.id ?? ""), c);
@@ -351,7 +359,7 @@ function consentLookup(consents) {
  * The design's daily rows: one per calendar date in `range`, oldest first, each with every design
  * Signal in the design's unit and the day's Mood rating (from that day's latest Summary, so the
  * charts and Summaries agree). A missing record, a null value or a Signal without Consent is null,
- * never zero.
+ * never zero; with `consents` null (not loaded) every Signal is null.
  * @param {{ date: string, values?: Record<string, unknown> }[]} daily
  * @param {{ range: { start: string, end: string }, summaries?: { date: string | null, mood: number | null }[], consents?: object[] | null }} options
  *   `summaries` in the design's shape (`designSummaries`)
@@ -652,6 +660,8 @@ export function withdrawnPatient(id) {
     checkIn: null,
     freshness: null,
     activeFlags: [],
+    flagsLoaded: false,
+    flagsError: false,
     history: [],
     summaries: [],
     daily: [],
@@ -681,7 +691,9 @@ export function withdrawnPatient(id) {
  * @property {object[]} [suggestions]
  * @property {object[]} [visits]
  * @property {object[]} [digests] the latest first; only the first is used
- * @property {object[] | null} [consents] null or missing: not loaded (hides nothing)
+ * @property {object[] | null} [consents] null or missing: not loaded, which hides every Signal
+ * @property {boolean} [flagsError] the flags could not be loaded (not a withdrawal): the record's
+ *   level and reasons stand in, and `flagsError` tells the UI to say so
  */
 
 /**
@@ -728,6 +740,7 @@ export function designPatient(sources, clock, { maxDays = MAX_DAILY_DAYS } = {})
     assessment: attention.assessment,
     activeFlags: attention.activeFlags,
     flagsLoaded: attention.flagsLoaded,
+    flagsError: sources.flagsError === true,
     history: Array.isArray(sources.flags) ? designHistory(/** @type {any} */ (sources.flags), { synthetic: record.synthetic === true, timeZone }) : [],
     daily,
     range,
@@ -741,6 +754,68 @@ export function designPatient(sources, clock, { maxDays = MAX_DAILY_DAYS } = {})
     whatHelps: designWhatHelps(sources.suggestions ?? [], { today, timeZone }),
     synthetic: record.synthetic === true,
     healthSource: record.healthSource ?? null,
+    today,
+  };
+}
+
+/**
+ * @typedef {object} RosterSources what the roster reads for one Patient, each `{ id, ...data }`
+ * @property {string} id
+ * @property {Partial<import("./contract.js").PatientDoc>} patient the record's data
+ * @property {object[] | null} [flags] null or missing: not loaded (the record's level stands in)
+ * @property {object[]} [daily] the latest daily records
+ * @property {object[]} [checkIns] the latest Check-in
+ * @property {{ granted?: unknown } | null} [sleepConsent] the `consents/sleepMinutes` document's
+ *   data; null when there is none; undefined while it loads. Only `granted: true` shows sleep.
+ */
+
+/**
+ * One roster row: the light part of `designPatient` the roster shows (level, open flags and
+ * reasons, the 14-day sleep sparkline, the latest Check-in, phone freshness), without Summaries,
+ * Signals, the timeline or what helps. The daily rows carry only `date` and `sleep`, and `sleep` is
+ * null unless the Patient's sleep Consent is known to be granted: a withheld or unknown Consent puts
+ * no value in the row. `rosterView` and `orderRoster` take it like a `designPatient` object.
+ * @param {RosterSources} sources
+ * @param {Clock} clock
+ * @param {{ maxDays?: number }} [options]
+ */
+export function designRosterPatient(sources, clock, { maxDays = ROSTER_DAILY_DAYS } = {}) {
+  const { id } = sources;
+  const record = sources.patient ?? {};
+  if (record.sharingConsent !== SHARING_GRANTED) return withdrawnPatient(id);
+  const { nowMillis, timeZone, today } = clockOf(clock);
+  const attention = designAttention(record, sources.flags ?? null, { checkIns: sources.checkIns ?? null, timeZone });
+  const consent = sources.sleepConsent;
+  const sleepConsent = consent === undefined ? "unknown" : consent?.granted === true ? "granted" : "withheld";
+  const range = dailyRange({ daily: /** @type {any} */ (sources.daily), tmsEndDate: record.tmsEndDate, today, maxDays });
+  const consents = sleepConsent === "granted" ? [{ subject: ROSTER_SIGNAL, granted: true }] : [];
+  const sleepKey = /** @type {string} */ (DESIGN_SIGNALS.find((s) => s.signal === ROSTER_SIGNAL)?.key);
+  const daily = designDaily(/** @type {any} */ (sources.daily ?? []), { range, consents }).map((row) => ({ date: row.date, [sleepKey]: row[sleepKey] }));
+  const name = record.displayName || "Unnamed patient";
+  return {
+    id,
+    name,
+    initials: initialsOf(name),
+    sharing: "active",
+    level: attention.level,
+    levelWord: attention.levelWord,
+    storedLevel: attention.storedLevel,
+    reason: attention.reason,
+    source: attention.source,
+    observed: attention.observed,
+    note: attention.activeFlags[0]?.reason ?? null,
+    lastPhone: typeof record.lastSeenAtMillis === "number" ? latestCheckInText(record.lastSeenAtMillis, nowMillis, timeZone) : "Never seen",
+    checkIn: latestCheckInText(record.lastCheckInAtMillis, nowMillis, timeZone),
+    freshness: freshness(record.lastSeenAtMillis, nowMillis),
+    alertsEnabled: record.synthetic !== true,
+    assessmentStatus: attention.assessmentStatus,
+    assessment: attention.assessment,
+    activeFlags: attention.activeFlags,
+    flagsLoaded: attention.flagsLoaded,
+    daily,
+    sleepConsent,
+    range,
+    synthetic: record.synthetic === true,
     today,
   };
 }
@@ -827,10 +902,11 @@ const DESIGN_TYPES = Object.freeze({ none: "", "PHQ-2": "phq2", "PHQ-9": "phq9" 
 /**
  * The design's Record a Visit form `{ date, type: "none" | "PHQ-2" | "PHQ-9", score }`, checked with
  * `validateVisit` (visit.js: not in the future, integer in range) and the design's two extra rules:
- * not before the TMS end date, and one Visit per date.
+ * strictly after the TMS end date (Phase 1 starts the day after, so a Visit on that day would be in
+ * no Phase and off the timeline), and one Visit per date.
  * @param {{ date: string, type: string, score?: string | number | null }} form
  * @param {{ today: string, tms?: string | null, visits?: { id?: string, date: string }[], editingId?: string | null }} context
- * @returns {{ ok: true, visit: import("./visit.js").Visit } | { ok: false, message: string, errors?: object }}
+ * @returns {{ ok: true, visit: import("./visit.js").Visit } | { ok: false, message: string, errors?: { date?: string, questionnaire?: string, score?: string } }}
  */
 export function validateDesignVisit(form, { today, tms = null, visits = [], editingId = null }) {
   const kind = DESIGN_TYPES[/** @type {keyof typeof DESIGN_TYPES} */ (form?.type)];
@@ -839,13 +915,14 @@ export function validateDesignVisit(form, { today, tms = null, visits = [], edit
     const { date, questionnaire, score } = result.errors;
     return { ok: false, message: /** @type {string} */ (date ?? questionnaire ?? score), errors: result.errors };
   }
-  if (isDateKey(tms) && result.visit.date < tms) return { ok: false, message: DESIGN_COPY.visitBeforeTms };
-  if (visits.some((v) => v.date === result.visit.date && v.id !== editingId)) return { ok: false, message: DESIGN_COPY.visitSameDate };
+  if (isDateKey(tms) && result.visit.date <= tms) return { ok: false, message: DESIGN_COPY.visitBeforeTms, errors: { date: DESIGN_COPY.visitBeforeTms } };
+  if (visits.some((v) => v.date === result.visit.date && v.id !== editingId)) return { ok: false, message: DESIGN_COPY.visitSameDate, errors: { date: DESIGN_COPY.visitSameDate } };
   return result;
 }
 
 /**
- * The TMS end date: `validateTmsEndDate` plus the design's rule that it is not after a Visit.
+ * The TMS end date: `validateTmsEndDate` plus the design's rule that it is strictly before every
+ * recorded Visit (the same rule as `validateDesignVisit`, from the other side).
  * @param {string} date
  * @param {{ today: string, visits?: { date: string }[] }} context
  * @returns {{ ok: true, date: string } | { ok: false, message: string }}
@@ -853,7 +930,7 @@ export function validateDesignVisit(form, { today, tms = null, visits = [], edit
 export function validateDesignTms(date, { today, visits = [] }) {
   const result = validateTmsEndDate(date, today);
   if (!result.ok) return { ok: false, message: result.error };
-  if (visits.some((v) => isDateKey(v.date) && v.date < result.date)) return { ok: false, message: DESIGN_COPY.tmsAfterVisit };
+  if (visits.some((v) => isDateKey(v.date) && v.date <= result.date)) return { ok: false, message: DESIGN_COPY.tmsAfterVisit };
   return result;
 }
 

@@ -18,6 +18,7 @@ import {
   designDigest,
   designHistory,
   designPatient,
+  designRosterPatient,
   designSummaries,
   designWhatHelps,
   highlightsList,
@@ -149,6 +150,12 @@ describe("designPatient on the Demo Patients", () => {
     for (const p of [steady(), declining(), sparse()]) {
       for (const s of p.summaries) assert.equal(p.daily.find((d) => d.date === s.date).mood, s.mood, `${p.id} ${s.date}`);
     }
+  });
+
+  test("Consents not loaded hide every Signal: an unknown Consent is never granted", () => {
+    const p = designPatient({ ...sourcesOf("steady"), consents: null }, CLOCK);
+    for (const s of DESIGN_SIGNALS) assert.ok(p.daily.every((r) => r[s.key] === null), s.key);
+    assert.ok(p.signals.every((s) => s.state === "no_consent" && s.latest === null));
   });
 
   test("Signal Consent off hides that Signal's values and says so", () => {
@@ -465,6 +472,48 @@ describe("the roster", () => {
   });
 });
 
+describe("the roster's light model", () => {
+  const rosterSources = (key, overrides = {}) => {
+    const s = sourcesOf(key);
+    const sleepConsent = s.consents.find((c) => c.subject === "sleepMinutes") ?? null;
+    return { id: s.id, patient: s.patient, flags: s.flags, daily: s.daily.slice(-28), checkIns: s.checkIns, sleepConsent, ...overrides };
+  };
+
+  test("has what the roster shows, as designPatient does, and nothing else", () => {
+    for (const key of ["steady", "declining", "sparse"]) {
+      const light = designRosterPatient(rosterSources(key), CLOCK);
+      const full = designPatient(sourcesOf(key), CLOCK);
+      for (const field of ["id", "name", "initials", "sharing", "level", "levelWord", "storedLevel", "reason", "note", "checkIn", "lastPhone", "freshness", "alertsEnabled", "assessmentStatus"]) {
+        assert.deepEqual(light[field], full[field], `${key} ${field}`);
+      }
+      assert.deepEqual(light.activeFlags, full.activeFlags, key);
+      assert.equal(light.summaries, undefined, "no Summaries");
+      assert.equal(light.signals, undefined, "no Signals");
+      assert.equal(light.timeline, undefined, "no timeline");
+      assert.ok(light.daily.every((r) => Object.keys(r).sort().join() === "date,sleep"), "only the date and sleep");
+    }
+    assert.deepEqual(orderRoster(["sparse", "steady", "declining"].map((k) => designRosterPatient(rosterSources(k), CLOCK))).map((p) => p.id), ["demo-declining", "demo-sparse", "demo-steady"]);
+  });
+
+  test("sleep is shown only with the sleep Consent granted; withheld or unknown puts no value in the rows", () => {
+    const granted = designRosterPatient(rosterSources("steady"), CLOCK);
+    assert.equal(granted.sleepConsent, "granted");
+    assert.ok(granted.daily.some((r) => typeof r.sleep === "number"));
+    for (const [sleepConsent, word] of [[{ subject: "sleepMinutes", granted: false }, "withheld"], [null, "withheld"], [undefined, "unknown"]]) {
+      const p = designRosterPatient(rosterSources("steady", { sleepConsent }), CLOCK);
+      assert.equal(p.sleepConsent, word);
+      assert.ok(p.daily.length > 0);
+      assert.ok(p.daily.every((r) => r.sleep === null), word);
+    }
+  });
+
+  test("a withdrawn Patient is the anonymous placeholder", () => {
+    const p = designRosterPatient(rosterSources("steady", { patient: { ...sourcesOf("steady").patient, sharingConsent: "declined" } }), CLOCK);
+    assert.equal(p.level, "hidden");
+    assert.deepEqual(p.daily, []);
+  });
+});
+
 describe("form checks", () => {
   const context = { today: TODAY, tms: "2026-10-02", visits: [{ id: "v", date: "2026-10-23" }] };
 
@@ -476,7 +525,7 @@ describe("form checks", () => {
     assert.equal(validateDesignVisit({ date: "2026-11-14", type: "none", score: "" }, context).ok, false, "future");
     assert.equal(validateDesignVisit({ date: "2026-02-30", type: "none", score: "" }, context).ok, false, "not a date");
     assert.deepEqual(validateDesignVisit({ date: TODAY, type: "none", score: "5" }, context), { ok: true, visit: { date: TODAY, questionnaire: null, score: null } });
-    assert.equal(validateDesignVisit({ date: "2026-10-01", type: "none" }, context).message, "The Visit must be on or after the TMS end date.");
+    assert.equal(validateDesignVisit({ date: "2026-10-01", type: "none" }, context).message, "The Visit must be after the TMS end date.");
     assert.match(validateDesignVisit({ date: "2026-10-23", type: "none" }, context).message, /already recorded/);
     assert.equal(validateDesignVisit({ date: "2026-10-23", type: "none" }, { ...context, editingId: "v" }).ok, true);
   });
@@ -496,7 +545,22 @@ describe("form checks", () => {
   test("the TMS end date is not in the future and not after a Visit", () => {
     assert.deepEqual(validateDesignTms("2026-10-02", context), { ok: true, date: "2026-10-02" });
     assert.equal(validateDesignTms("2026-11-14", context).ok, false);
-    assert.equal(validateDesignTms("2026-10-24", context).message, "TMS must end on or before the first recorded Visit.");
+    assert.equal(validateDesignTms("2026-10-24", context).message, "TMS must end before the first recorded Visit.");
+  });
+
+  test("a Visit on the TMS end date is refused from both sides, as the timeline would drop it", () => {
+    // The Visit side: the day TMS ended is refused, the day after is the first allowed.
+    const onTms = validateDesignVisit({ date: "2026-10-02", type: "none" }, context);
+    assert.equal(onTms.ok, false);
+    assert.equal(onTms.message, "The Visit must be after the TMS end date.");
+    assert.equal(validateDesignVisit({ date: "2026-10-03", type: "none" }, context).ok, true);
+    // The TMS side: ending on the day of a Visit is refused, the day before is the last allowed.
+    assert.equal(validateDesignTms("2026-10-23", context).ok, false);
+    assert.equal(validateDesignTms("2026-10-23", context).message, "TMS must end before the first recorded Visit.");
+    assert.deepEqual(validateDesignTms("2026-10-22", context), { ok: true, date: "2026-10-22" });
+    // What the form accepts, the Phases keep: a Visit the day after TMS ends closes Phase 1.
+    const visits = [{ id: "a", date: "2026-10-03" }];
+    assert.equal(phases("2026-10-02", visits, TODAY)[0].end, "2026-10-03");
   });
 
   test("an Intake file is .txt or .md, at most 100 KB", () => {
