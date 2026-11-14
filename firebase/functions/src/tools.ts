@@ -3,7 +3,8 @@
 // The tools run on the phone, where the Patient's data already is; the dispatcher is
 // `CompanionTools` in shared/.../voice/live/CompanionTools.kt, which mirrors these names and
 // arguments. All are BLOCKING, the only behaviour the #6 spike verified. find_places and
-// get_weather go through the mapTool callable (mapTool.ts). The calendar is not here: it waits on #19.
+// get_weather go through the mapTool callable (mapTool.ts); suggest_music starts the
+// generateMusic callable (music.ts) and returns at once. The calendar is not here: it waits on #19.
 import { SUGGESTION_KINDS } from "./types";
 
 /** A Live API parameter schema (OpenAPI subset, upper-case types, as recorded in the #6 spike). */
@@ -67,8 +68,8 @@ export const LIVE_TOOL_DECLARATIONS: readonly FunctionDeclaration[] = (
     },
     {
       name: "suggest_music",
-      description: "Show a card that opens a music search in the person's own app. Call when you suggest music. You get no results back, so do not name specific tracks as found.",
-      parameters: { type: "OBJECT", properties: { query: { type: "STRING", description: "For example 'calm piano'." } }, required: ["query"] },
+      description: "Start making about a minute of calm instrumental music for the person, matched to how they feel. It is ready on their screen in about half a minute, with a play button. Call when you suggest music, then tell them it is on its way. Never say it has finished or describe how it sounds.",
+      parameters: { type: "OBJECT", properties: { mood: { type: "STRING", description: "How they feel, in their own plain terms, for example 'tired and tense after a long week'. No names." } }, required: ["mood"] },
     },
     {
       name: "find_places",

@@ -10,6 +10,7 @@ import app.depressify.core.model.Signal
 import app.depressify.core.model.SuggestionStatus
 import app.depressify.shared.data.FakeCheckInGateway
 import app.depressify.shared.data.FakePatientStore
+import app.depressify.shared.data.MusicClip
 import app.depressify.shared.data.NearbyPlace
 import app.depressify.shared.data.Weather
 import app.depressify.shared.voice.live.LiveClient
@@ -97,7 +98,7 @@ class GeminiLiveSessionTest {
         val client = FakeLiveClient(listOf(
             call("get_health_summary", "days" to JsonPrimitive(7)),
             call("record_suggestion", "kind" to JsonPrimitive("music"), "details" to JsonPrimitive("One calm song tonight")),
-            call("suggest_music", "query" to JsonPrimitive("calm piano")),
+            call("suggest_music", "mood" to JsonPrimitive("tired after a long week")),
             call("find_places", "query" to JsonPrimitive("park near me")),
             call("no_such_tool"),
             call("wrap_up"),
@@ -108,8 +109,9 @@ class GeminiLiveSessionTest {
 
         // A missing day stays missing: only the day with a value is described, in words.
         assertEquals(listOf("Sleep: lower than usual", "Steps: about the same as usual"), assertIs<ToolCard.Insight>(snap.cards[0]).lines)
-        assertEquals("https://music.youtube.com/search?q=calm%20piano", assertIs<ToolCard.Music>(snap.cards[1]).url)
-        assertEquals("https://www.google.com/maps/search/?api=1&query=park%20near%20me", assertIs<ToolCard.Places>(snap.cards[2]).url)
+        // The fake has no music, so the card ends in its failed state while the Check-in goes on.
+        assertEquals(ToolCard.Music("tired after a long week", null, failed = true), snap.cards.filterIsInstance<ToolCard.Music>().single())
+        assertEquals("https://www.google.com/maps/search/?api=1&query=park%20near%20me", snap.cards.filterIsInstance<ToolCard.Places>().single().url)
         assertEquals(SuggestionKind.Music to "One calm song tonight", snap.offer to snap.offerDetails)
         assertTrue(snap.wrapped)
         assertTrue(gateway.suggestions.single().sharedWithClinician)
@@ -154,6 +156,19 @@ class GeminiLiveSessionTest {
         session(failed).apply { start(returning = true) }.let { live ->
             assertEquals(emptyList(), live.snapshot.value.cards)
             assertTrue(failed.sent.any { it.contains("backend_failed") })
+            live.stop()
+        }
+    }
+
+    @Test
+    fun suggestMusicAnswersAtOnceAndTheCardGetsTheClip() {
+        val clip = MusicClip("audio/mpeg", byteArrayOf(1, 2, 3))
+        gateway.music = clip
+        // The token minted before the change still sends "query".
+        val client = FakeLiveClient(listOf(call("suggest_music", "query" to JsonPrimitive("tense and tired"))))
+        session(client).apply { start(returning = true) }.let { live ->
+            assertEquals(ToolCard.Music("tense and tired", clip), live.snapshot.value.cards.single())
+            assertTrue(client.sent.any { it.contains("being_made") })
             live.stop()
         }
     }

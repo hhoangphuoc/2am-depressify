@@ -81,6 +81,8 @@ class FakeCheckInGateway : CheckInGateway {
     var places: List<NearbyPlace>? = emptyList()
     /** What the weather lookup returns; null makes it fail. */
     var weather: Weather? = null
+    /** What music generation returns; null makes it fail. */
+    var music: MusicClip? = null
     var brief: String? = null
     val finished: MutableList<Pair<String, CheckInDraft>> = mutableListOf()
 
@@ -102,6 +104,7 @@ class FakeCheckInGateway : CheckInGateway {
     override suspend fun recentDays(patientId: String, count: Int): List<DailyDoc> = days.take(count)
     override suspend fun findPlaces(patientId: String, query: String, near: PatientLocation): List<NearbyPlace> = places ?: throw IllegalStateException("UNAVAILABLE")
     override suspend fun weather(patientId: String, near: PatientLocation): Weather = weather ?: throw IllegalStateException("UNAVAILABLE")
+    override suspend fun generateMusic(patientId: String, mood: String): MusicClip = music ?: throw IllegalStateException("UNAVAILABLE")
     override suspend fun recentSummaries(patientId: String, count: Int): List<Summary> = summaries.take(count)
     override suspend fun lastSuggestion(patientId: String): Suggestion? = suggestions.lastOrNull()
 

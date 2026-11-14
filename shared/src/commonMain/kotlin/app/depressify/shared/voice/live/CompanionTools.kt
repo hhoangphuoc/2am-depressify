@@ -8,10 +8,13 @@ import app.depressify.core.model.Suggestion
 import app.depressify.core.model.SuggestionKind
 import app.depressify.core.model.sharingStamp
 import app.depressify.shared.data.CheckInGateway
+import app.depressify.shared.data.MusicClip
 import app.depressify.shared.data.NearbyPlace
 import app.depressify.shared.data.PatientLocation
 import app.depressify.shared.data.PatientStore
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.launch
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonArray
@@ -24,8 +27,8 @@ sealed interface ToolCard {
     /** What the Companion read from the Patient's own records, in plain words and never as a score. */
     data class Insight(val title: String, val lines: List<String>) : ToolCard
 
-    /** A music idea; [url] opens a search in the Patient's own music app or browser. */
-    data class Music(val query: String, val url: String) : ToolCard
+    /** Music being made for [mood]: [clip] once ready, or [failed]. Held in memory only. */
+    data class Music(val mood: String, val clip: MusicClip? = null, val failed: Boolean = false) : ToolCard
 
     /** A kind of place to go; [url] opens the search in Google Maps. [places] are the results found, shown and never stored. */
     data class Places(val query: String, val url: String, val places: List<NearbyPlace> = emptyList()) : ToolCard
@@ -53,6 +56,8 @@ class CompanionTools(
     private val patientId: String,
     private val nowMillis: () -> Long,
     private val effects: ToolEffects,
+    /** Runs the music generation after the tool has answered; cancelled with the Check-in. */
+    private val scope: CoroutineScope,
     private val location: PatientLocation = PatientLocation.Sample,
 ) {
     suspend fun dispatch(name: String, args: JsonObject): JsonObject = try {
@@ -62,7 +67,8 @@ class CompanionTools(
             "get_recent_summaries" -> recentSummaries(args.int("count")?.coerceIn(1, 5) ?: 3)
             "get_last_suggestion" -> lastSuggestion()
             "record_suggestion" -> recordSuggestion(args.string("kind"), args.string("details"))
-            "suggest_music" -> search(args.string("query")) { q -> ToolCard.Music(q, musicSearchUrl(q)) }
+            // "query" is the argument of the earlier declaration, still locked into tokens minted before it changed.
+            "suggest_music" -> makeMusic(args.string("mood") ?: args.string("query"))
             "find_places" -> findPlaces(args.string("query"))
             "get_weather" -> weather()
             "wrap_up" -> ok().also { effects.wrapUp() }
@@ -153,11 +159,26 @@ class CompanionTools(
         return ok()
     }
 
-    private fun search(query: String?, card: (String) -> ToolCard): JsonObject {
-        if (query.isNullOrBlank()) return error("invalid_args")
-        effects.show(card(query.trim()))
-        // The model gets no results back: the card only opens the Patient's own app.
-        return buildJsonObject { put("ok", true); put("shown", "a card that opens this search for the person") }
+    /** Answers at once and makes the music in the background, so the conversation does not wait. */
+    private fun makeMusic(mood: String?): JsonObject {
+        if (mood.isNullOrBlank()) return error("invalid_args")
+        val m = mood.trim()
+        effects.show(ToolCard.Music(m))
+        scope.launch {
+            val clip = try {
+                checkIns.generateMusic(patientId, m)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                null
+            }
+            effects.show(ToolCard.Music(m, clip, failed = clip == null))
+        }
+        return buildJsonObject {
+            put("ok", true)
+            put("status", "being_made")
+            put("shown", "a card that gets a play button in about half a minute")
+        }
     }
 
     private suspend fun findPlaces(query: String?): JsonObject {
@@ -244,7 +265,7 @@ class CompanionTools(
             "get_recent_summaries" -> "Reading your last Check-ins"
             "get_last_suggestion" -> "Recalling your last Suggestion"
             "record_suggestion" -> "Noting a Suggestion"
-            "suggest_music" -> "Finding some music"
+            "suggest_music" -> "Starting some music for you"
             "find_places" -> "Looking for a place nearby"
             "get_weather" -> "Checking the weather"
             else -> "One moment"

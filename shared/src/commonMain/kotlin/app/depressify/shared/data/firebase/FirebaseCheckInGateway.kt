@@ -9,6 +9,7 @@ import app.depressify.core.model.VoiceCue
 import app.depressify.shared.data.CheckInDraft
 import app.depressify.shared.data.CheckInGateway
 import app.depressify.shared.data.LiveStart
+import app.depressify.shared.data.MusicClip
 import app.depressify.shared.data.NearbyPlace
 import app.depressify.shared.data.PatientLocation
 import app.depressify.shared.data.Weather
@@ -17,6 +18,8 @@ import dev.gitlive.firebase.firestore.Direction
 import dev.gitlive.firebase.firestore.FirebaseFirestore
 import dev.gitlive.firebase.functions.FirebaseFunctions
 import kotlinx.serialization.Serializable
+import kotlin.io.encoding.Base64
+import kotlin.time.Duration.Companion.seconds
 
 /**
  * Start and Finish Check-in through the callables (the contract is in the README, "Check-in"),
@@ -56,6 +59,12 @@ class FirebaseCheckInGateway(private val db: FirebaseFirestore, private val func
     @Serializable
     private data class SuggestRequest(val patientId: String)
 
+    @Serializable
+    private data class MusicRequest(val patientId: String, val mood: String)
+
+    @Serializable
+    private data class MusicResponse(val mimeType: String, val audioBase64: String)
+
     private fun patient(patientId: String) = db.collection(Collections.PATIENTS).document(patientId)
 
     override suspend fun startCheckIn(patientId: String, brief: String, typed: Boolean): LiveStart {
@@ -88,6 +97,14 @@ class FirebaseCheckInGateway(private val db: FirebaseFirestore, private val func
 
     override suspend fun weather(patientId: String, near: PatientLocation): Weather =
         mapTool(patientId, "get_weather", near).data(WeatherResponse.serializer()).weather
+
+    override suspend fun generateMusic(patientId: String, mood: String): MusicClip {
+        // Generation takes about 25 s; the SDK's default call timeout is close to that.
+        val response = functions.httpsCallable("generateMusic", timeout = 120.seconds)
+            .invoke(MusicRequest.serializer(), MusicRequest(patientId, mood))
+            .data(MusicResponse.serializer())
+        return MusicClip(response.mimeType, Base64.decode(response.audioBase64))
+    }
 
     override suspend fun recentDays(patientId: String, count: Int): List<DailyDoc> =
         patient(patientId).collection(Collections.DAILY).orderBy("date", Direction.DESCENDING).limit(count).get()
