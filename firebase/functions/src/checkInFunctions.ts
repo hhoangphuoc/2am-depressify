@@ -1,4 +1,4 @@
-// The Check-in callables, both for the Patient (or anyone signed in on a Demo Patient):
+// The Check-in callables, both for the Patient (or any verified account on a Demo Patient):
 //
 //   startCheckIn   {patientId, brief, mode?} -> {checkInId, token, model, endpoint, mode,
 //                                                connectByMillis, expiresAtMillis}

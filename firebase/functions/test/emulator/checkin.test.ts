@@ -26,6 +26,7 @@ import { fetchLiveTokenClient } from "../../src/live";
 import { REGION } from "../../src/region";
 import { newPatientDoc, type PatientDoc, type Summary } from "../../src/types";
 import { FakeLiveTokens, FakeTextModel } from "../fakes";
+import { signInVerified, verifiedToken } from "./accounts";
 
 const PROJECT_ID = "demo-twoam";
 const HOST = "127.0.0.1";
@@ -77,6 +78,8 @@ describe("Check-in handlers with the Admin SDK on the Firestore emulator", () =>
     connectAuthEmulator(auth, `http://${HOST}:9099`, { disableWarnings: true });
     phoneDb = getFirestore(app);
     connectFirestoreEmulator(phoneDb, HOST, 8080);
+    // Anonymous, as before ADR 0010: the record stays the owner's under the rules. The handlers
+    // below are called in-process with a verified token for the same uid.
     uid = (await signInAnonymously(auth)).user.uid;
     await patient(uid);
   });
@@ -86,7 +89,7 @@ describe("Check-in handlers with the Admin SDK on the Firestore emulator", () =>
   });
 
   it("start creates the Check-in; finish writes the Summary, the Check-in's fields and the Patient's times", async () => {
-    const auth = { uid, token: {} };
+    const auth = { uid, token: verifiedToken("checkin-phone@example.com") };
     const tokens = new FakeLiveTokens();
     const started = await startCheckInHandler({ data: { patientId: uid, brief: BRIEF, mode: "typed" }, auth }, { store, liveTokens: tokens, clock: () => 1_000 });
     expect(started.token).toBe("auth_tokens/fake-token-1");
@@ -134,7 +137,7 @@ describe("Check-in handlers with the Admin SDK on the Firestore emulator", () =>
   it("a refused finish and a never-started Check-in write nothing", async () => {
     await expect(
       finishCheckInHandler(
-        { data: { patientId: uid, checkInId: "never-started", draft: DRAFT }, auth: { uid, token: {} } },
+        { data: { patientId: uid, checkInId: "never-started", draft: DRAFT }, auth: { uid, token: verifiedToken("checkin-phone@example.com") } },
         { store, textModel: new FakeTextModel(MODEL_JSON) },
       ),
     ).rejects.toMatchObject({ code: "not-found" });
@@ -172,18 +175,38 @@ describe.skipIf(!withFunctions)("Check-in callables through the Functions emulat
   let phone: ReturnType<typeof client>;
   let other: ReturnType<typeof client>;
   let signedOut: ReturnType<typeof client>;
+  let anonymous: ReturnType<typeof client>;
   let uid = "";
+  let anonymousUid = "";
   const checkInId = "emulator-silent-checkin";
 
   beforeAll(async () => {
     phone = client("checkin-phone");
     other = client("checkin-other");
     signedOut = client("checkin-signed-out");
-    uid = (await signInAnonymously(phone.auth)).user.uid;
-    await signInAnonymously(other.auth);
+    anonymous = client("checkin-anonymous");
+    uid = (await signInVerified(adminApp, phone.auth, { email: "checkin-phone@example.com", password: "demo-password-3" })).uid;
+    await signInVerified(adminApp, other.auth, { email: "checkin-other@example.com", password: "demo-password-4" });
     await patient(uid, { lastSeenAtMillis: null, lastCheckInAtMillis: null });
+    // A Patient who signed in anonymously before ADR 0010 and still has their record.
+    anonymousUid = (await signInAnonymously(anonymous.auth)).user.uid;
+    await patient(anonymousUid);
     // The Check-in as Start Check-in creates it (minting a real token is not exercised here).
-    await startCheckInHandler({ data: { patientId: uid, brief: BRIEF }, auth: { uid, token: {} } }, { store, liveTokens: new FakeLiveTokens(), newId: () => checkInId });
+    await startCheckInHandler(
+      { data: { patientId: uid, brief: BRIEF }, auth: { uid, token: verifiedToken("checkin-phone@example.com") } },
+      { store, liveTokens: new FakeLiveTokens(), newId: () => checkInId },
+    );
+  });
+
+  it("an anonymous Patient is told to verify their account, and nothing is started or finished", async () => {
+    const refusal = (call: Promise<unknown>) => call.then(() => null, (e: { code: string; message: string }) => ({ code: e.code, message: e.message }));
+    // The SDK adds the HTTP status to the message.
+    const verify = { code: "functions/failed-precondition", message: expect.stringContaining("Verify your account to start a Check-in.") };
+    expect(await refusal(anonymous.start({ patientId: anonymousUid, brief: BRIEF }))).toEqual(verify);
+    expect(await refusal(anonymous.finish({ patientId: anonymousUid, checkInId: "any", draft: { turns: [] } }))).toEqual(verify);
+    expect(await refusal(anonymous.start({ patientId: uid, brief: BRIEF }))).toEqual(verify);
+    expect(await count(`patients/${anonymousUid}/checkIns`)).toBe(0);
+    expect(await count(`patients/${anonymousUid}/summaries`)).toBe(0);
   });
 
   afterAll(async () => {
@@ -227,7 +250,7 @@ describe.skipIf(!realGemini)("OPT-IN: the handlers with the real Gemini API, Fir
     const key = process.env.GEMINI_API_KEY!;
     const id = "checkin-real-gemini-patient";
     await patient(id);
-    const auth = { uid: id, token: {} };
+    const auth = { uid: id, token: verifiedToken("checkin-real-gemini@example.com") };
     const started = await startCheckInHandler({ data: { patientId: id, brief: BRIEF, mode: "typed" }, auth }, { store, liveTokens: fetchLiveTokenClient(key) });
     expect(started.token).toMatch(/^auth_tokens\//);
     const result = await finishCheckInHandler(

@@ -4,7 +4,7 @@ rules_version = '2';
 // docs/firestore-schema.md; the tests are firebase/functions/test/rules/firestore-rules.test.ts.
 //
 // Who may see a Patient's progress: the Patient themselves, their Clinician, and, as a demo
-// shortcut, any signed-in user for a Patient marked synthetic.
+// shortcut, any verified account for a Patient marked synthetic.
 //
 //   Patient    reads and writes their own record and its collections. Summaries, Visits and
 //              Digests are read-only to them; flags are append-only (only the Clinician clears
@@ -18,11 +18,21 @@ rules_version = '2';
 //              Patient was sharing). Writes Visits, the TMS end date and display name, the
 //              cleared time on a flag they can see, and resets the Patient's flag level and
 //              reasons after follow-up. Nothing else.
-//   Demo       any signed-in user acts as the Patient on a record marked synthetic.
+//   Demo       any verified account acts as the Patient on a record marked synthetic.
 //   mail       no client access. Functions write it with the Admin SDK, which bypasses rules.
 //   clinicians the allowlist of Clinicians a new Patient may link to, one document per email.
 //              No client access; only the Admin SDK writes it (`npm run allow-clinician` and the
 //              seed in firebase/seed). The real Clinician's email lives there, never in this file.
+//
+// Accounts (ADR 0010). A verified account is not anonymous and its email is verified: Google
+// accounts arrive verified, email and password accounts after the link in the verification email.
+//   - Creating a Patient record, and the demo shortcut, need a verified account.
+//   - The Clinician needs a verified account with the custom claim `role: 'clinician'`, which only
+//     the Admin sets (`npm run allow-clinician`). A Patient's account never has it, so a Patient
+//     can never read as a Clinician, whatever their email.
+//   - Transition: a record that exists stays its owner's (auth uid == patientId), whatever the
+//     account, so a Patient who signed in anonymously before this change keeps their records.
+//     Upgrading that account with linkWithCredential keeps the uid, and with it the record.
 //
 // Functions (Finish Check-in, Intake, Digest, silence check) and the seed use the Admin SDK and
 // are not bound by these rules. Everything not matched below is denied.
@@ -37,14 +47,20 @@ service cloud.firestore {
       return request.auth != null;
     }
 
-    // The sign-in email, or null for an anonymous Patient.
-    //
-    // DEMO ONLY: the email is trusted without `request.auth.token.email_verified == true`,
-    // because accounts created in the Auth emulator are unverified. PRODUCTION MUST ALSO REQUIRE
-    // email_verified, or anyone who registers an unverified account with a Clinician's address
-    // can read that Clinician's Patients.
-    function authEmail() {
-      return signedIn() ? request.auth.token.get('email', null) : null;
+    // The person's own account: not anonymous, and its email verified by the provider (Google)
+    // or by the link in the verification email (email and password). An unverified email proves
+    // nothing, so it never counts.
+    function verifiedAccount() {
+      return signedIn()
+        && request.auth.token.firebase.sign_in_provider != 'anonymous'
+        && request.auth.token.get('email_verified', false) == true;
+    }
+
+    // A Clinician: a verified account the Admin has given the custom claim `role: 'clinician'`
+    // (`npm run allow-clinician`, which also marks the email verified). The claim reaches the
+    // token at the next sign-in or token refresh.
+    function isClinicianAccount() {
+      return verifiedAccount() && request.auth.token.get('role', null) == 'clinician';
     }
 
     // ---------------------------------------------------------------------------------------
@@ -55,18 +71,22 @@ service cloud.firestore {
       return signedIn() && request.auth.uid == patientId;
     }
 
-    // The demo shortcut: any signed-in user may act as a Demo Patient.
+    // The demo shortcut: any verified account may act as a Demo Patient. Not an anonymous or
+    // unverified one, which costs nothing to make (ADR 0010).
     function isDemoPatient(patient) {
-      return signedIn() && patient.synthetic == true;
+      return verifiedAccount() && patient.synthetic == true;
     }
 
-    // Acting as the Patient: the Patient themselves, or anyone signed in on a Demo Patient.
+    // Acting as the Patient: the Patient themselves, or any verified account on a Demo Patient.
     function actsAsPatient(patientId, patient) {
       return isOwner(patientId) || isDemoPatient(patient);
     }
 
+    // The Clinician's verified sign-in email is the one the Patient is linked to.
     function isClinicianOf(patient) {
-      return authEmail() != null && patient.clinicianEmail == authEmail();
+      return isClinicianAccount()
+        && request.auth.token.get('email', null) is string
+        && patient.clinicianEmail == request.auth.token.email;
     }
 
     // The one place that decides whether the Clinician may see this Patient. Every Clinician
@@ -181,7 +201,10 @@ service cloud.firestore {
         || isDemoPatient(resource.data)
         || clinicianCanRead(resource.data);
 
-      allow create: if isOwner(patientId) && validNewPatient(request.resource.data);
+      // A new record needs the Patient's own verified account (ADR 0010). An existing record
+      // stays its owner's through isOwner alone, so Patients who signed in anonymously before
+      // keep reading and writing it.
+      allow create: if isOwner(patientId) && verifiedAccount() && validNewPatient(request.resource.data);
 
       allow update: if (actsAsPatient(patientId, resource.data) && patientUpdate())
         || (clinicianCanWrite(resource.data) && clinicianUpdate());
@@ -216,7 +239,7 @@ service cloud.firestore {
       // A Clinician query on a stamped collection must filter on `sharedWithClinician == true`
       // (`clinicianCollectionFilters` in hosting/js/lib/sharing.js), or Firestore rejects it.
       // Functions stamp with `sharingStamp` (functions/src/sharing.ts). On a Demo Patient any
-      // signed-in user has the Patient's access, so there only the dashboard's filter hides
+      // verified account has the Patient's access, so there only the dashboard's filter hides
       // unshared documents.
 
       // A Clinician `get` of a missing document is refused like a hidden one, so a refusal never

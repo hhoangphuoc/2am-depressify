@@ -7,7 +7,16 @@ import { finishCheckInHandler, startCheckInHandler } from "../src/checkInFunctio
 import type { CallerAuth } from "../src/clinician";
 import { LIVE_ENDPOINT, LIVE_NEW_SESSION_WINDOW_MS, LIVE_TOKEN_LIFETIME_MS } from "../src/live";
 import { newPatientDoc, type PatientDoc } from "../src/types";
-import { CLINICIAN_EMAIL, FakeCheckInStore, FakeLiveTokens, FakeTextModel, PATIENT_ID, failingTextModel } from "./fakes";
+import {
+  CLINICIAN_EMAIL,
+  FakeCheckInStore,
+  FakeLiveTokens,
+  FakeTextModel,
+  PATIENT_ID,
+  clinicianToken,
+  failingTextModel,
+  verifiedToken,
+} from "./fakes";
 
 const SPIKE = join(__dirname, "..", "..", "..", "fixtures", "spike", "interactions");
 const recorded = JSON.parse(readFileSync(join(SPIKE, "finish-checkin-structured-v1.json"), "utf8"));
@@ -15,9 +24,9 @@ const MODEL_JSON: string = recorded.response.body.steps.find((s: { type: string 
 
 const NOW = 1_763_000_000_000;
 const DEMO_ID = "demo-steady";
-const patientAuth: CallerAuth = { uid: PATIENT_ID, token: {} };
-const otherAuth: CallerAuth = { uid: "someone-else", token: {} };
-const clinicianAuth: CallerAuth = { uid: "clinician-uid", token: { email: CLINICIAN_EMAIL } };
+const patientAuth: CallerAuth = { uid: PATIENT_ID, token: verifiedToken("patient-1@example.com") };
+const otherAuth: CallerAuth = { uid: "someone-else", token: verifiedToken("someone-else@example.com") };
+const clinicianAuth: CallerAuth = { uid: "clinician-uid", token: clinicianToken(CLINICIAN_EMAIL) };
 const BRIEF = "Fictional Brief for Alex: ask about the harbour walk, then the three ratings.";
 
 const DRAFT = {
@@ -116,7 +125,7 @@ describe("startCheckIn", () => {
   });
 
   it("refuses a missing Patient with the same answer as another user's", async () => {
-    const missing = await start({ patientId: "no-such-patient", brief: BRIEF }, { uid: "no-such-patient", token: {} }).catch((e: unknown) => e);
+    const missing = await start({ patientId: "no-such-patient", brief: BRIEF }, { uid: "no-such-patient", token: verifiedToken("nobody@example.com") }).catch((e: unknown) => e);
     const other = await start({ patientId: PATIENT_ID, brief: BRIEF }, otherAuth).catch((e: unknown) => e);
     expect(missing).toMatchObject({ code: "permission-denied" });
     expect((missing as Error).message).toBe((other as Error).message);
