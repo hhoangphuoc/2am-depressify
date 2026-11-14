@@ -220,11 +220,12 @@ A short weekly account of one Patient for the Clinician (issue #23), written by 
 | `weekStart` | date string | First date covered: the Monday. |
 | `weekEnd` | date string | Last date covered: the Sunday, or the day "Generate now" ran for a week still in progress. |
 | `summaryCount` | int | How many Summaries the text drew on. `0` means the week had no Check-ins. |
+| `sourceCheckInIds` | string[] | The Summaries the text drew on, by id (a Summary's id is its Check-in id), oldest first: one per Summary counted in `summaryCount`, all stamped `sharedWithClinician: true`, so the Clinician can open every one. `[]` for a week with no Check-ins. The dashboard lists them as the Digest's sources ("View source Summaries"). Digests written before the field existed lack it; the dashboard then shows the count only. |
 | `text` | string | At most 180 words. Written by the text model with storage off, from that week's Summaries and daily Signals only; or, for a week with no Check-ins, a fixed sentence saying so (the model is not called). |
 | `generatedAtMillis` | int | |
 | `sharedWithClinician` | boolean | The sharing stamp (`sharingStamp`). Digests are written only for sharing Patients, so it is `true`. |
 
-The text and `summaryCount` draw only on Summaries and daily records stamped `sharedWithClinician: true` (`weekData` in `firebase/functions/src/digest.ts`): a week that spans a time without sharing never tells the Clinician what was said or measured then.
+The text, `summaryCount` and `sourceCheckInIds` draw only on Summaries and daily records stamped `sharedWithClinician: true` (`weekData` in `firebase/functions/src/digest.ts`): a week that spans a time without sharing never tells the Clinician what was said or measured then.
 
 Which week each writer covers:
 
@@ -287,6 +288,8 @@ What the functions count per Patient record (`firebase/functions/src/limits.ts`)
 | Dashboard newest-flag order, banner and level | `patients/{id}/flags` where `sharedWithClinician == true`, for each listed Patient | none: one equality filter |
 | Dashboard Patient page | `daily`, `checkIns`, `summaries`, `suggestions`, `flags` where `sharedWithClinician == true`; `consents`, `visits` unfiltered | none: one equality filter, sorted in the browser |
 | Dashboard latest Digest | `patients/{id}/digests` where `sharedWithClinician == true`, order by `isoWeek` descending, limit 1 | composite `digests (sharedWithClinician ASC, isoWeek DESC)` in [`firestore.indexes.json`](../firebase/firestore.indexes.json). The emulator does not enforce indexes; production does. |
+| Dashboard roster sparkline (design) | `patients/{id}/daily` where `sharedWithClinician == true`, order by `date` descending, limit 28, for each listed Patient | composite `daily (sharedWithClinician ASC, date DESC)` |
+| Dashboard roster assessment (design) | `patients/{id}/checkIns` where `sharedWithClinician == true`, order by `startedAtMillis` descending, limit 1, for each listed Patient | composite `checkIns (sharedWithClinician ASC, startedAtMillis DESC)` |
 | Clear after follow-up | `patients/{id}/flags` where `sharedWithClinician == true`, then the reviewed flags by id in a transaction | none |
 | Digest functions | `summaries` by `createdAtMillis` range, `daily` by `date` range (Admin SDK); the stamp is filtered in code | single field (automatic) |
 | Seed reset | `patients` where `synthetic == true` (Admin SDK) | single field (automatic) |

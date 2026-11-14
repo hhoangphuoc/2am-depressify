@@ -105,7 +105,7 @@ export function initialIntakeState() {
   return { mode: "view", report: "", draft: "", trimmed: false, error: null, failed: null };
 }
 
-/** True while a call is in flight: edits and cancel are ignored. */
+/** True while a call is in flight: edits and cancel are ignored. @param {IntakeState} state */
 export function isBusy(state) {
   return state.mode === "extracting" || state.mode === "saving";
 }

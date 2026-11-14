@@ -31,7 +31,7 @@ const samples: Record<string, object> = {
   Flag: { level: "red", kind: "silent", reason: "", raisedAtMillis: 1, clearedAtMillis: null, sharedWithClinician: true } satisfies types.Flag,
   Visit: { date: "2026-11-13", questionnaire: null, score: null } satisfies types.Visit,
   Digest: {
-    isoWeek: "2026-W46", weekStart: "2026-11-09", weekEnd: "2026-11-15", summaryCount: 0, text: "", generatedAtMillis: 1,
+    isoWeek: "2026-W46", weekStart: "2026-11-09", weekEnd: "2026-11-15", summaryCount: 0, sourceCheckInIds: [], text: "", generatedAtMillis: 1,
     sharedWithClinician: true,
   } satisfies types.Digest,
   MailMessage: { subject: "", text: "" } satisfies types.MailMessage,

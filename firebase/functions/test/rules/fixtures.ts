@@ -113,6 +113,7 @@ export const digest: Digest = {
   weekStart: "2026-11-09",
   weekEnd: "2026-11-15",
   summaryCount: 5,
+  sourceCheckInIds: ["c1", "c2", "c3", "c4", "c5"],
   text: "A steady week.",
   generatedAtMillis: 1_700_000_000_000,
   sharedWithClinician: true,

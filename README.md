@@ -332,6 +332,40 @@ On the phone, Today shows the Suggestions in a "For you today" card once a Patie
 The Patient list shows a red banner for every uncleared red flag of the Clinician's Patients, with one reason and a "Review Patient" link. It stays until the flag is cleared; search by name and the level filter never hide it. A red flag that arrives while the dashboard is open is announced, and plays a short chime (WebAudio, no file) only after the Clinician turns on "Sound for red flags" in the header; the choice is kept in this browser.
 
 On the Patient page, the Attention section lists open flags (level word, reason, source, raised time) and the cleared history. "Clear after follow-up" clears one flag in a transaction: it sets the flag's `clearedAtMillis` and resets the Patient's `flagLevel` and `flagReasons` to the flags still open, or green. If anything new was raised since the dialog opened, it asks for a new review instead. The logic is in `firebase/hosting/js/lib/{banner,list-filter,sound-pref,flag-detail,clear}.js`; `firebase/seed/test/emulator/attention.test.js` runs the clearing helper as the Clinician under the rules.
+### Dashboard data layer
+
+For the Clinician dashboard UI built from the design prototype in `design/clinician`. Three files give it live data in the prototype's own shapes (`design/clinician/src/data.mjs`); the item-by-item map, the gaps and the open conflicts are in [`docs/design/dashboard-backend-sync.md`](docs/design/dashboard-backend-sync.md).
+
+| File | What it is |
+|---|---|
+| `firebase/hosting/js/lib/design-model.js` | Pure. Firestore documents → the design's patient object (`designPatient`), the light roster row (`designRosterPatient`), roster view (`rosterView`, `orderRoster`), level words (`DESIGN_LEVELS`), Signals (`DESIGN_SIGNALS`, `designSignals`), Summaries, timeline, Digest with sources, what helps, and the design's form checks (`validateDesignVisit`, `validateDesignTms`, `intakeFileProblem`) |
+| `firebase/hosting/js/lib/design-live.js` | Live subscriptions and actions; takes the Firestore functions as its first argument. `subscribeRoster`, `subscribePatient` (and `subscribeAttention`, `subscribeOverview`, `subscribeSummaries`, `subscribeSignals`, `subscribeIntakeVisits`, `subscribeDigest`), `recordVisit`, `setTmsEndDate`, `clearAttention`, `generateDigestNow`, `extractIntake`, `saveIntake` |
+| `firebase/hosting/js/data/design-data.js` | The same bound to this dashboard's browser SDK: `designData({ db, app })` |
+
+From a React or Vite port, pass the npm SDK:
+
+```js
+import * as fs from "firebase/firestore";
+import { subscribeRoster, subscribePatient, clearAttention, recordVisit } from "../../firebase/hosting/js/lib/design-live.js";
+import { rosterView } from "../../firebase/hosting/js/lib/design-model.js";
+
+// The roster: status is "loading" | "ok" | "denied" | "expired" | "error"; fromCache means offline or stale.
+const stopRoster = subscribeRoster(fs, db, { clinicianEmail: user.email, keepWithdrawn: true }, (roster) => {
+  const view = rosterView(roster, { search, filter });   // view.patients, view.counts, view.banner, view.filters, view.message
+  if (roster.newRed.length && soundOn) chime();           // red flags that arrived since the last update
+});
+
+// One Patient: status is "loading" | "ok" | "withdrawn" | "error"; state.patient has the shape createPatients() makes.
+// state.loaded, state.errors ("denied" | "error") and state.docs are per collection; a failed collection is null, never empty.
+const stopPatient = subscribePatient(fs, db, patientId, { sections: "all" }, (state) => setPatient(state));
+
+// Actions return { ok: true, ... } or { ok: false, message } with copy safe to show.
+await recordVisit(fs, db, patientId, { date, type: "PHQ-9", score: "12" }, { today, tms: patient.tms, visits: patient.visits });
+await clearAttention(fs, db, { patientId, raw: state.raw, nowMillis: Date.now() });   // { ok: false, changed: true } asks for a new review; notOpen: nothing to clear
+```
+
+In this plain-JS dashboard, `designData({ db, app: auth.app })` from `js/data/design-data.js` returns the same functions with `fs` and `db` already bound (`data.subscribeRoster(options, onChange)`), plus the callables (`data.generateDigestNow(patientId)`, `data.extractIntake(patientId, text)`, `data.saveIntake(patientId, highlights)`). Every query keeps the sharing filters the rules require; a Patient who stops sharing becomes `status: "withdrawn"` with an anonymous placeholder, and their listeners stop; the record is checked again after 5 s, 15 s and then every minute, so a Patient who shares again comes back. The roster's sleep sparkline shows only while the Patient's sleep Consent is granted. The tests are `firebase/hosting/test/design-{model,live}.test.mjs` and, against the emulators under the rules, `firebase/seed/test/emulator/design-live.test.js`.
+
 ### Weekly Digest
 
 The Patient page shows the latest weekly Digest: the dates it covers, how many Summaries it drew on, when it was generated, and a short account written from that week's Summaries and Signals. Two functions write it to `patients/{id}/digests/{isoWeek}` (for example `2026-W46`):

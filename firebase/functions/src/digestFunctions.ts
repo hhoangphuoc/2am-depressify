@@ -151,6 +151,8 @@ export async function writeDigestFor(
     weekStart: period.weekStart,
     weekEnd: period.weekEnd,
     summaryCount: week.summaries.length,
+    // weekData keeps only shared Summaries, oldest first, so the Clinician can read every source.
+    sourceCheckInIds: week.summaries.map((s) => s.checkInId),
     text,
     generatedAtMillis: nowMillis,
     sharedWithClinician: sharingStamp(patient),

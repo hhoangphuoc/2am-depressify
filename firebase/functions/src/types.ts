@@ -300,6 +300,13 @@ export interface Digest {
   weekEnd: string;
   /** How many Summaries the text drew on. 0 means the week had no Check-ins. */
   summaryCount: number;
+  /**
+   * The Summaries the text drew on, by id (a Summary's id is its Check-in id), oldest first: one per
+   * Summary counted in `summaryCount`, all stamped `sharedWithClinician`. The dashboard lists them as
+   * the Digest's sources. Empty for a week with no Check-ins. Digests written before this field
+   * existed lack it.
+   */
+  sourceCheckInIds: string[];
   text: string;
   generatedAtMillis: number;
   /** Whether the Patient was sharing when this Digest was written (`sharingStamp`). */

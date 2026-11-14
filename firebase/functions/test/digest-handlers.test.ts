@@ -77,6 +77,7 @@ describe("generateDigest (Generate now)", () => {
       weekStart: "2026-11-09",
       weekEnd: "2026-11-14",
       summaryCount: 2,
+      sourceCheckInIds: ["checkin-2026-11-10", "checkin-2026-11-12"],
       text: MODEL_TEXT,
       generatedAtMillis: SATURDAY_NOON,
       sharedWithClinician: true,
@@ -101,6 +102,7 @@ describe("generateDigest (Generate now)", () => {
     );
     expect(model.requests).toHaveLength(0);
     expect(digest.summaryCount).toBe(0);
+    expect(digest.sourceCheckInIds).toEqual([]);
     expect(digest.text).toMatch(/no Check-ins/i);
     expect(digest.text).not.toContain("invented");
     expect(s.writes).toHaveLength(1);
@@ -115,6 +117,8 @@ describe("generateDigest (Generate now)", () => {
       { store: s, textModel: model, nowMillis: () => SATURDAY_NOON },
     );
     expect(digest.summaryCount).toBe(1);
+    // The source list names only what the Clinician may read: never the Summary from the off period.
+    expect(digest.sourceCheckInIds).toEqual(["checkin-2026-11-12"]);
     expect(digest.sharedWithClinician).toBe(true);
     expect(model.requests[0]!.input).toContain("back again");
     expect(model.requests[0]!.input).not.toContain("said while not sharing");
@@ -130,6 +134,19 @@ describe("generateDigest (Generate now)", () => {
     );
     expect(model.requests).toHaveLength(0);
     expect(digest.summaryCount).toBe(0);
+    expect(digest.sourceCheckInIds).toEqual([]);
+  });
+
+  it("lists the Summaries it drew on, oldest first, one id per Summary counted", async () => {
+    const late = summary("2026-11-13", "late");
+    const early = summary("2026-11-09", "early");
+    const s = new FakeDigestStore({ p1: { patient: sharing("Order"), summaries: [late, early, summary("2026-11-11", "middle")], days: W46_DAYS } });
+    const { digest } = await generateDigestHandler(
+      { data: { patientId: "p1" }, auth: clinician },
+      { store: s, textModel: new FakeTextModel(MODEL_TEXT), nowMillis: () => SATURDAY_NOON },
+    );
+    expect(digest.sourceCheckInIds).toEqual(["checkin-2026-11-09", "checkin-2026-11-11", "checkin-2026-11-13"]);
+    expect(digest.sourceCheckInIds).toHaveLength(digest.summaryCount);
   });
 
   it("regenerating overwrites the same week", async () => {
@@ -209,6 +226,7 @@ describe("weeklyDigest (Mondays 07:00 Helsinki)", () => {
       weekStart: "2026-11-09",
       weekEnd: "2026-11-15",
       summaryCount: 2,
+      sourceCheckInIds: ["checkin-2026-11-10", "checkin-2026-11-12"],
       text: MODEL_TEXT,
       generatedAtMillis: MONDAY_0700,
       sharedWithClinician: true,

@@ -211,6 +211,7 @@
             "weekStart",
             "weekEnd",
             "summaryCount",
+            "sourceCheckInIds",
             "text",
             "generatedAtMillis",
             "sharedWithClinician"

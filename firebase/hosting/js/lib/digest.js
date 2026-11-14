@@ -81,7 +81,7 @@ export function digestButtonLabel(state) {
   return "Generate now";
 }
 
-/** The line under the button: progress, the result or the failure. */
+/** The line under the button: progress, the result or the failure. @param {DigestState} state */
 export function digestStatus(state) {
   switch (state.phase) {
     case "generating":
