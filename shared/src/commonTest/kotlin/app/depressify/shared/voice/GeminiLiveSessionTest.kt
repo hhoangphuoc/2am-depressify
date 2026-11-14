@@ -114,13 +114,15 @@ class GeminiLiveSessionTest {
     }
 
     @Test
-    fun toolCallsReadThePatientsRecordsShowCardsAndAreAnswered() {
+    fun contextToolsAnswerGeminiWithoutCardsWhileSuggestionsStillShow() {
         gateway.days = listOf(
             DailyDoc.of("2026-11-13", mapOf(Signal.SLEEP_MINUTES to 300.0), mapOf(Signal.SLEEP_MINUTES to -1.6, Signal.STEPS to 0.2), null, sharedWithClinician = true),
             DailyDoc.of("2026-11-12", emptyMap(), emptyMap(), null, sharedWithClinician = true),
         )
+        gateway.summaries = listOf(app.depressify.core.model.Summary("saved", 1000, 2, null, null, "Broken sleep", listOf("Missing a friend"), emptyList(), null, null, emptyList(), true))
         val client = FakeLiveClient(listOf(
             call("get_health_summary", "days" to JsonPrimitive(7)),
+            call("get_recent_summaries", "count" to JsonPrimitive(3)),
             call("record_suggestion", "kind" to JsonPrimitive("music"), "details" to JsonPrimitive("One calm song tonight")),
             call("suggest_music", "mood" to JsonPrimitive("tired after a long week")),
             call("find_places", "query" to JsonPrimitive("park near me")),
@@ -132,15 +134,16 @@ class GeminiLiveSessionTest {
         val snap = live.snapshot.value
 
         // A missing day stays missing: only the day with a value is described, in words.
-        assertEquals(listOf("Sleep: lower than usual", "Steps: about the same as usual"), assertIs<ToolCard.Insight>(snap.cards[0]).lines)
-        assertEquals(listOf(-1, 0), assertIs<ToolCard.Insight>(snap.cards[0]).comparisons.map { it.direction })
+        assertTrue(client.sent.any { it.contains("Sleep: lower than usual") && it.contains("Steps: about the same as usual") })
+        assertTrue(client.sent.any { it.contains("Missing a friend") && it.contains("mood_1_to_5") })
+        assertEquals(2, snap.cards.size)
         // The fake has no music, so the card ends in its failed state while the Check-in goes on.
         assertEquals(ToolCard.Music("tired after a long week", null, failed = true), snap.cards.filterIsInstance<ToolCard.Music>().single())
         assertEquals("https://www.google.com/maps/search/?api=1&query=park%20near%20me", snap.cards.filterIsInstance<ToolCard.Places>().single().url)
         assertEquals(SuggestionKind.Music to "One calm song tonight", snap.offer to snap.offerDetails)
         assertTrue(snap.wrapped)
         assertTrue(gateway.suggestions.single().sharedWithClinician)
-        assertEquals(6, client.sent.count { it.contains("toolResponse") })
+        assertEquals(7, client.sent.count { it.contains("toolResponse") })
         assertTrue(client.sent.any { it.contains("\"c-no_such_tool\"") && it.contains("unknown_tool") })
         live.stop()
     }

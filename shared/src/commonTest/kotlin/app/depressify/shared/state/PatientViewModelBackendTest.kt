@@ -145,6 +145,33 @@ class PatientViewModelBackendTest {
     }
 
     @Test
+    fun historyUsesThePatientsStoredRecordsAndOnlyTheLastSevenCalendarDays() {
+        val checkIns = FakeCheckInGateway().apply {
+            summaries = listOf(app.depressify.core.model.Summary("aino-1", 1794564000000, 2, null, null, "Broken sleep", listOf("A quieter week"), emptyList(), null, null, emptyList(), true))
+            days = listOf("2026-11-14", "2026-11-08", "2026-11-07").map {
+                app.depressify.core.model.DailyDoc.of(it, mapOf(app.depressify.core.model.Signal.STEPS to 1200.0), emptyMap(), null, true)
+            }
+        }
+        val vm = PatientViewModel(PatientBackend(PatientSession(auth, store, "clinician@example.com"), store, store.consents, checkIns), nowMillis = { 1794650400000 })
+
+        assertEquals(HistoryLoad.Ready, vm.ui.value.historyLoad)
+        assertEquals(listOf("aino-1"), vm.ui.value.history.map { it.id })
+        assertEquals(2, vm.ui.value.history.single().ratings.mood)
+        assertEquals(listOf("2026-11-14", "2026-11-08"), vm.ui.value.historyDays.map { it.date })
+        checkIns.failReads = true
+        vm.loadHistory()
+        assertEquals(HistoryLoad.Failed, vm.ui.value.historyLoad)
+        assertEquals(listOf("aino-1"), vm.ui.value.history.map { it.id })
+        checkIns.failReads = false
+        checkIns.summaries = emptyList()
+        checkIns.days = emptyList()
+        vm.loadHistory()
+        assertEquals(HistoryLoad.Ready, vm.ui.value.historyLoad)
+        assertTrue(vm.ui.value.history.isEmpty())
+        assertTrue(vm.ui.value.historyDays.isEmpty())
+    }
+
+    @Test
     fun withoutASignedInPatientTodayStaysOnDemoPlaces() {
         assertEquals(TodayLoad.Demo, PatientViewModel().ui.value.todayLoad)
         assertEquals(TodayLoad.Demo, PatientViewModel(backend).ui.value.todayLoad)

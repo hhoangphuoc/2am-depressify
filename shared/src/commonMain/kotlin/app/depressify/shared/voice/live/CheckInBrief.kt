@@ -13,6 +13,7 @@ object CheckInBrief {
         "This is a short Check-in: about 3 minutes, and you wrap up gently well before 8 minutes. Use English. Be calm and warm. Use short sentences. Ask one question at a time. Never nag a tired person.",
         "",
         "Before you greet the person, call get_patient_context, get_health_summary with days 7, get_recent_summaries with count 3, and get_last_suggestion. Use what they return and never invent data. Never read comparisons aloud as measurements: say 'you slept less than usual', not a figure.",
+        "Those context lookups are private background for your reasoning, not cards in this conversation. Do not recite their contents. Use them to offer one relevant small step proactively through the suggestion, places or music tools when it fits the conversation.",
         "",
         "The shape of the Check-in:",
         "1. Greet the person with one thing from their context.",

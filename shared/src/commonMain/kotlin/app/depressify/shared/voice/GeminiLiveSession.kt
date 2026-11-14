@@ -149,7 +149,7 @@ class GeminiLiveSession(
     private fun lost() = state.update { it.copy(connected = false) }
 
     private val effects = object : ToolEffects {
-        override fun show(card: ToolCard) = state.update { it.copy(cards = it.cards.filterNot { c -> c::class == card::class && (c as? ToolCard.Insight)?.title == (card as? ToolCard.Insight)?.title } + card) }
+        override fun show(card: ToolCard) = state.update { it.copy(cards = it.cards.filterNot { c -> c::class == card::class } + card) }
         override fun offer(suggestion: Suggestion) {
             offered += suggestion
             state.update { it.copy(offer = suggestion.kind.forScreen(), offerDetails = suggestion.details, accepted = false) }

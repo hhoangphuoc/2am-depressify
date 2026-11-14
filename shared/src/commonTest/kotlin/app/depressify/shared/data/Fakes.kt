@@ -71,6 +71,7 @@ class FakeConsentStore : ConsentStore {
 /** The Patient's Check-in records in memory, and a fixed Live token. */
 class FakeCheckInGateway : CheckInGateway {
     var days: List<DailyDoc> = emptyList()
+    var failReads = false
     var summaries: List<Summary> = emptyList()
     val suggestions: MutableList<Suggestion> = mutableListOf()
     val flags: MutableList<Flag> = mutableListOf()
@@ -101,11 +102,17 @@ class FakeCheckInGateway : CheckInGateway {
         return Summary(checkInId, 1000, mood = 3, energy = null, sleepQuality = null, sleepLine = "Slept less than usual", themes = listOf("A tired week"), voiceCues = emptyList(), suggestion = "One calm song tonight", previousOutcome = null, quotes = emptyList(), sharedWithClinician = true)
     }
 
-    override suspend fun recentDays(patientId: String, count: Int): List<DailyDoc> = days.take(count)
+    override suspend fun recentDays(patientId: String, count: Int): List<DailyDoc> {
+        check(!failReads)
+        return days.take(count)
+    }
     override suspend fun findPlaces(patientId: String, query: String, near: PatientLocation): List<NearbyPlace> = places ?: throw IllegalStateException("UNAVAILABLE")
     override suspend fun weather(patientId: String, near: PatientLocation): Weather = weather ?: throw IllegalStateException("UNAVAILABLE")
     override suspend fun generateMusic(patientId: String, mood: String): MusicClip = music ?: throw IllegalStateException("UNAVAILABLE")
-    override suspend fun recentSummaries(patientId: String, count: Int): List<Summary> = summaries.take(count)
+    override suspend fun recentSummaries(patientId: String, count: Int): List<Summary> {
+        check(!failReads)
+        return summaries.take(count)
+    }
     override suspend fun lastSuggestion(patientId: String): Suggestion? = suggestions.lastOrNull()
 
     override suspend fun saveSuggestion(patientId: String, suggestion: Suggestion) {
