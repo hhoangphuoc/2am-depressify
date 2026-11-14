@@ -1,6 +1,6 @@
 # Implementation status
 
-Status as of 14 November 2026. Covers issues #7, #8, #9, #10, #11, #12, #13, #23 and #29, the backend part of #22 (the red flag email), the silence check (#28), the backend half of the #6 spikes, the backend part of #14 (Start and Finish Check-in, and the Live protocol parsing in `core`), the review decisions that followed, and the backend half of the #6 spikes ([spike-results.md](spike-results.md)). Terms follow [GLOSSARY.md](../GLOSSARY.md).
+Status as of 14 November 2026. Covers issues #7, #8, #9, #10, #11, #12, #13, #23 and #29, the backend part of #22 (the red flag email), the silence check (#28), the backend half of the #6 spikes, the backend part of #14 (Start and Finish Check-in, and the Live protocol parsing in `core`), the pure `core` pipeline of the daily job (#26), the review decisions that followed, and the backend half of the #6 spikes ([spike-results.md](spike-results.md)). Terms follow [GLOSSARY.md](../GLOSSARY.md).
 
 ## Work on top of this branch (open PRs)
 
@@ -16,6 +16,7 @@ Kept up to date as PRs are opened and merged. Each PR also updates its own rows 
 | #55 | `docs/session-handoff-on-49` | Session handoff, and this overview | Open |
 | #56 | `docs/cloud-setup-on-49` | Firebase and Google Cloud setup record | Open |
 | #57 | `feat/14-typed-checkin-on-49` (on #50, merges #52) | #14, backend: `startCheckIn`, `finishCheckIn`, and `LiveProtocol` in `core` | Open; tested (functions 249, core 39, emulators 87 + 14). Not deployed. |
+| to open | `feat/26-daily-job-rules` (from `main`) | #26, `core` only: the daily job's pure pipeline (daily record, Baseline, sign of life, Signal flag rules, write plan) | Tested (core 102); the app's background work, debug action and device check are still to do |
 | — | — | #20 (Decisions into flags), then #21 (Outcomes) | Next, after #14 |
 | — | — | #18 (Map tool) | Waits on enabling `mapstools.googleapis.com` and the #17 tool catalog |
 
@@ -126,6 +127,39 @@ The callables are reached through the Firebase SDK (`httpsCallable` in `europe-n
 - `LiveProtocolFixturesTest` (JVM) parses every server message in `fixtures/spike/live/messages/` and the whole recorded session, and checks the builders against the recorded client messages; `LiveProtocolTest` (common) covers several parts in one message, an unknown message, a tool call and an interruption.
 - Not built here (app team): the Ktor `LiveClient`, audio, the Check-in runner and recorder, and the screens.
 
+### Daily job pipeline (`core`, #26)
+
+`app.depressify.core.daily`, pure common Kotlin (no platform imports; it compiles for iOS). The whole decision of one run is `DailyJob.run(DailyJobInputs): DailyJobResult`, tested end to end with plain inputs. The app reads the inputs, calls it, and writes the result; the pipeline does no I/O and reads no clock.
+
+| Part | What it does |
+|---|---|
+| `SignalBaseline` | The contract's Baseline: the 14 calendar dates strictly before the day with a value, at least 5, median centre, spread `max(sample SD, 0.05 x \|median\|, 0.001)`. `vsBaseline` keeps the measured sign; `oriented` flips lower-is-better Signals and drops Signals with no direction; `composite` is the mean of the oriented values that exist. `BaselineFixtureTest` (JVM) runs every case of `fixtures/baseline/baseline-cases.json` (14 comparisons, 5 oriented, 3 composites). |
+| `DailyRecordBuilder` | Today's `DailyDoc`: every Signal key, null when not consented, missing or not a finite number (a real zero stays zero), the comparisons and the composite. |
+| `SignalFlagRules`, `DailyThresholds`, `FlagReasons` | The five rules below. Thresholds in one object, the spec's starred ones marked STARTING VALUE; reasons are the seed's sentences, with no decimal numbers. |
+| `FlagWriteRules` | The write plan: the new flags (uncleared, stamped with `PatientDoc.sharingStamp()`, id `<kind>-<date>`, or `<kind>-<date>-unshared` for a flag stamped false), the record's new `flagLevel` / `flagReasons` (or none), and the sign of life. |
+| `DailyJob` | Composes the above. |
+
+| Flag | Rule (STARTING VALUE where starred in the spec) | Missing data |
+|---|---|---|
+| Red `sleep_collapse` | Sleep under 180 minutes*, else oriented sleep at or below -2.5* | Only when today's sleep is present |
+| Red `inactive` | Steps and screen-on minutes in the last 24 hours both exactly 0 | Both present; each needs its Consent (Steps; usage, `lateNightScreenMinutes`) |
+| Amber `poor_sleep` | Oriented sleep at or below -1.0* on each of the last 3 calendar nights | All 3 present; a night without a record breaks the run |
+| Amber `low_mood` | Mood 2 or lower at each of the last 3 finished Check-ins | A null rating breaks the run |
+| Amber `drift` | Composite at or below -1.0* on each of the last 3* calendar days | All present. A constant history gives 0 and a short one (under 5 days) none, so neither raises drift |
+
+Earlier days' comparisons are recomputed from their stored values (each against the days before it, as the seed and dashboard do), so the job needs the previous 16 daily records (`DailyThresholds.HISTORY_DAYS_NEEDED`).
+
+Write plan, mirroring `raisedAttention` and `hasOpenFlag` in the functions:
+- A kind with an uncleared flag of the same stamp is not raised again (`already_open`). A flag stamped false never blocks a shared one.
+- A kind already raised today with the same stamp is not raised again that day, even when cleared (`already_raised`; the id is taken and the rules refuse a second create). For `low_mood`, a flag of the kind raised at or after the newest of the three Check-ins already covered them, so a cleared low-mood flag is not raised again on the same Check-ins.
+- Only flags stamped true change the record. The level only goes up: a function's red, or one the Clinician left uncleared, is never lowered. Every existing reason is kept (the rules check `hasAll`), a new reason at or above the current level goes first, and one below it goes last. With nothing new, `attention` is null and the app leaves the level and reasons alone.
+- `lastSeenAtMillis` becomes the run's time, and never moves back.
+- Today's record keeps the stamp it was created with on later runs. Demo overrides replace readings and mark the record `demoOverride`; a later device run keeps a demo record's values.
+
+**The app wires up (not built):** the periodic work about every six hours (WorkManager on Android; a background task on iOS) and the "Run daily job now" debug action; reading the Signals and Consents, the previous 16 daily records, today's record, the recent Check-ins, the flags and the Patient record; writing the daily record (set), the new flags (create), and `lastSeenAtMillis` plus the level and reasons in one transaction; and the S24+ check. Pause the job during the silence test, or the sign of life overwrites the 25-hours-ago value.
+
+**Decided deviation:** #26 asks the job to fill `objectiveChange` and `outcomeScore` on yesterday's Suggestions. The review made the Outcome fields function-only, so Finish Check-in writes them (#21, PR #65). The job does not touch Suggestions.
+
 ### Seed (`firebase/seed`)
 
 `npm run seed` deletes and recreates three Demo Patients with 42 days of synthetic history ending today:
@@ -178,7 +212,7 @@ The callables are reached through the Firebase SDK (`httpsCallable` in `europe-n
 Differences that remain between `main`'s Patient UI and the contract, for the next slices:
 
 - `core` has two sets of types: the screen models (`app.depressify.core`: `SuggestionKind`, `Summary`, `SignalId`, `Baseline`) and the contract (`app.depressify.core.model`). They don't map one to one. The screens have four Suggestion kinds and the contract seven; the screens treat ratings and Voice observations as Signals and the contract as Consent purposes.
-- The screens' `Baseline` is the 14-day median with at least 5 valid days. The contract's Baseline also has a floor on the spread, pinned by `fixtures/baseline/baseline-cases.json`. The Kotlin side must check that fixture when Signals are wired (#16).
+- The screens' `Baseline` is the 14-day median with at least 5 valid days, counted in records. The contract's Baseline, `SignalBaseline` in `app.depressify.core.daily` (#26), also has a floor on the spread and counts calendar dates, and its JVM test runs `fixtures/baseline/baseline-cases.json`. The screens should move to it (#16).
 - The sharing screens show a fictional Clinician name. The record holds the Clinician's email.
 
 ## Frontend
@@ -200,11 +234,11 @@ Results on `feat/14-typed-checkin-on-49` (on #50, with #52's spike fixtures merg
 
 | Suite | Command | Result |
 |---|---|---|
-| Kotlin `core` (contract, `CoreRulesTest`, `LiveProtocolTest`, `LiveProtocolFixturesTest`) | `./gradlew :core:jvmTest` | 39 pass; the exported contract is unchanged |
-| Kotlin `shared` (session and view model wiring, with fakes) | `./gradlew :shared:testAndroidHostTest` | 10 pass |
+| Kotlin `core` (contract, `CoreRulesTest`, `LiveProtocolTest`, `LiveProtocolFixturesTest`, and on `feat/26-daily-job-rules` the daily pipeline and `BaselineFixtureTest`) | `./gradlew :core:jvmTest` | 39 pass; 102 on `feat/26-daily-job-rules` (63 new). The exported contract is unchanged |
+| Kotlin `shared` (session and view model wiring, with fakes) | `./gradlew :shared:testAndroidHostTest` | 10 pass; 16 on `feat/26-daily-job-rules` (from `main`) |
 | Android build | `./gradlew :androidApp:assembleDebug` | APK builds |
 | iOS build | `xcodegen generate`, then `xcodebuild` for the arm64 simulator | Builds and links with the Firebase iOS SDK |
-| Functions | `cd firebase/functions && npm test` | 206 pass |
+| Functions | `cd firebase/functions && npm test` | 206 pass; 291 on `feat/26-daily-job-rules` (from `main`, after `npx -y npm@10 ci`), with the contract drift guard |
 | Seed | `cd firebase/seed && npm test` | 89 pass |
 | Dashboard helpers | `cd firebase/hosting && node --test` | 308 pass |
 | Rules, functions and end-to-end on the emulators | `firebase emulators:exec --only auth,firestore,functions --project demo-twoam "npm --prefix functions run test:emulator"` | 86 pass with Firebase CLI 15.36.0, including the `redFlagAlert` trigger and the silence test raising red with one email |
@@ -264,7 +298,7 @@ Deploy notes:
 
 ## Open items for the backend
 
-- **Moved from the daily job:** the spec has the phone's daily job write `objectiveChange` and `outcomeScore`. These are now function-only, so Finish Check-in must compute them (#21, below).
+- **Moved from the daily job:** the spec has the phone's daily job write `objectiveChange` and `outcomeScore`. These are now function-only, so Finish Check-in computes them (#21, PR #65). The `core` daily pipeline (#26) does not touch Suggestions.
 - **Seams left by #14:**
   - **#17 (tool catalog):** `LIVE_TOOL_DECLARATIONS` in `firebase/functions/src/tools.ts` now holds nine tools written by hand to match `CompanionTools` in `shared`. #17 still replaces them with `core`'s `ToolCatalog` export and adds the comparison test; the token body, field mask and the crisis rule (which names `raise_crisis` once it is declared) need no change.
   - **#20 (Decisions):** `TODO(#20)` in `finishCheckInHandler` (`src/checkInFunctions.ts`) marks where the three yes/no questions go, on the same in-memory transcript; the flags and the Patient's level belong in the same `writeFinish` transaction.
