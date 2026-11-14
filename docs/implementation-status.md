@@ -1,6 +1,6 @@
 # Implementation status
 
-Status as of 14 November 2026. Covers issues #7, #8, #9, #10, #11, #12, #13, #23 and #29, the backend part of #22 (the red flag email), the silence check (#28), the backend half of the #6 spikes, the backend part of #14 (Start and Finish Check-in, and the Live protocol parsing in `core`), the review decisions that followed, and the backend half of the #6 spikes ([spike-results.md](spike-results.md)). Terms follow [GLOSSARY.md](../GLOSSARY.md).
+Status as of 14 November 2026. Covers issues #7, #8, #9, #10, #11, #12, #13, #23 and #29, the backend part of #22 (the red flag email), the silence check (#28), the backend half of the #6 spikes, the backend part of #14 (Start and Finish Check-in, and the Live protocol parsing in `core`), the Nudge rules and quiet hours in `core` (#27), the review decisions that followed, and the backend half of the #6 spikes ([spike-results.md](spike-results.md)). Terms follow [GLOSSARY.md](../GLOSSARY.md).
 
 ## Work on top of this branch (open PRs)
 
@@ -16,6 +16,7 @@ Kept up to date as PRs are opened and merged. Each PR also updates its own rows 
 | #55 | `docs/session-handoff-on-49` | Session handoff, and this overview | Open |
 | #56 | `docs/cloud-setup-on-49` | Firebase and Google Cloud setup record | Open |
 | #57 | `feat/14-typed-checkin-on-49` (on #50, merges #52) | #14, backend: `startCheckIn`, `finishCheckIn`, and `LiveProtocol` in `core` | Open; tested (functions 249, core 39, emulators 87 + 14). Not deployed. |
+| to open | `feat/27-nudge-rules` → `main` | #27, `core` part: Nudge rules, Nudge text, quiet hours, and the `core` purity check | Open; tested (core 76) |
 | — | — | #20 (Decisions into flags), then #21 (Outcomes) | Next, after #14 |
 | — | — | #18 (Map tool) | Waits on enabling `mapstools.googleapis.com` and the #17 tool catalog |
 
@@ -120,11 +121,40 @@ The callables are reached through the Firebase SDK (`httpsCallable` in `europe-n
 
 ### Live protocol parsing (`core`, #14)
 
-`app.depressify.core.live.LiveProtocol`, pure common Kotlin (no platform imports; the purity check covers it):
+`app.depressify.core.live.LiveProtocol`, pure common Kotlin (no platform imports; the purity check, `checkCommonPurity` in `core/build.gradle.kts`, runs before `:core:jvmTest`):
 - `parse(frame: ByteArray | String | JsonObject): List<LiveEvent>`: one server frame (binary UTF-8 JSON) to events, in the order the phone must act on them. `LiveEvent` is `SetupComplete`, `AudioOut(pcm, sampleRate)`, `ModelText`, `InputText`, `OutputText`, `Interrupted`, `GenerationComplete`, `TurnComplete`, `ToolCall(id, name, args)`, `ToolCallCancellation`, `VoiceActivity(started)`, `Usage` and `GoAway`. Empty, unknown, malformed and `sessionResumptionUpdate` messages give no events; it never throws; bad base64 audio is skipped.
 - Builders: `setupMessage`, `textMessage` (`realtimeInput.text`, the verified typed path), `clientContentMessage`, `audioMessage` (16 kHz PCM16 base64), `audioStreamEndMessage`, `toolResponseMessage`.
 - `LiveProtocolFixturesTest` (JVM) parses every server message in `fixtures/spike/live/messages/` and the whole recorded session, and checks the builders against the recorded client messages; `LiveProtocolTest` (common) covers several parts in one message, an unknown message, a tool call and an interruption.
 - Not built here (app team): the Ktor `LiveClient`, audio, the Check-in runner and recorder, and the screens.
+
+### Nudge rules and quiet hours (`core`, #27)
+
+**Built** in `app.depressify.core.nudge`, pure common Kotlin with tests. Nothing in the data contract changed.
+
+- **`NudgeDecision.decide(NudgeInput): NudgeOutcome`**: `None(NoNudgeReason)` or `Nudge(NudgeReason)`.
+  - Inputs: `now` and the Patient's `timeZone`, `nudgesEnabled`, `lastNudgeAt`, `quietHours`, `recentDays` (daily records with their stored `vsBaseline`), `lastCheckInAt`, `calendar` (`Busy`, `Free`, `Unknown`), `weather` (`Good`, `Bad`, `Unknown`), `staleAfterDays`.
+  - No Nudge, in this order: Nudges off; one already sent today (local date); inside quiet hours (overnight windows included; invalid quiet hours count as the default); calendar busy.
+  - Otherwise the first that applies:
+    1. `RoughNights`: the newest record not dated in the future and the record for the day before, both no older than the staleness limit and both with sleep at or below −1, and time at home or late-night screen time above +1 on either day.
+    2. `FreeHourGoodWeather`: `Free` and `Good`.
+    3. `NoCheckInByEvening`: 17:00 or later with no Check-in today.
+  - Unknown calendar or weather never counts as free or good. A missing night never counts. Stale or future-dated records are never evidence.
+- **`NudgeThresholds`**: every threshold and time, all starting values. Sleep −1, "more than usual" above +1, 17:00, a 60-minute window, records stale after 1 day.
+- **`CalendarAvailability.forWindow(busy, now)`**: turns free/busy intervals into `Busy` or `Free` for the next hour. No reading gives `Unknown`.
+- **`NudgeNotification.forNudge(nudge)`**: the interface design's copy, "A moment for you?" / "Your Check-in is here when you want it.", for every reason.
+- **`QuietHoursRules`**, on top of `QuietHours` / `LocalMinutes` in `Schedule.kt`:
+  - `Default` is 21:00 to 09:00. `validate` accepts overnight ranges and rejects identical endpoints and times off the hour.
+  - `fromContract` / `toContract` map to the Patient record's whole-hour `quietHoursStart` / `quietHoursEnd`. A broken stored record reads as the default.
+  - `display` shows the time zone: `21:00–09:00 (Europe/Helsinki)`.
+- **Kept on the phone, not in Firestore:** the last Nudge time and the Nudge on/off choice. Nudges are local notifications decided on the phone, so nothing else reads them. A reinstall forgets them, which allows at most one extra Nudge that day.
+- **The app team wires up:**
+  - Calling `decide` from the daily job, after today's daily record is built.
+  - Recording `lastNudgeAt` when it posts.
+  - The calendar and weather reads.
+  - The notification, its channel, the permission (denied gives `nudgesEnabled = false`), and the tap into a ready-to-start Check-in without the microphone.
+  - The quiet-hours screen through `QuietHoursRules`, and its Compose UI tests.
+  - The S24+ check.
+- **Open:** the quiet-hours screen steps by 30 minutes, but the Patient record stores whole hours. Either the stepper moves by an hour, or the contract moves to minutes.
 
 ### Seed (`firebase/seed`)
 
@@ -200,11 +230,11 @@ Results on `feat/14-typed-checkin-on-49` (on #50, with #52's spike fixtures merg
 
 | Suite | Command | Result |
 |---|---|---|
-| Kotlin `core` (contract, `CoreRulesTest`, `LiveProtocolTest`, `LiveProtocolFixturesTest`) | `./gradlew :core:jvmTest` | 39 pass; the exported contract is unchanged |
-| Kotlin `shared` (session and view model wiring, with fakes) | `./gradlew :shared:testAndroidHostTest` | 10 pass |
+| Kotlin `core` (contract, `CoreRulesTest`, `LiveProtocolTest`, `LiveProtocolFixturesTest`, the #27 Nudge and quiet-hours tests) | `./gradlew :core:jvmTest` | 76 pass on `feat/27-nudge-rules` (37 of them for #27); the exported contract is unchanged |
+| Kotlin `shared` (session and view model wiring, with fakes) | `./gradlew :shared:testAndroidHostTest` | 16 pass on `feat/27-nudge-rules` |
 | Android build | `./gradlew :androidApp:assembleDebug` | APK builds |
 | iOS build | `xcodegen generate`, then `xcodebuild` for the arm64 simulator | Builds and links with the Firebase iOS SDK |
-| Functions | `cd firebase/functions && npm test` | 206 pass |
+| Functions | `cd firebase/functions && npm test` | 291 pass on `feat/27-nudge-rules` |
 | Seed | `cd firebase/seed && npm test` | 89 pass |
 | Dashboard helpers | `cd firebase/hosting && node --test` | 308 pass |
 | Rules, functions and end-to-end on the emulators | `firebase emulators:exec --only auth,firestore,functions --project demo-twoam "npm --prefix functions run test:emulator"` | 86 pass with Firebase CLI 15.36.0, including the `redFlagAlert` trigger and the silence test raising red with one email |
