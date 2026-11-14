@@ -158,6 +158,8 @@ describe("the structured-output request", () => {
     expect(schema.properties.previousPreferNotToSay.type).toBe("boolean");
     expect(schema.additionalProperties).toBe(false);
     expect(schema.properties.quotes.maxItems).toBe(3);
+    // #20: the few quotes are the ones that explain a concern, when there is one.
+    expect(request.system_instruction).toMatch(/quotes[^\n]*concern/i);
     expect(schema.properties.mood.type).toEqual(["integer", "null"]);
     expect(schema).toBe(SUMMARY_SCHEMA);
   });

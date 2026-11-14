@@ -112,7 +112,7 @@ Start Check-in (#14, `startCheckIn`) creates the Check-in with the Admin SDK whe
 | `mood`, `energy`, `sleepQuality` | int 1..5 or null | Unanswered is `null`. Written by Finish Check-in only. |
 | `voiceCues` | VoiceCue[] | `{label, intensity 1..5, heard}`. Observations, never a diagnosis. Written by Finish Check-in only, from the draft. |
 | `crisis` | boolean | `true` when the Check-in raised a crisis. Written by Finish Check-in only, from the draft's crisis marker. The phone raises its own red crisis flag at once (`flags`); Finish Check-in also raises `crisis-<checkInId>` from the marker unless a crisis flag with the same stamp is still open. |
-| `assessment` | Assessment or null | How the automatic review (the Decisions API, #20) went. `assessed`: answered, and any flag it gave is in `flags`. `unassessed`: the safety filter refused to judge it; an amber `unassessed` flag was raised. `unavailable`: a timeout or other failure; no flag came from the review, and the dashboard should show "assessment unavailable" beside the last known flag, never a new green. `null` until Finish Check-in, and for a Check-in in which the Patient said nothing (nothing to review). A retry whose review fails keeps an earlier `assessed` or `unassessed`. Written by Finish Check-in only; never shown to the Patient. |
+| `assessment` | Assessment or null | How the automatic review (the Decisions API, #20) went. `assessed`: answered, and any flag it gave is in `flags`. `unassessed`: the safety filter refused to judge it; an amber `unassessed` flag was raised. `unavailable`: a timeout or other failure; no flag came from the review, and the dashboard shows "Assessment unavailable" beside the last known level when the latest reviewed Check-in has it (`assessmentNote` in `hosting/js/lib/flag-detail.js`), never a new green. `null` until Finish Check-in, and for a Check-in in which the Patient said nothing (nothing to review). A retry whose review fails keeps an earlier `assessed` or `unassessed`. Written by Finish Check-in only; never shown to the Patient. |
 | `previousTried` | boolean or null | Whether the Patient tried the previous Suggestion, as the review heard it: `true` (the answer was at or above 0.6), `false` (at or below 0.4), or `null` when unknown (in between, not asked because there was no previous Suggestion, or no review). It is the review's answer only: the Outcome on the Suggestion (#21) takes the text model's answer first and this one only when the text model is unsure, so the two can differ. Written by Finish Check-in only. |
 | `sharedWithClinician` | boolean | The sharing stamp. |
 
@@ -271,7 +271,7 @@ What the functions count per Patient record (`firebase/functions/src/limits.ts`)
 
 | Field | Type | Notes |
 |---|---|---|
-| `checkInStarts` | list of `{checkInId, uid, startedAtMillis}` | One entry per Check-in Start Check-in created in the last hour (older entries are dropped on the next start). Start Check-in refuses the 11th start in an hour with `resource-exhausted`, before minting a token. Finish Check-in reads `uid`: a caller who is not the Patient (the Demo Patient shortcut) may finish only a Check-in they started. |
+| `checkInStarts` | list of `{checkInId, uid, startedAtMillis}` | One entry per Check-in Start Check-in created in the last day (older entries are dropped on the next start). Start Check-in refuses the 11th start in an hour with `resource-exhausted`, before minting a token; only the last hour counts. Finish Check-in reads `uid`: a caller who is not the Patient (the Demo Patient shortcut) may finish only a Check-in they started, also when the finish is retried hours later. |
 | `redFlagEmailsAtMillis` | list of integers | When `redFlagAlert` wrote each email in the last hour. The 6th in an hour is skipped (`capped`). |
 
 ## Queries
@@ -311,7 +311,7 @@ The list query must carry the sharing filter (built by `clinicianListFilters` in
 | Patient record: delete | no | no | no | no |
 | `daily` | read, write (create stamped as now; the stamp never changes) | read documents stamped `true` | no | no |
 | `consents` | read, write | read | no | no |
-| `checkIns` | read; create with no ratings, no Voice cues and `crisis: false`, stamped as now; update `startedAtMillis` and `endedAtMillis` only; delete | read documents stamped `true` | no | no |
+| `checkIns` | read; create with no ratings, no Voice cues, `crisis: false` and null `assessment` and `previousTried`, stamped as now; update `startedAtMillis` and `endedAtMillis` only; delete | read documents stamped `true` | no | no |
 | `suggestions` | read; create with no Outcome (`outcomeCheckInId` `null` or absent), stamped as now; update `status` and `booked` only; delete | read documents stamped `true` | no | no |
 | `summaries` | read | read documents stamped `true` | no | no |
 | `flags` | read; create uncleared flags stamped as now; no change or delete | read documents stamped `true`; set `clearedAtMillis` only, on those | no | no |

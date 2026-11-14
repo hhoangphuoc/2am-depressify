@@ -82,8 +82,6 @@ export function silentFlag(patient: Partial<Pick<PatientDoc, "sharingConsent">>,
   };
 }
 
-export { raisedAttention, type StoredFlag } from "./flags";
-
 export type SilencePlan =
   | { raise: true; flagId: string; flag: Flag; update: Pick<PatientDoc, "flagLevel" | "flagReasons"> }
   | { raise: false; skip: SilencePlanSkip };
