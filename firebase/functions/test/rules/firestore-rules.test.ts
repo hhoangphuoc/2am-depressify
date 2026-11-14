@@ -26,6 +26,7 @@ import {
   CRISIS_REASON,
   DEMO,
   OTHER_CLINICIAN,
+  PATIENT_READ_ONLY,
   PATIENT_WRITABLE,
   SAMPLES,
   SHARED_AT,
@@ -96,7 +97,7 @@ describe("A Patient reads and writes their own record and its collections, but c
     for (const sub of SUBCOLLECTIONS) await assertSucceeds(getDocs(collection(db, `patients/${ALICE}/${sub}`)));
   });
 
-  it("creates, updates and deletes in daily, consents, checkIns, summaries and suggestions", async () => {
+  it("creates, updates and deletes in daily, consents, checkIns and suggestions", async () => {
     const db = asPatient(env, ALICE);
     for (const sub of PATIENT_WRITABLE) for (const write of await writes(db, ALICE, sub)) await assertSucceeds(write());
   });
@@ -106,6 +107,11 @@ describe("A Patient reads and writes their own record and its collections, but c
     for (const sub of ["visits", "digests"] as const) {
       for (const write of await writes(db, ALICE, sub)) await assertFails(write());
     }
+  });
+
+  it("patientCannotWriteSummaries: what the Clinician reads is written by the Check-in, not by hand", async () => {
+    const db = asPatient(env, ALICE);
+    for (const write of await writes(db, ALICE, "summaries")) await assertFails(write());
   });
 
   it("updates the fields the phone owns: quiet hours, sign of life, last Check-in, health source, sharing Consent", async () => {
@@ -404,6 +410,11 @@ describe("Any signed-in user can read and write a Patient marked synthetic", () 
     await assertSucceeds(updateDoc(doc(db, `patients/${DEMO}`), { lastSeenAtMillis: 1_700_000_400_000 }));
     for (const sub of PATIENT_WRITABLE) for (const write of await writes(db, DEMO, sub)) await assertSucceeds(write());
     await assertSucceeds(setDoc(doc(db, `patients/${DEMO}/flags/f2`), crisisFlag));
+  });
+
+  it("cannot write Summaries, Visits or Digests through the demo shortcut", async () => {
+    const db = asPatient(env, STRANGER);
+    for (const sub of PATIENT_READ_ONLY) for (const write of await writes(db, DEMO, sub)) await assertFails(write());
   });
 
   it("cannot unmark the Patient as synthetic or move them to another Clinician", async () => {

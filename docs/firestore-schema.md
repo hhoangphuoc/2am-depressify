@@ -216,13 +216,14 @@ The list query must carry the sharing filter (built by `clinicianListFilters` in
 | Patient record: create | own id only, `clinicianEmail` the demo Clinician, `synthetic` false, `tmsEndDate` null, `intakeHighlights` empty | no | no | no |
 | Patient record: update | `quietHoursStart`, `quietHoursEnd`, `lastSeenAtMillis`, `lastCheckInAtMillis`, `healthSource`, `sharingConsent` (to `granted` or `declined`, always with a new `sharingChangedAtMillis`), `sharingChangedAtMillis`; `flagLevel` and `flagReasons` only to raise (level never lower, reasons kept) | `displayName`, `tmsEndDate`, and a reset of `flagLevel` and `flagReasons` | no | no |
 | Patient record: delete | no | no | no | no |
-| `daily`, `consents`, `checkIns`, `summaries`, `suggestions` | read, write | read | no | no |
+| `daily`, `consents`, `checkIns`, `suggestions` | read, write | read | no | no |
+| `summaries` | read | read | no | no |
 | `flags` | read; create uncleared flags; no change or delete | read; set `clearedAtMillis` only | no | no |
 | `visits` | read | read, create, update, delete | no | no |
 | `digests` | read | read | no | no |
 | `mail` | no | no | no | no |
 
-Anything not listed, including a collection outside this schema, is denied. Field owners: `displayName`, `tmsEndDate` and clearing flags belong to the Clinician; `intakeHighlights` and Summaries are written by functions; `synthetic` and `clinicianEmail` never change after creation from a client.
+Anything not listed, including a collection outside this schema, is denied. Field owners: `displayName`, `tmsEndDate` and clearing flags belong to the Clinician; `intakeHighlights` and Summaries are written by functions only, so the Patient cannot edit what the Clinician reads; `synthetic` and `clinicianEmail` never change after creation from a client.
 
 `flagLevel`, `flagReasons` and `flags` are readable by the Patient's own app, because the phone raises flags and needs the open ones to avoid duplicates. The app never shows them (ADR 0005, ADR 0009).
 

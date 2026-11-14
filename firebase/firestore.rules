@@ -205,11 +205,10 @@ service cloud.firestore {
         allow read: if canRead();
         allow write: if patientAccess();
       }
-      // Normally written by Finish Check-in (Admin SDK). The ticket lets the Patient write their
-      // own collections apart from Visits and Digests, so the Patient may write these too.
+      // Written only by Finish Check-in (Admin SDK) from the Check-in itself. Read-only to every
+      // client, the Patient included, so what the Clinician reads cannot be edited by hand.
       match /summaries/{checkInId} {
         allow read: if canRead();
-        allow write: if patientAccess();
       }
       match /suggestions/{suggestionId} {
         allow read: if canRead();

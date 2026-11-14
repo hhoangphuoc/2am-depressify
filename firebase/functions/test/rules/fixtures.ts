@@ -122,7 +122,9 @@ export const SAMPLES: Record<Subcollection, { id: string; data: object }> = {
 export const SUBCOLLECTIONS = Object.keys(SAMPLES) as Subcollection[];
 
 /** The collections a Patient reads and writes. Visits and Digests are read-only to them; flags are append-only. */
-export const PATIENT_WRITABLE: Subcollection[] = ["daily", "consents", "checkIns", "summaries", "suggestions"];
+export const PATIENT_WRITABLE: Subcollection[] = ["daily", "consents", "checkIns", "suggestions"];
+/** Written by functions only (Admin SDK): read-only to the Patient, the demo shortcut and the Clinician. */
+export const PATIENT_READ_ONLY: Subcollection[] = ["summaries", "visits", "digests"];
 /** The collections the Clinician may not write at all. */
 export const CLINICIAN_READ_ONLY: Subcollection[] = ["daily", "consents", "checkIns", "summaries", "suggestions", "digests"];
 
