@@ -24,7 +24,8 @@ import type { Firestore } from "firebase-admin/firestore";
 import * as logger from "firebase-functions/logger";
 import { onSchedule } from "firebase-functions/v2/scheduler";
 import { SCHEDULER_REGION } from "./region";
-import { SILENCE_SCHEDULE, SILENCE_TIME_ZONE, silenceDecision, silencePlan, type SilencePlan, type SilencePlanSkip, type StoredFlag } from "./silence";
+import type { StoredFlag } from "./flags";
+import { SILENCE_SCHEDULE, SILENCE_TIME_ZONE, silenceDecision, silencePlan, type SilencePlan, type SilencePlanSkip } from "./silence";
 import { COLLECTIONS, type Flag, type PatientDoc } from "./types";
 
 /** What the silence check reads and writes. */

@@ -1,0 +1,11 @@
+Use case: precise-object-edit.
+Asset type: full Depressify logo lockup, square.
+Input image: /Users/hhoangphuoc/Downloads/Depressify_Sunrise_Logo.png is the edit target. Make a faithful recolor of this exact image only. This is refinement of the user's chosen full logo, not a new design.
+
+Preserve the original composition, exact right-facing human head profile silhouette and proportions, cloud and both raindrops, all interior shapes and rolling hills, sunrise disc and every ray, the caring supporting hand cradling the head and holding the two-leaf sprout, all white negative-space shapes, and the original generous spacing. Keep every element in its original position and preserve all icon details. Do not redesign, move, crop or simplify anything. Keep the full logo at the same square aspect ratio.
+
+Replace the original rainbow colors with this cohesive muted app palette only: deep blue-green ink #233C4C, teal accent #326B73, soft sea-glass #8CC1C2, pale blue-gray #E9EDF0, soft white #E4EBE8, paper #FAFAF7. Translate the sunrise disc, rays and luminous surrounding dawn into softly luminous ivory/mist from the palette; translate landscape and leaves to sea-glass/teal, shaded head to blue-green, cloud and raindrops to cool pale blue-gray. Muted tonal transitions within this palette are acceptable where they preserve the original illustration. Remove the original rainbow blues, purples, yellow, orange and lime; no saturated rainbow. Preserve the recognizable hope-and-self-care narrative and crisp clean professional graphic style.
+
+Text verbatim: "Depressify" (capital D, remainder lowercase; D-e-p-r-e-s-s-i-f-y). Preserve the exact original rounded bold humanist sans wordmark, letter shapes, baseline, size and position below the illustration. Wordmark must be deep blue-green #233C4C with the original leaf dot above the i recolored teal #326B73. Keep all text clearly readable. No other text.
+
+Background must be a uniform opaque paper-white #FAFAF7, edge-to-edge, including the original negative spaces, without transparency. No added texture, 3D, shadows, app mockup, frame, badges, slogans or clinical claims. Change only colors; retain the exact source composition and geometry.

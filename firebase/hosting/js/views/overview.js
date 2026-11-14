@@ -8,6 +8,7 @@ import { onSnapshot } from "https://www.gstatic.com/firebasejs/13.3.0/firebase-f
 import { shownAttention } from "../lib/clear.js";
 import { COLLECTIONS } from "../lib/contract.js";
 import { isDateKey, shortDate } from "../lib/dates.js";
+import { assessmentNote } from "../lib/flag-detail.js";
 import { levelWord } from "../lib/list-row.js";
 import { moodByWeek, questionnairePoints, timelineRows } from "../lib/timeline.js";
 import { drawTimeline, timelineTable } from "./timeline-chart.js";
@@ -50,6 +51,8 @@ export function mountAttention(container, { db, patientId }) {
   let patient = null;
   /** @type {object[] | null} null until the flags load, or when they cannot be read */
   let flags = null;
+  /** @type {object[]} the visible Check-ins, for the "assessment unavailable" note (#20) */
+  let checkIns = [];
 
   function render() {
     if (!patient) return;
@@ -62,7 +65,8 @@ export function mountAttention(container, { db, patientId }) {
     for (const reason of reasons) list.append(el("li", {}, reason));
     const row = el("div", { class: "attention-row" });
     row.append(chip, list);
-    block.replaceChildren(heading, row);
+    const note = assessmentNote(checkIns);
+    block.replaceChildren(heading, row, ...(note ? [el("p", { class: "muted" }, note)] : []));
   }
 
   const stopFlags = onSnapshot(
@@ -77,6 +81,18 @@ export function mountAttention(container, { db, patientId }) {
       render();
     },
   );
+  const stopCheckIns = onSnapshot(
+    patientQuery(db, patientId, COLLECTIONS.checkIns),
+    (snapshot) => {
+      checkIns = snapshot.docs.map((d) => d.data());
+      render();
+    },
+    // Without the Check-ins there is no note; the level and reasons still show.
+    () => {
+      checkIns = [];
+      render();
+    },
+  );
 
   return {
     update(view) {
@@ -85,6 +101,7 @@ export function mountAttention(container, { db, patientId }) {
     },
     destroy() {
       stopFlags();
+      stopCheckIns();
       block.remove();
     },
   };

@@ -27,6 +27,7 @@ The mirrors are kept in step by tests. The `core` JVM tests export the Kotlin co
 | `SharingConsent` | `undecided`, `granted`, `declined` |
 | `ConsentPurpose` | `sharing`, `ratings`, `voice_cues` |
 | `QuestionnaireKind` | `phq2`, `phq9` |
+| `Assessment` | `assessed`, `unassessed`, `unavailable`. How Finish Check-in's automatic review of a Check-in went (#20); see `checkIns`. |
 
 ## Collections
 
@@ -42,6 +43,7 @@ patients/{patientId}                 PatientDoc      patientId = the Patient's a
   digests/{isoWeek}                  Digest          isoWeek = e.g. 2026-W46
 mail/{mailId}                        MailDoc         written by functions only; read by Trigger Email
 clinicians/{email}                   (allowlist)     the Clinicians a new Patient may link to; Admin SDK only
+patientLimits/{patientId}            PatientLimits   hourly caps and who started each recent Check-in; functions only
 ```
 
 ### `patients/{patientId}`: PatientDoc
@@ -53,10 +55,10 @@ clinicians/{email}                   (allowlist)     the Clinicians a new Patien
 | `intakeHighlights` | string | `""` | Extracted from the Intake, at most 120 words, reviewed by the Clinician. Written only by the `saveIntake` function (Clinician only); no client writes it. The report itself is never stored. |
 | `tmsEndDate` | date string or null | `null` | Set by the Clinician. Week 1 starts the day after. |
 | `flagLevel` | FlagLevel | `green` | The highest uncleared flag stamped `sharedWithClinician: true`. A flag raised while the Patient was not sharing never counts. Never shown to the Patient. |
-| `flagReasons` | string[] | `[]` | The reasons of those flags, highest level first, then newest. Plain sentences, never a number. |
+| `flagReasons` | string[] | `[]` | The reasons of those flags, highest level first, then newest. Plain sentences: never a score or a decimal number (a plain duration such as "under 3 hours" is fine). |
 | `quietHoursStart` | int 0..23 | `21` | No Nudges inside quiet hours; the window may cross midnight. |
 | `quietHoursEnd` | int 0..23 | `9` | |
-| `lastSeenAtMillis` | int or null | `null` | Last sign of life from the phone. The hourly silence check (`silenceCheck`, #28) reads it: older than 24 hours on a sharing, non-synthetic Patient raises red `silent`. `null` (never seen) is not silent. Finish Check-in moves it to the time of the finish (never back). |
+| `lastSeenAtMillis` | int or null | `null` | Last sign of life from the phone. The hourly silence check (`silenceCheck`, #28) reads it: older than 24 hours on a sharing, non-synthetic Patient raises red `silent`. `null` (never seen) is not silent. Finish Check-in moves it to the time of the finish, and the phone's daily job (#26) to the time of each run (never back). |
 | `lastCheckInAtMillis` | int or null | `null` | The end of the latest finished Check-in. Finish Check-in moves it forward (never back). `null` means no Check-in has finished yet: Start Check-in then adds the first-Check-in AI disclosure to the token's instruction. |
 | `healthSource` | HealthSource | `device` | Exactly one source per Patient. |
 | `synthetic` | boolean | `false` | `true` for Demo Patients. |
@@ -64,6 +66,8 @@ clinicians/{email}                   (allowlist)     the Clinicians a new Patien
 | `sharingChangedAtMillis` | int or null | `null` | When `sharingConsent` last changed. Written with every change. |
 
 ### `daily/{date}`: DailyDoc
+
+Written by the phone's daily job (#26): the decision is `DailyJob.run` in `core` (`app.depressify.core.daily`), and the app writes its result. Every run rewrites today's record whole, keeping the stamp it was created with. A record a demo control wrote (`demoOverride: true`) keeps its values on later device runs.
 
 | Field | Type | Notes |
 |---|---|---|
@@ -85,7 +89,7 @@ vsBaseline = (today - median) / spread
 
 The floor keeps a constant history from dividing by zero. `vsBaseline` keeps the sign as measured; the oriented comparison negates it for `lower_is_better` Signals, so negative always means worse, and is `null` for Signals with direction `none`. `composite` is the mean of the oriented comparisons that are not `null`.
 
-The rule is pinned by a shared fixture, [`fixtures/baseline/baseline-cases.json`](../fixtures/baseline/baseline-cases.json): inputs and expected comparisons, oriented values and composites, including fewer than 5 valid days, null days, a constant series and both directions. The JavaScript rule lives once, in the dashboard's `firebase/hosting/js/lib/baseline.js`; the seed re-exports it (`firebase/seed/src/baseline.js`). The seed tests and the dashboard tests (`firebase/hosting/test/baseline.test.mjs`) run the fixture through it, and core's Kotlin Baseline tests read the same file. Change the rule only by changing the fixture, core and that file together.
+The rule is pinned by a shared fixture, [`fixtures/baseline/baseline-cases.json`](../fixtures/baseline/baseline-cases.json): inputs and expected comparisons, oriented values and composites, including fewer than 5 valid days, null days, a constant series and both directions. The JavaScript rule lives once, in the dashboard's `firebase/hosting/js/lib/baseline.js`; the seed re-exports it (`firebase/seed/src/baseline.js`). The functions keep a TypeScript copy, `firebase/functions/src/baseline.ts` (functions are built from `src` alone), which Finish Check-in uses for an Outcome's `objectiveChange` (#21). The seed tests, the dashboard tests (`firebase/hosting/test/baseline.test.mjs`) and the functions tests (`firebase/functions/test/baseline.test.ts`) run the fixture through their copy, and in `core`, `BaselineFixtureTest` runs every case on the JVM through `SignalBaseline` (`app.depressify.core.daily`), the Kotlin rule. (The screens' older `app.depressify.core.Baseline` has no spread floor; moving the screens to `SignalBaseline` is #16.) Change the rule only by changing the fixture and every copy together.
 
 ### `consents/{subject}`: Consent
 
@@ -100,7 +104,7 @@ The rule is pinned by a shared fixture, [`fixtures/baseline/baseline-cases.json`
 
 ### `checkIns/{checkInId}`: CheckIn
 
-Start Check-in (#14, `startCheckIn`) creates the Check-in with the Admin SDK when it mints the Live token: `startedAtMillis` is the server time, the ratings, Voice cues and crisis marker are empty (`null`, `[]`, `false`), and it is stamped with `sharingStamp`. Finish Check-in (`finishCheckIn`) writes the ratings, Voice cues and crisis marker from the draft it receives, the same draft the Summary is made from, and `endedAtMillis` if it is still `null`. The app owns only the times: it may change them with an update of those fields, and never changes the rest. The rules still let the app create a Check-in as it would (empty function-only fields, stamped as now), but with Start Check-in it does not need to, and Finish Check-in refuses a Check-in id that does not exist (`not-found`).
+Start Check-in (#14, `startCheckIn`) creates the Check-in with the Admin SDK when it mints the Live token: `startedAtMillis` is the server time, the ratings, Voice cues, crisis marker, `assessment` and `previousTried` are empty (`null`, `[]`, `false`, `null`, `null`), and it is stamped with `sharingStamp`. Finish Check-in (`finishCheckIn`) writes the ratings, Voice cues and crisis marker from the draft it receives, the same draft the Summary is made from, `assessment` and `previousTried` from the Decisions API's answers (#20), and `endedAtMillis` if it is still `null`. The app owns only the times: it may change them with an update of those fields, and never changes the rest. The rules still let the app create a Check-in as it would (empty function-only fields, stamped as now), but with Start Check-in it does not need to, and Finish Check-in refuses a Check-in id that does not exist (`not-found`).
 
 | Field | Type | Notes |
 |---|---|---|
@@ -109,12 +113,14 @@ Start Check-in (#14, `startCheckIn`) creates the Check-in with the Admin SDK whe
 | `endedAtMillis` | int or null | Set by Finish Check-in when still `null` (a time the app already wrote is kept); the app may update it. |
 | `mood`, `energy`, `sleepQuality` | int 1..5 or null | Unanswered is `null`. Written by Finish Check-in only. |
 | `voiceCues` | VoiceCue[] | `{label, intensity 1..5, heard}`. Observations, never a diagnosis. Written by Finish Check-in only, from the draft. |
-| `crisis` | boolean | `true` when the Check-in raised a crisis. Written by Finish Check-in only, from the draft's crisis marker. The red crisis flag itself is still raised by the phone at once (`flags`). |
+| `crisis` | boolean | `true` when the Check-in raised a crisis. Written by Finish Check-in only, from the draft's crisis marker. The phone raises its own red crisis flag at once (`flags`); Finish Check-in also raises `crisis-<checkInId>` from the marker unless a crisis flag with the same stamp is still open. |
+| `assessment` | Assessment or null | How the automatic review (the Decisions API, #20) went. `assessed`: answered, and any flag it gave is in `flags`. `unassessed`: the safety filter refused to judge it; an amber `unassessed` flag was raised. `unavailable`: a timeout or other failure; no flag came from the review, and the dashboard shows "Assessment unavailable" beside the last known level when the latest reviewed Check-in has it (`assessmentNote` in `hosting/js/lib/flag-detail.js`), never a new green. `null` until Finish Check-in, and for a Check-in in which the Patient said nothing (nothing to review). A retry whose review fails keeps an earlier `assessed` or `unassessed`. Written by Finish Check-in only; never shown to the Patient. |
+| `previousTried` | boolean or null | Whether the Patient tried the previous Suggestion, as the review heard it: `true` (the answer was at or above 0.6), `false` (at or below 0.4), or `null` when unknown (in between, not asked because there was no previous Suggestion, or no review). It is the review's answer only: the Outcome on the Suggestion (#21) takes the text model's answer first and this one only when the text model is unsure, so the two can differ. Written by Finish Check-in only. |
 | `sharedWithClinician` | boolean | The sharing stamp. |
 
 ### `summaries/{checkInId}`: Summary
 
-The Patient reads exactly what the Clinician reads. Written only by Finish Check-in (`finishCheckIn`), in one transaction with the Check-in's fields and the Patient's `lastCheckInAtMillis` and `lastSeenAtMillis`. Without usable model output (a silent Check-in, a failed or malformed model reply) it is the minimal Summary: empty `themes`, `sleepLine` and `quotes`, `null` ratings, Voice cues and the Suggestion still from the draft. The transcript itself is never written.
+The Patient reads exactly what the Clinician reads. Written only by Finish Check-in (`finishCheckIn`), in one transaction with the Check-in's fields and the Patient's `lastCheckInAtMillis` and `lastSeenAtMillis`. A model timeout, lost connection, rate limit or server error writes nothing and answers `unavailable`, so the phone retries while it still holds the draft. Without usable model output otherwise (a silent Check-in, a request the model refuses, a malformed reply) it is the minimal Summary: empty `themes`, `sleepLine` and `quotes`, `null` ratings, Voice cues and the Suggestion still from the draft. The transcript itself is never written.
 
 | Field | Type | Notes |
 |---|---|---|
@@ -127,11 +133,22 @@ The Patient reads exactly what the Clinician reads. Written only by Finish Check
 | `suggestion` | string or null | The Suggestion made: the draft's accepted one, else its open proposal (`null` if every one was declined); when the draft has none, the line the text model heard agreed. |
 | `previousOutcome` | string or null | What the Patient said about the previous Suggestion. |
 | `quotes` | string[] | At most three, each at most 200 characters, and only the Patient's own words: a quote the model returns that is not in a Patient turn of the draft is dropped. |
-| `sharedWithClinician` | boolean | The sharing stamp, from `sharingStamp` when Finish Check-in writes it. A retried finish keeps the stamp the Summary already has. |
+| `sharedWithClinician` | boolean | The sharing stamp: `true` only when the Check-in is stamped `true` and the Patient still shares when Finish Check-in writes it. A Check-in started while not sharing, or one the Patient stopped sharing during, gives an unshared Summary. A retried finish keeps the stamp the Summary already has. |
 
 ### `suggestions/{suggestionId}`: Suggestion
 
-The app records a Suggestion and changes only `status` and `booked`. The Outcome (`tried`, `felt`, `objectiveChange`, `outcomeScore`) is written by functions only: `null` when the app creates the Suggestion, and never changed by the app. The spec has the phone's daily job fill in `objectiveChange` and `outcomeScore`; under these rules that has to happen in a function instead (Finish Check-in, which writes `tried` and `felt`, can compute both, since the day's steps comparison is already on the daily record).
+The app records a Suggestion and changes only `status` and `booked`. The Outcome (`tried`, `felt`, `objectiveChange`, `outcomeScore`, `outcomeCheckInId`) is written by functions only: `null` when the app creates the Suggestion (an app that sends no `outcomeCheckInId` is accepted too), and never changed by the app. The spec has the phone's daily job fill in `objectiveChange` and `outcomeScore`; under these rules Finish Check-in computes both when it records the Outcome (#21, below).
+
+The four states of an accepted Suggestion's Outcome, kept apart by two fields (a field that means more than two things gets a type):
+
+| State | `outcomeCheckInId` | `tried` | `felt` | `objectiveChange` | `outcomeScore` |
+|---|---|---|---|---|---|
+| Open: not answered yet | `null` | `null` | `null` | `null` | `null` |
+| "Prefer not to say": answered, unknown | the Check-in | `null` | `null` | `null` | `null` |
+| "Not this time" | the Check-in | `false` | `null` | the day's change, or `null` | `-0.1` |
+| Tried | the Check-in | `true` | 1..5 or `null` | the day's change, or `null` | `-1..1` |
+
+A proposed or declined Suggestion never gets an Outcome, so "declined" (`status`) never means "not tried".
 
 | Field | Type | Notes |
 |---|---|---|
@@ -141,11 +158,22 @@ The app records a Suggestion and changes only `status` and `booked`. The Outcome
 | `suggestedAtMillis` | int | Set when the app creates it. |
 | `status` | SuggestionStatus | `proposed` until the Patient answers. The app may change it. |
 | `booked` | boolean | Set only after the calendar write succeeds. The app may change it. |
-| `tried` | boolean or null | `null` until answered; `false` is "not this time". Functions only. |
-| `felt` | int 1..5 or null | Functions only. |
-| `objectiveChange` | number or null | That day's oriented steps comparison with Baseline. Functions only. |
-| `outcomeScore` | number or null | `null` until the Patient answers. Functions only. |
+| `tried` | boolean or null | `null` until answered, and for "prefer not to say"; `false` is "not this time". Functions only. |
+| `felt` | int 1..5 or null | How trying it felt, when tried and the Patient said. Functions only. |
+| `objectiveChange` | number or null | The oriented steps comparison with Baseline on the day the Suggestion was made (Helsinki date of `suggestedAtMillis`). `null` for "prefer not to say", when the Patient has left steps out, or when that day has no comparison. Functions only. |
+| `outcomeScore` | number or null | `null` until the Patient answers, and for "prefer not to say". Functions only. See the rule below. |
+| `outcomeCheckInId` | string or null | The Check-in whose answer recorded the Outcome; `null` while it is open. Functions only. |
 | `sharedWithClinician` | boolean | The sharing stamp. An Outcome filled in later does not change it. |
+
+**Outcomes and learning what helps (#21).** Finish Check-in records the Outcome in its one transaction (`firebase/functions/src/outcomes.ts`, pure):
+
+- **Target.** The function finds it: the most recent accepted Suggestion (by `suggestedAtMillis`, then id) made before the Check-in started, not one of the draft's own Suggestions, with no Outcome yet (`outcomeCheckInId`, `tried` and `outcomeScore` all `null`), or whose Outcome this same Check-in recorded. When the request names `lastSuggestionId` (the Suggestion the Companion asked about) and it is not that target, no Outcome is written: the answer was about another Suggestion, such as a declined one. The transaction finds the target again and writes only if it is unchanged.
+- **Which answer counts.** The text model's structured output first: `previousTried` true or false (with `previousFelt` 1..5 when tried), then `previousPreferNotToSay`. Only when the text model is unsure (said nothing either way, or gave no usable reply) does the Decisions answer (#20) decide, and only a clear yes or no (`previousTried` on the Check-in). With neither, nothing is written and the Outcome stays open for the next Check-in. A silent Check-in records none.
+- **`objectiveChange`.** The daily record of the Suggestion's day: its stored `vsBaseline.steps` when that is a number, otherwise the comparison computed from the 14 records before it by the shared Baseline rule; oriented (steps are higher-is-better). `null` when there is no such day, no steps that day, too few valid days, or `consents/steps` is `granted: false`.
+- **`outcomeScore`.** `null` until answered and for "prefer not to say"; `-0.1` for "not this time", whatever the steps say (an Outcome is the Patient's report, and sensors never override "not this time"); otherwise `clamp(0.7 x (felt - 3) / 2 + 0.3 x clamp(objectiveChange, -1, 1), -1, 1)`, where a feeling not given and a missing step change each count as 0. The step change is clamped before it is weighted, so it moves the score by at most 0.3 and cannot turn a bad feeling good.
+- **Once.** An Outcome is applied once: a Suggestion that has one, from this Check-in or another, is never written again, so a retried finish leaves what its first attempt recorded and a late retry never overwrites a later Check-in's Outcome. Only the Outcome fields change; the stamp, status and the rest stay.
+- **Ranking.** Only scored Suggestions count, by mean then count (both descending, ties in `SuggestionKind` order). The Brief gets the top three kinds and, when the injected random source is below 0.2, one kind to try: the first kind with no score, or else the least-scored kind outside the top three. Kotlin: `SuggestionRanker` and `Outcomes` in `core` (`app.depressify.core.learning`), for the phone's Brief builder (the functions only write the scores). The dashboard's "what seems to help" (`firebase/hosting/js/lib/what-helps.js`) orders by the same stored `outcomeScore` and counts a Suggestion as waiting only while its Outcome is open.
+- **One rule.** The score, the ranking, the guidance and the target are pinned by [`fixtures/outcomes/outcome-cases.json`](../fixtures/outcomes/outcome-cases.json), read by the functions' tests, core's JVM tests and the seed's tests.
 
 ### `flags/{flagId}`: Flag
 
@@ -159,6 +187,17 @@ The app records a Suggestion and changes only `status` and `booked`. The Outcome
 | `sharedWithClinician` | boolean | The sharing stamp. A flag stamped `false` is never shown to the Clinician, never counts toward the Patient's `flagLevel`, and does not stop a shared flag of the same kind being raised later (the "not raised again" rule compares flags with the same stamp). |
 
 **The silence check's flags.** `silenceCheck` (#28, hourly) writes red `silent` flags with the id `silent-<lastSeenAtMillis>`: one id per silence, so a retried or overlapping run never writes a second flag for the same silence, and a silence whose flag the Clinician has cleared is not flagged again until the phone has been seen and gone quiet once more. It writes only for a Patient who is sharing (`isSharingActive`), is not synthetic, and whose `lastSeenAtMillis` is more than 24 hours old (exactly 24 hours, `null` and a time in the future are not silent), and only when no uncleared `silent` flag with the same stamp is open. In the same transaction it raises the Patient's `flagLevel` to `red` and puts the reason first in `flagReasons`, keeping the other reasons; nothing else on the record changes. The flag is stamped with `sharingStamp(patient)`, which is `true` there. The reason is always "The phone has been quiet: it has not connected for over 24 hours." It says nothing about mood or self-harm.
+
+**The daily job's flags.** The phone's daily job (#26, `FlagWriteRules` in `core`) raises `sleep_collapse`, `inactive`, `poor_sleep`, `low_mood` and `drift` with the id `<kind>-<date>` (the seed's format), or `<kind>-<date>-unshared` when stamped `false`, so a repeated run the same day computes the same id and a kind is raised at most once a day per stamp. It creates them uncleared and stamped with `sharingStamp()`, skips a kind with an uncleared flag of the same stamp, and skips a `low_mood` whose three Check-ins an earlier flag of that kind already covered. Only flags stamped `true` change the record: the level only rises and every existing reason is kept, as in `raisedAttention`. It never writes Suggestions: `objectiveChange` and `outcomeScore` are Finish Check-in's (#21).
+
+**Finish Check-in's flags (#20).** Finish Check-in asks the Decisions API three yes/no questions about the Check-in (crisis, marked hopelessness or decline, tried the last Suggestion) and routes the answers with the spec's starting thresholds (`DECISION_THRESHOLDS` in `firebase/functions/src/decisions.ts`): crisis at or above 0.5, or the draft's crisis marker, gives red `crisis`; decline at or above 0.6 gives amber `decline`; a safety refusal (HTTP 400 with a documented safety code) gives amber `unassessed`; a timeout or any other failure gives no flag and `assessment: "unavailable"` on the Check-in. The flag id is `<kind>-<checkInId>`, so a retried finish never writes a second one, and a flag the Clinician cleared is not raised again by the same Check-in. No flag is written when an uncleared flag of that kind with the same stamp is open (the phone's own `crisis-<millis>` counts). Flags are stamped like the Summary: `true` only when the Check-in was started while sharing and the Patient still shares. In the same transaction as the Summary, a flag stamped `true` raises the Patient's `flagLevel` (never lowers it) and adds its reason (`raisedAttention` in `src/flags.ts`, shared with the silence check). When the text model fails in a way that may pass (Finish Check-in answers `unavailable` and saves no Summary), the flags are still written in their own transaction, so a crisis is not lost if the phone never retries. The reasons are fixed sentences with no number and nothing the Patient said:
+
+| Kind | Level | Reason |
+|---|---|---|
+| `crisis` (draft's marker) | red | "Signs of a crisis came up during a Check-in." |
+| `crisis` (Decisions answer) | red | "The automatic review of a Check-in found signs of a crisis." |
+| `decline` | amber | "The automatic review of a Check-in found marked hopelessness or a clear decline in coping." |
+| `unassessed` | amber | "A Check-in could not be assessed automatically." |
 
 **Creating a red flag emails the Clinician.** Any writer can create the flag: the phone's crisis tool, Finish Check-in's Decisions backstop (#20), the phone's daily job, or the hourly silence check (#28, `silent`). The `redFlagAlert` function reacts to every created flag and writes the email to [`mail`](#mailmailid-maildoc). A writer must never send mail itself, and must not create a red flag a second time to "resend" it. The "not raised again" rule already prevents that, and the email is tied to the flag's id.
 
@@ -209,6 +248,8 @@ The extension adds a `delivery` map (state, attempts, error) to the document as 
 
 **Document id:** `red-flag-` followed by the SHA-256 hex of `<patientId>/<flagId>`. The function writes it with `create()`. Triggers are delivered at least once and this one is retried on failure, so a second delivery finds the document and sends nothing. There is at most one email per flag.
 
+**Hourly cap.** A phone writes its own flags, with its own reason, so one Patient record causes at most 5 emails an hour (`MAX_RED_FLAG_EMAILS_PER_HOUR`, counted in [`patientLimits`](#patientlimitspatientid-functions-only) in the same transaction that creates the email). A flag past the cap is still recorded and shown on the dashboard; only its email is skipped.
+
 **When an email is written** (`alertDecision` in `firebase/functions/src/alerts.ts`, a pure function):
 
 - The flag is `red`, has `clearedAtMillis: null` and is stamped `sharedWithClinician: true`. Amber and green never email.
@@ -216,7 +257,7 @@ The extension adds a `delivery` map (state, attempts, error) to the document as 
 - The Patient is not a Demo Patient (`synthetic: false`). The seed deletes and recreates the Demo Patients' invented red flags on every run, and each run would otherwise email the Clinician.
 - `clinicianEmail` is an address.
 
-Each run logs one line: the Patient and flag ids, the flag's kind (a `FlagKind`, or `other`) and the outcome (`sent`, `duplicate`, or `skipped` with the check that stopped it). It never logs the reason, the display name, the address or the email.
+Each run logs one line: the Patient and flag ids, the flag's kind (a `FlagKind`, or `other`) and the outcome (`sent`, `duplicate`, `capped`, or `skipped` with the check that stopped it). It never logs the reason, the display name, the address or the email.
 
 **`DASHBOARD_URL`** is a non-secret function parameter for the link. Empty, which is the default, means the project's Hosting site, `https://<project-id>.web.app`.
 
@@ -227,6 +268,15 @@ The Clinicians a new Patient may link to, one document per email. The document i
 | Field | Type | Notes |
 |---|---|---|
 | `email` | string | The same as the document id. |
+
+### `patientLimits/{patientId}`: functions only
+
+What the functions count per Patient record (`firebase/functions/src/limits.ts`). No client reads or writes it, so a client cannot reset a cap, and it is not part of the data contract in `core`. The seed does not delete it.
+
+| Field | Type | Notes |
+|---|---|---|
+| `checkInStarts` | list of `{checkInId, uid, startedAtMillis}` | One entry per Check-in Start Check-in created in the last day (older entries are dropped on the next start). Start Check-in refuses the 11th start in an hour with `resource-exhausted`, before minting a token; only the last hour counts. Finish Check-in reads `uid`: a caller who is not the Patient (the Demo Patient shortcut) may finish only a Check-in they started, also when the finish is retried hours later. |
+| `redFlagEmailsAtMillis` | list of integers | When `redFlagAlert` wrote each email in the last hour. The 6th in an hour is skipped (`capped`). |
 
 ## Queries
 
@@ -240,13 +290,14 @@ The Clinicians a new Patient may link to, one document per email. The document i
 | Digest functions | `summaries` by `createdAtMillis` range, `daily` by `date` range (Admin SDK); the stamp is filtered in code | single field (automatic) |
 | Seed reset | `patients` where `synthetic == true` (Admin SDK) | single field (automatic) |
 | Live demo Patient reset | every document of one Patient's `daily`, `checkIns`, `summaries`, `suggestions`, `flags` and `visits`, filtered in code by the mock markers (Admin SDK) | none |
+| Finish Check-in | in the finish transaction, `patients/{id}/flags` where `kind in ["crisis", "decline", "unassessed"]` (Admin SDK) | single field (automatic) |
 | Silence check | all `patients`, selecting `sharingConsent`, `synthetic` and `lastSeenAtMillis` only; then, in each silent Patient's transaction, `patients/{id}/flags` where `kind == "silent"` (Admin SDK) | single field (automatic) |
 
 The list query must carry the sharing filter (built by `clinicianListFilters` in `firebase/hosting/js/lib/sharing.js`); without it the rules reject the whole query. Likewise every query on a stamped collection is built by `patientCollectionQuery` in the same file (bound to the browser SDK in `js/queries.js`), which adds `sharedWithClinician == true`. A new query that adds an `orderBy` or range on another field needs a composite index.
 
 ## Demo Patients
 
-`firebase/seed` writes three Demo Patients with the Admin SDK: `demo-steady` (green), `demo-declining` (amber flags, then red in the last two days) and `demo-sparse` (seven Check-ins at most, days of missing Signals, amber for low mood). Each has `synthetic: true`, `healthSource: "synthetic"`, `sharingConsent: "granted"`, the seeded Clinician (`--clinician` or `CLINICIAN_EMAIL`, also added to `clinicians`), an Intake that begins "Synthetic demo data", 42 daily records ending today, a TMS end date 42 days ago, one Visit 21 days ago with a PHQ-9 score, every Consent granted, and Check-ins with Summaries and Suggestions (most with an Outcome score). Every value is invented. Flags sit on the first morning the spec's starting thresholds hold. Every stamped document is `sharedWithClinician: true`, except that `demo-steady` stopped sharing from 06:00 30 days ago to 06:00 27 days ago: its three daily records, Check-ins, Summaries and Suggestions from that time are stamped `false`, so the dashboard shows a three-day gap; its `sharingChangedAtMillis` and `consents/sharing` are the time it shared again. Document ids are stable: daily records by date, `checkin-<date>` (also the Summary id), `suggestion-<date>`, `<kind>-<date>` for flags and `visit-<date>`.
+`firebase/seed` writes three Demo Patients with the Admin SDK: `demo-steady` (green), `demo-declining` (amber flags, then red in the last two days) and `demo-sparse` (seven Check-ins at most, days of missing Signals, amber for low mood). Each has `synthetic: true`, `healthSource: "synthetic"`, `sharingConsent: "granted"`, the seeded Clinician (`--clinician` or `CLINICIAN_EMAIL`, also added to `clinicians`), an Intake that begins "Synthetic demo data", 42 daily records ending today, a TMS end date 42 days ago, one Visit 21 days ago with a PHQ-9 score, every Consent granted, and Check-ins with Summaries and Suggestions (most with an Outcome score). Every value is invented. Flags sit on the first morning the spec's starting thresholds hold. Every stamped document is `sharedWithClinician: true`, except that `demo-steady` stopped sharing from 06:00 30 days ago to 06:00 27 days ago: its three daily records, Check-ins, Summaries and Suggestions from that time are stamped `false`, so the dashboard shows a three-day gap; its `sharingChangedAtMillis` and `consents/sharing` are the time it shared again. Seeded Check-ins carry `assessment: "assessed"` and, when the previous Suggestion was accepted, `previousTried` equal to its `tried`; that Suggestion's Outcome is scored by the shared Outcome rule and its `outcomeCheckInId` is that Check-in. Document ids are stable: daily records by date, `checkin-<date>` (also the Summary id), `suggestion-<date>`, `<kind>-<date>` for flags and `visit-<date>`.
 
 ## Live demo Patient
 
@@ -281,8 +332,8 @@ Without `--reset`, a Patient who already has mock history is refused. With it, t
 | Patient record: delete | no | no | no | no |
 | `daily` | read, write (create stamped as now; the stamp never changes) | read documents stamped `true` | no | no |
 | `consents` | read, write | read | no | no |
-| `checkIns` | read; create with no ratings, no Voice cues and `crisis: false`, stamped as now; update `startedAtMillis` and `endedAtMillis` only; delete | read documents stamped `true` | no | no |
-| `suggestions` | read; create with no Outcome, stamped as now; update `status` and `booked` only; delete | read documents stamped `true` | no | no |
+| `checkIns` | read; create with no ratings, no Voice cues, `crisis: false` and null `assessment` and `previousTried`, stamped as now; update `startedAtMillis` and `endedAtMillis` only; delete | read documents stamped `true` | no | no |
+| `suggestions` | read; create with no Outcome (`outcomeCheckInId` `null` or absent), stamped as now; update `status` and `booked` only; delete | read documents stamped `true` | no | no |
 | `summaries` | read | read documents stamped `true` | no | no |
 | `flags` | read; create uncleared flags stamped as now; no change or delete | read documents stamped `true`; set `clearedAtMillis` only, on those | no | no |
 | `visits` | read | read, create, update, delete | no | no |
@@ -290,7 +341,7 @@ Without `--reset`, a Patient who already has mock history is refused. With it, t
 | `mail` | no | no | no | no |
 | `clinicians` | no | no | no | no |
 
-Anything not listed, including a collection outside this schema, is denied. Field owners: `displayName`, `tmsEndDate` and clearing flags belong to the Clinician; `intakeHighlights`, Summaries, a Check-in's ratings, Voice cues and crisis marker, and a Suggestion's Outcome are written by functions only, so what reaches the Clinician is recorded by the app and functions, not edited by hand; `synthetic` and `clinicianEmail` never change after creation from a client; `sharedWithClinician` never changes after creation.
+Anything not listed, including a collection outside this schema, is denied. Field owners: `displayName`, `tmsEndDate` and clearing flags belong to the Clinician; `intakeHighlights`, Summaries, a Check-in's ratings, Voice cues, crisis marker, `assessment` and `previousTried`, and a Suggestion's Outcome are written by functions only, so what reaches the Clinician is recorded by the app and functions, not edited by hand; `synthetic` and `clinicianEmail` never change after creation from a client; `sharedWithClinician` never changes after creation.
 
 A Clinician query on a stamped collection must filter on `sharedWithClinician == true`, or the whole query is refused. A Clinician `get` of a stamped document that does not exist is refused like a hidden one, so a refusal never tells that a document exists.
 

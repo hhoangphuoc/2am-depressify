@@ -168,18 +168,18 @@ The Summary and extraction use `gemini-4-hydrogen` with structured output. The j
 
 ## Learning what helps
 
-Each Suggestion has a kind (walk, class, music, calling someone, and so on). Its Outcome combines the Patient's answer at the next Check-in (whether they tried it, and how it felt from 1 to 5) with that day's change in steps and time outside against Baseline. The three best kinds go into the Brief. About one Suggestion in five deliberately tries something new. The dashboard shows "what works for this Patient".
+Each Suggestion has a kind (walk, class, music, calling someone, and so on). Its Outcome combines the Patient's answer at the next Check-in (whether they tried it, and how it felt from 1 to 5) with that day's change in steps against Baseline (time outside is not measured). The three best kinds go into the Brief. About one Suggestion in five deliberately tries something new. The dashboard shows "what works for this Patient".
 
 ## Attention flag
 
-The flag is green, amber or red, always with written reasons and never a number ([ADR 0009](../adr/0009-attention-flag-has-three-levels-with-reasons.md)). The Clinician clears it after acting. The Patient never sees it.
+The flag is green, amber or red, always with written reasons and never a score ([ADR 0009](../adr/0009-attention-flag-has-three-levels-with-reasons.md)). The Clinician clears it after acting. The Patient never sees it.
 
 The Decisions API answers three yes/no questions about each Check-in: is there a crisis, is there marked hopelessness or decline, and did the Patient try the last Suggestion.
 
 | Level | Raised by | What happens |
 |---|---|---|
 | Amber | Decline or hopelessness in a Check-in; a Mood rating of 2 or lower in three Check-ins in a row; sleep well below Baseline for three nights; sustained drift across several Signals; the safety filter refusing to judge a Check-in | The Patient moves up the dashboard list with the reasons shown |
-| Red | A crisis in a Check-in; no sign of life from the phone for 24 hours; a sharp break such as a sleep collapse | As amber, plus a banner on the dashboard and an email to the Clinician |
+| Red | A crisis in a Check-in; no sign of life from the phone for 24 hours; a sharp break such as a sleep collapse, or a day with no steps and no screen use | As amber, plus a banner on the dashboard and an email to the Clinician |
 
 A phone cannot report its own silence, so a Cloud Function checks each hour for Patients whose phone has been quiet for 24 hours. Thresholds are starting values to tune on the Demo Patients.
 
