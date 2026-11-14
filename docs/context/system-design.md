@@ -30,7 +30,7 @@ The Clinician follows progress Phase by Phase and is told who may need a call, w
 | `firebase/hosting` | Clinician dashboard: plain HTML and JavaScript with Chart.js |
 | `firebase/seed` | Script that creates the Demo Patients |
 
-The backend is Firebase: Firestore, Auth, Cloud Functions, Cloud Messaging and Hosting, in an EU region ([ADR 0008](../adr/0008-firebase-backend-and-plain-web-dashboard.md)). Shared code reaches Firebase through the GitLive `firebase-kotlin-sdk`.
+The backend is Firebase: Firestore, Auth, Cloud Functions, Cloud Messaging and Hosting, in the EU region `europe-north1` (Finland) ([ADR 0008](../adr/0008-firebase-backend-and-plain-web-dashboard.md)). Shared code reaches Firebase through the GitLive `firebase-kotlin-sdk`.
 
 ```mermaid
 flowchart LR
@@ -314,4 +314,4 @@ Stretch: on-phone voice analysis, HealthKit, late-night screen time if not alrea
 - Whether wellbeing Suggestions fit the permitted uses of Maps data on a Finnish billing account is a legal reading we have not made.
 - Google permission for Calendar in test mode is limited to 100 listed users.
 - The build is broken into tasks in the [implementation plan](../plans/implementation-plan.md). It decides and shows Nudges on the phone, so it does not use Cloud Messaging.
-- Not yet chosen: the Firestore region, the mock crisis number, and the wording of Consent screens.
+- Not yet chosen: the mock crisis number and the wording of Consent screens. (The region is chosen: `europe-north1`.)
