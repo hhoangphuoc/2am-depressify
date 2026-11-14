@@ -3,11 +3,16 @@ import type { TextModelClient, TextRequest } from "../src/gemini";
 import type { CallerAuth } from "../src/clinician";
 import type { AlertStore } from "../src/alertFunctions";
 import { finishWrites, type FinishContent } from "../src/checkIn";
+import { DECISION_FLAG_KINDS, decisionFlagWrites, type Judgment } from "../src/decisions";
+import { DecisionsError, type DecisionsClient, type DecisionsRequest } from "../src/decisionsApi";
 import type { CheckInStore } from "../src/checkInFunctions";
+import { withEmail, withStart, type CheckInStart } from "../src/limits";
 import type { LiveTokenClient, LiveTokenRequest } from "../src/live";
+import { outcomeDailyNeeded, outcomeTarget, type OutcomePlan, type StoredSuggestion } from "../src/outcomes";
 import type { DigestStore } from "../src/digestFunctions";
 import type { PatientStore } from "../src/intakeFunctions";
-import type { SilencePlan, StoredFlag } from "../src/silence";
+import type { StoredFlag } from "../src/flags";
+import type { SilencePlan } from "../src/silence";
 import type { SilenceStore } from "../src/silenceFunctions";
 import { newPatientDoc, type CheckIn, type DailyDoc, type Digest, type Flag, type MailDoc, type PatientDoc, type Summary, type Suggestion } from "../src/types";
 
@@ -121,6 +126,8 @@ export class FakeDigestStore implements DigestStore {
 /** Patient records and the `mail` collection; `createMail` refuses an id that exists, like `create()`. */
 export class FakeAlertStore implements AlertStore {
   readonly mail = new Map<string, MailDoc>();
+  /** When each Patient's emails were written, as `patientLimits` keeps them. */
+  readonly emailsAt = new Map<string, number[]>();
   reads = 0;
   creates = 0;
   failReads = false;
@@ -135,12 +142,15 @@ export class FakeAlertStore implements AlertStore {
     return patient ? { ...patient } : undefined;
   }
 
-  async createMail(id: string, mail: MailDoc) {
+  async createMail(id: string, mail: MailDoc, patientId: string, nowMillis: number) {
     this.creates += 1;
     if (this.failWrites) throw new Error("write failed");
-    if (this.mail.has(id)) return false;
+    if (this.mail.has(id)) return "duplicate" as const;
+    const emails = withEmail(this.emailsAt.get(patientId), nowMillis);
+    if (emails === null) return "capped" as const;
     this.mail.set(id, mail);
-    return true;
+    this.emailsAt.set(patientId, emails);
+    return "sent" as const;
   }
 }
 
@@ -218,10 +228,18 @@ export class FakeCheckInStore implements CheckInStore {
   readonly summaries = new Map<string, Summary>();
   readonly consents = new Map<string, boolean>();
   readonly suggestions = new Map<string, Partial<Suggestion>>();
+  /** Daily records, keyed `<patientId>/<date>`. */
+  readonly daily = new Map<string, Partial<DailyDoc>>();
+  /** Flags, keyed `<patientId>/<flagId>`. */
+  readonly flags = new Map<string, Flag>();
+  /** Each Patient's recorded starts, as `patientLimits` keeps them. */
+  readonly starts = new Map<string, CheckInStart[]>();
   /** Every document write, in order, as `path` and the data written. */
   readonly writes: { path: string; data: unknown }[] = [];
   failReads = false;
   failWrites = false;
+  /** Fails only `writeFlags`. */
+  failFlagWrites = false;
 
   constructor(patients: Record<string, Partial<PatientDoc>> = { [PATIENT_ID]: { ...newPatientDoc("Live patient", CLINICIAN_EMAIL), sharingConsent: "granted" } }) {
     for (const [id, doc] of Object.entries(patients)) this.patients.set(id, { ...doc });
@@ -243,7 +261,7 @@ export class FakeCheckInStore implements CheckInStore {
     return doc ? structuredClone(doc) : undefined;
   }
 
-  async getConsent(patientId: string, subject: "ratings" | "voice_cues") {
+  async getConsent(patientId: string, subject: "ratings" | "voice_cues" | "steps") {
     if (this.failReads) throw new Error("read failed");
     return this.consents.get(this.key(patientId, subject)) ?? null;
   }
@@ -254,6 +272,32 @@ export class FakeCheckInStore implements CheckInStore {
     return doc ? structuredClone(doc) : undefined;
   }
 
+  /** One Patient's accepted Suggestions, as the store's equality query reads them. */
+  acceptedSuggestions(patientId: string): StoredSuggestion[] {
+    return [...this.suggestions.entries()]
+      .filter(([key, s]) => key.startsWith(`${patientId}/`) && s.status === "accepted")
+      .map(([key, s]) => ({ id: key.slice(patientId.length + 1), suggestion: structuredClone(s) }));
+  }
+
+  async getAcceptedSuggestions(patientId: string) {
+    if (this.failReads) throw new Error("read failed");
+    return this.acceptedSuggestions(patientId);
+  }
+
+  async reserveStart(patientId: string, start: CheckInStart) {
+    if (this.failWrites) throw new Error("write failed");
+    const starts = withStart(this.starts.get(patientId), start);
+    if (starts === null) return false;
+    this.starts.set(patientId, starts);
+    this.writes.push({ path: `patientLimits/${patientId}`, data: { checkInStarts: structuredClone(starts) } });
+    return true;
+  }
+
+  async getStart(patientId: string, checkInId: string) {
+    if (this.failReads) throw new Error("read failed");
+    return this.starts.get(patientId)?.find((start) => start.checkInId === checkInId);
+  }
+
   async createCheckIn(patientId: string, checkIn: CheckIn) {
     if (this.failWrites) throw new Error("write failed");
     const key = this.key(patientId, checkIn.id);
@@ -262,21 +306,110 @@ export class FakeCheckInStore implements CheckInStore {
     this.writes.push({ path: `patients/${patientId}/checkIns/${checkIn.id}`, data: structuredClone(checkIn) });
   }
 
-  async writeFinish(patientId: string, checkInId: string, content: FinishContent, nowMillis: number) {
+  /** One Patient's flags of the Decisions kinds, as the store's `in` query reads them. */
+  decisionFlags(patientId: string): StoredFlag[] {
+    return [...this.flags.entries()]
+      .filter(([key, flag]) => key.startsWith(`${patientId}/`) && (DECISION_FLAG_KINDS as readonly string[]).includes(flag.kind))
+      .map(([key, flag]) => ({ id: key.slice(patientId.length + 1), flag: structuredClone(flag) }));
+  }
+
+  private createFlags(patientId: string, flags: { id: string; flag: Flag }[]) {
+    for (const { id, flag } of flags) {
+      const key = this.key(patientId, id);
+      if (this.flags.has(key)) throw new Error("already exists");
+      this.flags.set(key, structuredClone(flag));
+      this.writes.push({ path: `patients/${patientId}/flags/${id}`, data: structuredClone(flag) });
+    }
+  }
+
+  async writeFinish(patientId: string, checkInId: string, content: FinishContent, judgment: Judgment, nowMillis: number, plan: OutcomePlan | null) {
     if (this.failWrites) throw new Error("write failed");
     const key = this.key(patientId, checkInId);
     const patient = this.patients.get(patientId);
     const checkIn = this.checkIns.get(key);
     if (!patient || !checkIn) throw new Error("missing");
-    const writes = finishWrites({ patient, checkIn, summary: this.summaries.get(key) }, checkInId, content, nowMillis);
+    const target = plan ? outcomeTarget(this.acceptedSuggestions(patientId), { id: checkInId, startedAtMillis: checkIn.startedAtMillis }, plan.excludeIds) : undefined;
+    const range = outcomeDailyNeeded(target, plan);
+    const daily = range
+      ? [...this.daily.entries()]
+          .filter(([k]) => k.startsWith(`${patientId}/`))
+          .map(([k, d]) => ({ ...structuredClone(d), date: k.slice(patientId.length + 1) }))
+          .filter((d) => d.date >= range.start && d.date <= range.end)
+      : [];
+    const writes = finishWrites(
+      { patient, checkIn, summary: this.summaries.get(key), flags: this.decisionFlags(patientId), outcome: { target, daily } },
+      checkInId,
+      content,
+      nowMillis,
+      judgment,
+      plan,
+    );
     this.summaries.set(key, structuredClone(writes.summary));
     this.checkIns.set(key, { ...checkIn, ...structuredClone(writes.checkIn) });
-    this.patients.set(patientId, { ...patient, ...writes.patient });
+    this.patients.set(patientId, { ...patient, ...structuredClone(writes.patient) });
     this.writes.push(
       { path: `patients/${patientId}/summaries/${checkInId}`, data: structuredClone(writes.summary) },
       { path: `patients/${patientId}/checkIns/${checkInId}`, data: structuredClone(writes.checkIn) },
-      { path: `patients/${patientId}`, data: { ...writes.patient } },
+      { path: `patients/${patientId}`, data: structuredClone(writes.patient) },
     );
+    this.createFlags(patientId, writes.flags);
+    if (writes.suggestion) {
+      const suggestionKey = this.key(patientId, writes.suggestion.id);
+      this.suggestions.set(suggestionKey, { ...this.suggestions.get(suggestionKey), ...structuredClone(writes.suggestion.fields) });
+      this.writes.push({ path: `patients/${patientId}/suggestions/${writes.suggestion.id}`, data: structuredClone(writes.suggestion.fields) });
+    }
     return structuredClone(writes.summary);
   }
+
+  async writeFlags(patientId: string, checkInId: string, judgment: Judgment, nowMillis: number) {
+    if (this.failWrites || this.failFlagWrites) throw new Error("write failed");
+    if (judgment.flags.length === 0) return 0;
+    const patient = this.patients.get(patientId);
+    const checkIn = this.checkIns.get(this.key(patientId, checkInId));
+    if (!patient || !checkIn) throw new Error("missing");
+    const writes = decisionFlagWrites({ patient, checkIn, flags: this.decisionFlags(patientId) }, checkInId, judgment.flags, nowMillis);
+    this.createFlags(patientId, writes.flags);
+    if (writes.attention) {
+      this.patients.set(patientId, { ...patient, ...structuredClone(writes.attention) });
+      this.writes.push({ path: `patients/${patientId}`, data: structuredClone(writes.attention) });
+    }
+    return writes.flags.length;
+  }
 }
+
+/** Fixed answers, as the spike recorded them: `answers.<key>.{type, noul, confidence}`. */
+export function decisionsReply(answers: { crisis?: number; decline?: number; triedLast?: number }): unknown {
+  return {
+    answers: Object.fromEntries(Object.entries(answers).map(([key, noul]) => [key, { type: "noul", noul, confidence: Math.max(noul, 1 - noul) }])),
+    usage: { total_tokens: 1 },
+  };
+}
+
+/** A routine Check-in: no crisis, no decline, the last Suggestion tried. */
+export const ROUTINE_DECISIONS = decisionsReply({ crisis: 0.02, decline: 0.06, triedLast: 0.98 });
+
+/**
+ * Returns `reply` (or runs `behaviour`) and records every request. The ways it can fail, each as the
+ * real client would, with an error whose message and fields echo the input (to prove nothing logs
+ * them): `decisionsRefusal()`, `decisionsTimeout()`, `decisionsError(status)`.
+ */
+export class FakeDecisions implements DecisionsClient {
+  readonly requests: DecisionsRequest[] = [];
+  constructor(private readonly behaviour: unknown | ((request: DecisionsRequest) => Promise<unknown>) = ROUTINE_DECISIONS) {}
+
+  async decide(request: DecisionsRequest) {
+    this.requests.push(request);
+    return typeof this.behaviour === "function" ? (this.behaviour as (r: DecisionsRequest) => Promise<unknown>)(request) : structuredClone(this.behaviour);
+  }
+}
+
+function echoing(error: DecisionsError, request: DecisionsRequest): DecisionsError {
+  return Object.assign(error, { message: `${error.message} for input: ${request.input}`, body: { request } });
+}
+
+/** HTTP 400 with the documented `safety` code. */
+export const decisionsRefusal = () => new FakeDecisions(async (request: DecisionsRequest) => { throw echoing(new DecisionsError(400, "safety"), request); });
+/** No status: the request timed out. */
+export const decisionsTimeout = () => new FakeDecisions(async (request: DecisionsRequest) => { throw echoing(new DecisionsError(null, null), request); });
+/** Any other HTTP failure. */
+export const decisionsError = (status = 500) => new FakeDecisions(async (request: DecisionsRequest) => { throw echoing(new DecisionsError(status, "internal"), request); });

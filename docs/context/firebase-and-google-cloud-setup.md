@@ -125,7 +125,7 @@ All of these were run against `junction26hel-7400` with the user's approval.
 | Firestore, Identity Toolkit (Auth), Cloud Functions, Cloud Run, Cloud Build, Artifact Registry, Eventarc, Cloud Scheduler, Secret Manager | yes | Turned on by Firebase and the deploys |
 | Places API (New) | yes | Spike fixtures; fallback for #18 |
 | Weather API | yes | Spike fixtures; fallback for #18 |
-| **Maps Tools** (`mapstools.googleapis.com`) | **no** | #18, the recommended path: weather, place search and walking routes in one service. The Maps key already allows it; the user only has to enable it. |
+| **Maps Tools** (`mapstools.googleapis.com`, "Maps Experience agent tools") | **yes** | #18, the recommended path: weather, place search and walking routes in one service. Enabled and verified on 14 November with the stored `MAPS_API_KEY` (the key `depressify-maps` allows mapstools, places, weather and routes): `v1:lookupWeather`, `v1:searchText` and `v1:computeRoutes` all returned HTTP 200. #18 (the Map tool) is being built by a teammate. |
 | **Routes API** | **no** | Only needed if #18 falls back to the direct APIs |
 | **Google Calendar API** (`calendar-json.googleapis.com`) | **no** | #19 (on the phone) |
 
@@ -141,7 +141,7 @@ Full details and fixtures: `docs/spike-results.md` and `fixtures/spike/`.
   - It works from shared Kotlin with Ktor (OkHttp and CIO engines). The first reply comes back in about 0.5 s.
 - **Structured output:** `POST /v1/interactions` with `response_format` (a JSON schema), `store: false`. It takes about 7 s.
 - **Decisions:** `POST /v1beta/decisions` with `gemini-decision-1` and yes/no (`noul`) questions.
-- **Maps:** the direct Places and Weather calls work. The Maps agent tools and Routes return 403 until those APIs are enabled.
+- **Maps:** the direct Places and Weather calls work. At the time of the spike the Maps agent tools and Routes returned 403; the Maps agent tools are now enabled and returned HTTP 200 for weather, text search and routes (14 November).
 
 ## 8. Still to do
 

@@ -6,7 +6,7 @@ A wellbeing companion for the time between Visits: a Kotlin Multiplatform Patien
 
 | Path | What it is |
 |---|---|
-| `core/` | Pure Kotlin Multiplatform common code (JVM, iOS): the rules the Patient screens use and, in `core/model`, the Firestore data contract. No platform code. |
+| `core/` | Pure Kotlin Multiplatform common code (JVM, iOS): the rules the Patient screens and the phone's daily job use (`core/daily`) and, in `core/model`, the Firestore data contract. No platform code. |
 | `shared/` | Kotlin Multiplatform client code: the Compose Multiplatform Patient UI, its view model, and Firebase through the GitLive SDK (`shared/data`). |
 | `androidApp/` | Android application entry point. |
 | `iosApp/` | XcodeGen spec (`project.yml`) and Swift glue. |
@@ -187,8 +187,8 @@ Where each key or credential lives, following [ADR 0002](docs/adr/0002-phone-con
 
 | Credential | Where it goes | Used by | State |
 |---|---|---|---|
-| `GEMINI_API_KEY` | Function secret: `firebase functions:secrets:set GEMINI_API_KEY --project prod`. Locally: `firebase/functions/.secret.local` (copy `.secret.local.example`). | Interactions API (`gemini-4-hydrogen`, `store: false`) for Intake and the Digest, and Start Check-in, which mints the single-use Gemini Live token (`gemini-3.8-live`) the phone connects with. Later, Decisions. | Wired; no real call made from this repository yet |
-| `MAPS_API_KEY` | Function secret, same two places. Enable `mapstools.googleapis.com` and restrict the key to it. | Maps agent tools (`lookupWeather`, `searchText`, `computeRoutes`) from the Map tool function. | Name reserved; the function is not built (#18) |
+| `GEMINI_API_KEY` | Function secret: `firebase functions:secrets:set GEMINI_API_KEY --project prod`. Locally: `firebase/functions/.secret.local` (copy `.secret.local.example`). | Interactions API (`gemini-4-hydrogen`, `store: false`) for Intake, the Digest and Finish Check-in; Start Check-in, which mints the single-use Gemini Live token (`gemini-3.8-live`) the phone connects with; and the Decisions API (`gemini-decision-1`) in Finish Check-in. | Wired |
+| `MAPS_API_KEY` | Function secret, same two places. Enable `mapstools.googleapis.com` and restrict the key to it. | Maps agent tools (`lookupWeather`, `searchText`, `computeRoutes`) from the Map tool function. | Set; `mapstools.googleapis.com` enabled and verified (HTTP 200 for all three on 14 November). The Map tool (#18) is being built by a teammate |
 | Google Calendar | No key. The Patient grants access on the phone. | Free time and booking, on the phone. | Not built (#19) |
 | Firebase app config | `secrets.properties` (Android), `GoogleService-Info.plist` (iOS). These identify the project and are not secrets, but stay out of the repository. | The Patient app. | Wired |
 
@@ -196,7 +196,7 @@ Before the first real Gemini call:
 
 - Use a paid-tier Gemini project. The terms require it for users in the EEA, and paid-tier prompts are not used for training.
 - Turn off AI Studio logging for that project. It is on by default for Interactions calls.
-- The SDK calls `/v1/interactions`. Live tokens (`/v1beta/auth_tokens`) and Decisions (`/v1beta/decisions`) exist only on `v1beta`, so those calls must set the API version when they are added.
+- The SDK calls `/v1/interactions`. Live tokens (`/v1beta/auth_tokens`) and Decisions (`/v1beta/decisions`) exist only on `v1beta`; both are called with `fetch` on `v1beta` (`src/live.ts`, `src/decisionsApi.ts`).
 ## The spoken Check-in
 
 A Check-in is a Gemini Live session the phone opens itself (ADR 0002):
@@ -209,7 +209,7 @@ A Check-in is a Gemini Live session the phone opens itself (ADR 0002):
 
 To give the Companion history to draw on, seed the Demo Patients and set `demo.patientId` in `secrets.properties` (Android) or `DemoPatientId` in `Secrets.plist` (iOS) to `demo-steady`, `demo-declining` or `demo-sparse`. Locally, put `GEMINI_API_KEY` in `firebase/functions/.secret.local` and restart the emulators.
 
-Not built yet: Decisions and the flag from the transcript, weather, place results and walking routes from the Maps agent tools, and calendar booking. The place card only opens a Google Maps search.
+Finish Check-in also judges the transcript with the Decisions API and raises the Attention flag (#20); the Patient never sees it. A crisis found only by that judgment does not yet show the Crisis notice on the phone (the response carries no flag). Not built yet: weather, place results and walking routes from the Maps agent tools, and calendar booking. The place card only opens a Google Maps search.
 
 ## Run the walking skeleton locally
 
@@ -266,14 +266,14 @@ The fictional Intake for the live demo Patient is in [docs/demo/intake-live-pati
 
 ### Check-in (Start and Finish)
 
-Two callables in `europe-north1` serve a Check-in (#14). The caller must have a verified account ([Patient sign-in](#patient-sign-in)) and be the Patient (`auth.uid == patientId`), or any verified account when the Patient is a Demo Patient (`synthetic: true`), as in the rules. Signed out: `unauthenticated`; anonymous or not yet verified: `failed-precondition`, "Verify your account to start a Check-in."; anyone else, or a missing Patient: `permission-denied`.
+Two callables in `europe-north1` serve a Check-in (#14). The caller must have a verified account ([Patient sign-in](#patient-sign-in)) and be the Patient (`auth.uid == patientId`), or any verified account when the Patient is a Demo Patient (`synthetic: true`), as in the rules. Signed out: `unauthenticated`; anonymous or not yet verified: `failed-precondition`, "Verify your account to start a Check-in."; anyone else, or a missing Patient: `permission-denied`. On a Demo Patient only the caller who started a Check-in may finish it, so the seeded Summaries cannot be overwritten. One Patient record starts at most 10 Check-ins an hour; past that `startCheckIn` answers `resource-exhausted` without minting a token.
 
 | Callable | Request | Response |
 |---|---|---|
 | `startCheckIn` | `{patientId, brief, mode?}`. `brief` is the Brief built on the phone (1 to 12,000 characters); `mode` is `"typed"` or `"spoken"` (default). | `{checkInId, token, model, endpoint, mode, connectByMillis, expiresAtMillis}` |
 | `finishCheckIn` | `{patientId, checkInId, draft, todayLines?, lastSuggestionId?}` | `{checkInId, summary, minimal}` |
 
-**Start.** The function mints a single-use ephemeral Live token (`POST /v1beta/auth_tokens`, the shape recorded in [spike-results.md](docs/spike-results.md#1-ephemeral-token-for-gemini-live)) that locks `models/gemini-3.8-live`, the system instruction (the Brief, then fixed rules: not a clinician, no diagnosis, treatment or questionnaires, the crisis instruction, the AI disclosure while `lastCheckInAtMillis` is `null`, and short replies when typed), the tool declarations (`firebase/functions/src/tools.ts`, the nine tools the phone runs in `CompanionTools`), AUDIO output and both transcriptions. Then it creates `checkIns/{checkInId}` with empty ratings, Voice cues and crisis marker, stamped with `sharingStamp`. The phone:
+**Start.** The function mints a single-use ephemeral Live token (`POST /v1beta/auth_tokens`, the shape recorded in [spike-results.md](docs/spike-results.md#1-ephemeral-token-for-gemini-live)) that locks `models/gemini-3.8-live`, the system instruction (the Brief, then fixed rules: not a clinician, no diagnosis, treatment or questionnaires, the crisis instruction, the AI disclosure while `lastCheckInAtMillis` is `null`, and short replies when typed), the tool declarations (`firebase/functions/src/tools.ts`, the nine tools the phone runs in `CompanionTools`), AUDIO output and both transcriptions. Then it creates `checkIns/{checkInId}` with empty ratings, Voice cues, crisis marker, `assessment` and `previousTried`, stamped with `sharingStamp`. The phone:
 - opens `endpoint + "?access_token=" + token` before `connectByMillis` (60 s), sends `{"setup":{"model":"<model>"}}` (or `{"setup":{}}`) and waits for `setupComplete`. The token expires at `expiresAtMillis` (10 minutes: the 8-minute cap plus margin). A reused or late token is refused as a WebSocket close 1011 with a reason, never as an HTTP error.
 - reads every server frame as binary UTF-8 JSON.
 - in a typed Check-in sends `{"realtimeInput":{"text":"..."}}` and shows `serverContent.outputTranscription.text` as the Companion's words. The reply is still audio (the only modality verified with `gemini-3.8-live`); playing it is the app's choice.
@@ -289,9 +289,23 @@ Two callables in `europe-north1` serve a Check-in (#14). The caller must have a 
 }
 ```
 
-`todayLines` are today's Signals against Baseline as words (at most 12), and `lastSuggestionId` the previous Suggestion the Companion asked about. Malformed items inside the lists are dropped and long text is cut (turns 2,000 characters, at most 400 turns); a wrong overall shape is `invalid-argument`. The function calls `gemini-4-hydrogen` with storage off and structured output (one attempt, 40-second timeout), then writes `summaries/{checkInId}`, the ratings, Voice cues, crisis marker and end time on the Check-in, and `lastCheckInAtMillis` / `lastSeenAtMillis` on the Patient, in one transaction. A silent Check-in, a failed model call or malformed output still succeeds with the minimal Summary (`minimal: true`). A Check-in that Start Check-in never created is `not-found`. A failed write is `unavailable`: retry with the same `checkInId`, which overwrites the one Summary and never makes a second. A retry without usable model output keeps what the model wrote before. The returned `summary` is exactly what the Patient and the Clinician read.
+`todayLines` are today's Signals against Baseline as words (at most 12), and `lastSuggestionId` the previous Suggestion the Companion asked about (`Outcomes.openSuggestion` in `core` finds it: the most recent accepted Suggestion with no Outcome yet). Malformed items inside the lists are dropped and long text is cut (turns 2,000 characters, at most 400 turns); a wrong overall shape is `invalid-argument`. The function calls `gemini-4-hydrogen` with storage off and structured output (one attempt, 40-second timeout) and, at the same time, the Decisions API (`gemini-decision-1`, below), then writes `summaries/{checkInId}`, the ratings, Voice cues, crisis marker, `assessment`, `previousTried` and end time on the Check-in, any new Attention flags, `lastCheckInAtMillis` / `lastSeenAtMillis` and the raised flag level on the Patient, and the Outcome on the previous Suggestion (below), in one transaction. A text model timeout, rate limit or server error is `unavailable` and saves nothing but the flags the judgment raised: retry with the same `checkInId` while the phone still holds the draft. A silent Check-in, a request the model refuses or malformed output still succeeds with the minimal Summary (`minimal: true`). The Summary is shared with the Clinician only when the Check-in was started while sharing and the Patient still shares at the end. A Check-in that Start Check-in never created is `not-found`. A failed write is `unavailable`: retry with the same `checkInId`, which overwrites the one Summary and never makes a second. A retry without usable model output keeps what the model wrote before. The returned `summary` is exactly what the Patient and the Clinician read. The response never says anything about a flag, a level or the assessment: the Patient never sees one.
 
-Both need the `GEMINI_API_KEY` secret. In the emulator there is no secret, so `startCheckIn` fails with `unavailable` after its checks and creates nothing, and `finishCheckIn` works only for a silent Check-in (no model call). The emulator suite exercises exactly those paths. With `CHECKIN_REAL_GEMINI=1` and `GEMINI_API_KEY` in the environment, `test/emulator/checkin.test.ts` also runs the handlers against the real API with fictional text, writing only to the Firestore emulator; it never runs by default.
+**The flag judgment (#20).** Finish Check-in sends the same transcript to `POST /v1beta/decisions` (key in `x-goog-api-key`, one attempt, 15-second timeout, the shape recorded in [spike-results.md](docs/spike-results.md#4-decisions-api-20)) with three `noul` questions: is there a crisis, is there marked hopelessness or decline, and (only when `lastSuggestionId` names a Suggestion) did the Patient try it. A silent Check-in is not sent. Routing, with the spec's starting thresholds in `firebase/functions/src/decisions.ts`:
+
+| Answer | Result |
+|---|---|
+| crisis ≥ 0.5, or the draft's `crisis: true` (whatever the answer, even when the call fails) | red `crisis` flag; `redFlagAlert` emails the Clinician |
+| decline ≥ 0.6 | amber `decline` flag |
+| HTTP 400 with a safety code (`safety`, `prohibited_content`, `blocklist`, `image_safety`, `content_blocked`) | amber `unassessed` flag, "A Check-in could not be assessed automatically."; `assessment: "unassessed"` |
+| a timeout, any other error, or a reply without usable crisis and decline answers | no flag from the review, `assessment: "unavailable"`; the Summary is saved as usual |
+| triedLast ≥ 0.6 / ≤ 0.4 / in between or not asked | `previousTried` `true` / `false` / `null` on the Check-in; the Outcome (#21) uses it only when the text model is unsure |
+
+Flag ids are `<kind>-<checkInId>`, so a retry never raises a flag twice; a kind with an uncleared flag of the same stamp (such as the phone's own crisis flag) is not raised again; flags are stamped like the Summary, and only a flag stamped `true` raises the Patient's `flagLevel` (never lowers it) and adds its reason. The transcript sent for judgment is never stored or logged; `test/checkin-logging.test.ts` covers the success, refusal, timeout and error paths.
+
+**The Outcome (#21).** The function finds the Suggestion the answer belongs to: the most recent accepted Suggestion made before the Check-in started, not one of the draft's, with no Outcome yet. It writes the Outcome only when `lastSuggestionId` is absent or names that Suggestion, so a declined Suggestion never gets one. The text model's answer counts first (tried with an optional 1 to 5 feeling, not this time, or prefer not to say); the Decisions answer only when the text model is unsure; with neither, the Outcome stays open. It sets `tried`, `felt`, `objectiveChange` (the steps against Baseline on the day the Suggestion was made), `outcomeScore` (`null` until answered and for prefer not to say, `-0.1` not tried, otherwise `0.7 x (felt - 3) / 2 + 0.3 x` the step change clamped to ±1, all clamped to ±1) and `outcomeCheckInId`, once: a retry or a later Check-in never rewrites it. The rules are in [firestore-schema.md](docs/firestore-schema.md#suggestionssuggestionid-suggestion) and pinned by `fixtures/outcomes/outcome-cases.json`; the phone ranks kinds for its Brief with `SuggestionRanker` in `core` (`app.depressify.core.learning`).
+
+Both need the `GEMINI_API_KEY` secret. In the emulator there is no secret, so `startCheckIn` fails with `unavailable` after its checks and creates nothing, and `finishCheckIn` works only for a silent Check-in (no model or Decisions call). The emulator suite exercises exactly those paths. With `CHECKIN_REAL_GEMINI=1` and `GEMINI_API_KEY` in the environment, `test/emulator/checkin.test.ts` also runs the handlers against the real API with fictional text, writing only to the Firestore emulator; it never runs by default.
 
 ### Attention work queue
 
@@ -311,7 +325,7 @@ Both call the text model with storage off and need the `GEMINI_API_KEY` secret. 
 
 ### Red flag email
 
-When a red flag is created (`patients/{id}/flags/{flagId}`), the `redFlagAlert` function writes one email for the Patient's Clinician to the top-level `mail` collection. The Firebase Trigger Email extension then sends it. Every red flag is covered, whoever raises it: the phone's crisis tool, Finish Check-in's backstop, the phone's daily job, and the hourly silence check (#28). They only have to create the flag.
+When a red flag is created (`patients/{id}/flags/{flagId}`), the `redFlagAlert` function writes one email for the Patient's Clinician to the top-level `mail` collection. The Firebase Trigger Email extension then sends it. Every red flag is covered, whoever raises it: the phone's crisis tool, Finish Check-in's backstop, the phone's daily job, and the hourly silence check (#28). They only have to create the flag. One Patient record causes at most 5 emails an hour; a flag past that is still recorded and shown on the dashboard.
 
 | Sent when | Not sent when |
 |---|---|

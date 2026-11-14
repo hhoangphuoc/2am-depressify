@@ -4,7 +4,6 @@
 import type { App } from "firebase-admin/app";
 import { getAuth as getAdminAuth } from "firebase-admin/auth";
 import { createUserWithEmailAndPassword, signInWithEmailAndPassword, type Auth, type User } from "firebase/auth";
-import type { CallerAuth } from "../../src/clinician";
 
 // emulators:exec sets this; the Admin SDK's Auth needs it to stay off the real service.
 process.env.FIREBASE_AUTH_EMULATOR_HOST ||= "127.0.0.1:9099";
@@ -13,12 +12,6 @@ export interface Account {
   email: string;
   password: string;
 }
-
-/** The token a verified email and password account carries, for handlers called in-process. */
-export const verifiedToken = (email: string): CallerAuth["token"] => ({ email, email_verified: true, firebase: { sign_in_provider: "password" } });
-
-/** A Clinician's token, as allow-clinician leaves the account, for handlers called in-process. */
-export const clinicianToken = (email: string): CallerAuth["token"] => ({ ...verifiedToken(email), role: "clinician" });
 
 /** Signs `auth` in to the account, creating it if it is new. The email stays unverified. */
 export async function signInAccount(auth: Auth, account: Account): Promise<User> {

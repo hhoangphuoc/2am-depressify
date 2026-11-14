@@ -15,8 +15,8 @@ import { connectFunctionsEmulator, getFunctions, httpsCallable } from "firebase/
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { extractIntakeHandler, saveIntakeHandler, adminPatientStore } from "../../src/intakeFunctions";
 import { newPatientDoc, type PatientDoc } from "../../src/types";
-import { FakeTextModel, failingTextModel } from "../fakes";
-import { clinicianToken, signInClinician } from "./accounts";
+import { FakeTextModel, clinicianToken, failingTextModel } from "../fakes";
+import { signInClinician } from "./accounts";
 import { REGION } from "../../src/region";
 
 const PROJECT_ID = "demo-twoam";

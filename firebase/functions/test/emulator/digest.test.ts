@@ -21,8 +21,8 @@ import { writeDemoPatients } from "../../../seed/src/firestore.js";
 import { dateInZone, onDemandPeriod, scheduledPeriod } from "../../src/digest";
 import { adminDigestStore, generateDigestHandler, weeklyDigestHandler } from "../../src/digestFunctions";
 import { newPatientDoc, type Digest, type Summary } from "../../src/types";
-import { FakeTextModel } from "../fakes";
-import { clinicianToken, signInClinician } from "./accounts";
+import { FakeTextModel, clinicianToken } from "../fakes";
+import { signInClinician } from "./accounts";
 import { REGION } from "../../src/region";
 
 const PROJECT_ID = "demo-twoam";

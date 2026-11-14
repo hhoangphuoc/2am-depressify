@@ -13,6 +13,7 @@ import { newPatientDoc, type PatientDoc } from "../src/types";
 import {
   CLINICIAN_EMAIL,
   FakeCheckInStore,
+  FakeDecisions,
   FakeDigestStore,
   FakeLiveTokens,
   FakePatientStore,
@@ -149,7 +150,9 @@ describe("Start and Finish Check-in refuse an anonymous Patient before spending 
     const writes = store.writes.length;
     const model = new FakeTextModel("{}");
     const draft = { turns: [{ speaker: "patient", text: "A fictional line." }] };
-    const error = await rejection(finishCheckInHandler({ data: { patientId: PATIENT_ID, checkInId: "c1", draft }, auth: owner.anonymous }, { store, textModel: model }));
+    const error = await rejection(
+      finishCheckInHandler({ data: { patientId: PATIENT_ID, checkInId: "c1", draft }, auth: owner.anonymous }, { store, textModel: model, decisions: new FakeDecisions() }),
+    );
     expect(error.code).toBe("failed-precondition");
     expect(model.requests).toHaveLength(0);
     expect(store.writes).toHaveLength(writes);

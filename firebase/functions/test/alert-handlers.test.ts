@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { mailIdFor } from "../src/alerts";
 import { createAlertFunctions, redFlagAlertHandler } from "../src/alertFunctions";
+import { LIMIT_WINDOW_MS, MAX_RED_FLAG_EMAILS_PER_HOUR } from "../src/limits";
 import { REGION } from "../src/region";
 import { newPatientDoc, type Flag } from "../src/types";
 import { FakeAlertStore, PATIENT_ID } from "./fakes";
@@ -22,8 +23,10 @@ function redFlag(overrides: Partial<Flag> = {}): Flag {
 
 const sharing = { ...newPatientDoc("Alex Example", "clinician@example.com"), sharingConsent: "granted" as const };
 
-function run(store: FakeAlertStore, flag: Partial<Flag> | undefined, flagId = FLAG_ID) {
-  return redFlagAlertHandler({ patientId: PATIENT_ID, flagId, flag }, { store, dashboardUrl: DASHBOARD });
+const NOW = 1_700_000_000_000;
+
+function run(store: FakeAlertStore, flag: Partial<Flag> | undefined, flagId = FLAG_ID, nowMillis = NOW) {
+  return redFlagAlertHandler({ patientId: PATIENT_ID, flagId, flag }, { store, dashboardUrl: DASHBOARD, clock: () => nowMillis });
 }
 
 describe("redFlagAlertHandler", () => {
@@ -41,6 +44,16 @@ describe("redFlagAlertHandler", () => {
     expect(await run(store, redFlag())).toEqual({ outcome: "duplicate", kind: "crisis" });
     expect(store.mail.size).toBe(1);
     expect(store.creates).toBe(2);
+  });
+
+  it("stops emailing past the hourly cap for one Patient, and emails again an hour later", async () => {
+    const store = new FakeAlertStore({ [PATIENT_ID]: sharing });
+    for (let i = 0; i < MAX_RED_FLAG_EMAILS_PER_HOUR; i++) expect((await run(store, redFlag(), `flag-${i}`)).outcome).toBe("sent");
+    expect(await run(store, redFlag(), "one-too-many")).toEqual({ outcome: "capped", kind: "crisis" });
+    expect(store.mail.size).toBe(MAX_RED_FLAG_EMAILS_PER_HOUR);
+    // A retried delivery of a flag already emailed is still a duplicate, not a second email.
+    expect((await run(store, redFlag(), "flag-0")).outcome).toBe("duplicate");
+    expect((await run(store, redFlag(), "an-hour-later", NOW + LIMIT_WINDOW_MS)).outcome).toBe("sent");
   });
 
   it("does not read the Patient record for an amber flag", async () => {
