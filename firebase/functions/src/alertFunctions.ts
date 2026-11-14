@@ -10,6 +10,8 @@
 //
 // Every red flag emails, whoever raises it (the phone's crisis tool, Finish Check-in's Decisions
 // backstop, the phone's daily job, the hourly silence check #28); none of them sends mail itself.
+// The one limit is MAX_RED_FLAG_EMAILS_PER_HOUR per Patient (limits.ts): a phone writes its own
+// flags, so without it one phone could flood the Clinician's inbox.
 //
 // Log lines carry the ids, the flag's kind (a contract value, or "other") and the outcome only:
 // never the reason, the display name, the address or the email (test/alert-logging.test.ts).
@@ -18,6 +20,7 @@ import { defineString } from "firebase-functions/params";
 import * as logger from "firebase-functions/logger";
 import { onDocumentCreated } from "firebase-functions/v2/firestore";
 import { alertDecision, flagSkip, mailIdFor, resolveDashboardUrl, type AlertSkip } from "./alerts";
+import { PATIENT_LIMITS, withEmail } from "./limits";
 import { REGION } from "./region";
 import { COLLECTIONS, FLAG_KINDS, type Flag, type FlagKind, type MailDoc, type PatientDoc } from "./types";
 
@@ -37,12 +40,13 @@ export const FLAG_DOCUMENT = `${COLLECTIONS.patients}/{patientId}/${COLLECTIONS.
 /** What the alert reads and writes. */
 export interface AlertStore {
   getPatient(patientId: string): Promise<Partial<PatientDoc> | undefined>;
-  /** Creates `mail/{id}`. Resolves false, writing nothing, when the document already exists. */
-  createMail(id: string, mail: MailDoc): Promise<boolean>;
+  /**
+   * Creates `mail/{id}` and counts it in `patientLimits/{patientId}`, in one transaction. Writes
+   * nothing when the document already exists (`duplicate`) or the Patient has reached the hourly
+   * cap (`capped`, see `withEmail`).
+   */
+  createMail(id: string, mail: MailDoc, patientId: string, nowMillis: number): Promise<"sent" | "duplicate" | "capped">;
 }
-
-/** Firestore's ALREADY_EXISTS, which `create()` fails with when the document is there. */
-const ALREADY_EXISTS = 6;
 
 /** The Admin SDK store used in production and in the emulator tests. */
 export function adminAlertStore(db: Firestore): AlertStore {
@@ -51,14 +55,18 @@ export function adminAlertStore(db: Firestore): AlertStore {
       const snapshot = await db.collection(COLLECTIONS.patients).doc(patientId).get();
       return snapshot.exists ? (snapshot.data() as Partial<PatientDoc>) : undefined;
     },
-    async createMail(id, mail) {
-      try {
-        await db.collection(COLLECTIONS.mail).doc(id).create(mail);
-        return true;
-      } catch (error) {
-        if ((error as { code?: unknown })?.code === ALREADY_EXISTS) return false;
-        throw error;
-      }
+    async createMail(id, mail, patientId, nowMillis) {
+      const mailRef = db.collection(COLLECTIONS.mail).doc(id);
+      const limitsRef = db.collection(PATIENT_LIMITS).doc(patientId);
+      return db.runTransaction(async (tx) => {
+        const [existing, limits] = await Promise.all([tx.get(mailRef), tx.get(limitsRef)]);
+        if (existing.exists) return "duplicate";
+        const emails = withEmail(limits.get("redFlagEmailsAtMillis"), nowMillis);
+        if (emails === null) return "capped";
+        tx.create(mailRef, mail);
+        tx.set(limitsRef, { redFlagEmailsAtMillis: emails }, { merge: true });
+        return "sent";
+      });
     },
   };
 }
@@ -69,6 +77,8 @@ export type LoggedKind = FlagKind | "other";
 export type AlertOutcome =
   | { outcome: "sent"; kind: LoggedKind }
   | { outcome: "duplicate"; kind: LoggedKind }
+  /** The Patient has reached the hourly email cap. The flag is recorded and shows on the dashboard. */
+  | { outcome: "capped"; kind: LoggedKind }
   | { outcome: "skipped"; skip: AlertSkip; kind: LoggedKind };
 
 export interface FlagCreated {
@@ -81,6 +91,7 @@ export interface FlagCreated {
 export interface AlertDeps {
   store: AlertStore;
   dashboardUrl: string;
+  clock?: () => number;
 }
 
 function loggedKind(kind: unknown): LoggedKind {
@@ -101,8 +112,10 @@ export async function redFlagAlertHandler(event: FlagCreated, deps: AlertDeps): 
   const decision = alertDecision(event.flag, patient, { patientId: event.patientId, dashboardUrl: deps.dashboardUrl });
   if ("skip" in decision) return { outcome: "skipped", skip: decision.skip, kind };
 
-  const created = await deps.store.createMail(mailIdFor(event.patientId, event.flagId), decision.mail);
-  return { outcome: created ? "sent" : "duplicate", kind };
+  // The flag's reason and the Patient's name are written by the phone, and a phone can create any
+  // number of flags, so the emails one record can cause are capped.
+  const outcome = await deps.store.createMail(mailIdFor(event.patientId, event.flagId), decision.mail, event.patientId, (deps.clock ?? Date.now)());
+  return { outcome, kind };
 }
 
 /** How the trigger gets its dependencies, built per event so parameters are read at run time. */
