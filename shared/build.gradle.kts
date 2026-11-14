@@ -1,34 +1,31 @@
-// `shared`: Kotlin Multiplatform client code. Compose Multiplatform UI, view models, Firebase access
-// through the GitLive SDK, and Koin modules. Depends on `core`.
+import org.jetbrains.kotlin.gradle.dsl.JvmTarget
+
+// `shared`: the Patient app's Kotlin Multiplatform client code, compiled for Android and iOS. Depends on `core`.
+//   - Compose Multiplatform UI and app state (`app.depressify.shared`, its `screens`, `state`, `ui`, `voice`).
+//   - The client data layer, UI-free: `app.depressify.shared.data` (Firebase through the GitLive SDK),
+//     `.session`, `.sharing`, `.config` and `.di` (Koin). The app state reaches the backend only through it.
 //
-// Test seams in this module:
-//   - shared common tests (view models, session, controllers with fakes): `./gradlew :shared:jvmTest`
-//   - Compose UI tests (`*UiTest`, common UI test API on the JVM/desktop host): also `:shared:jvmTest`
-//   - Android host tests are switched on explicitly and exclude `*UiTest`: `:shared:testAndroidHostTest`
+// Tests: the common tests (data layer, session, app state, with fakes) run on the Android host:
+// `./gradlew :shared:testAndroidHostTest`.
 plugins {
-    alias(libs.plugins.kotlinMultiplatform)
-    alias(libs.plugins.kotlinSerialization)
-    alias(libs.plugins.androidKotlinMultiplatformLibrary)
-    alias(libs.plugins.composeMultiplatform)
-    alias(libs.plugins.composeCompiler)
+    alias(libs.plugins.kotlin.multiplatform)
+    alias(libs.plugins.android.kmp.library)
+    alias(libs.plugins.compose.multiplatform)
+    alias(libs.plugins.compose.compiler)
 }
 
 kotlin {
-    jvmToolchain(21)
-
     android {
         namespace = "app.depressify.shared"
         compileSdk = libs.versions.android.compileSdk.get().toInt()
         minSdk = libs.versions.android.minSdk.get().toInt()
+        compilerOptions { jvmTarget.set(JvmTarget.JVM_17) }
+        androidResources { enable = true }
 
         // Host tests are off by default in the Android-KMP plugin; switch them on explicitly.
         withHostTest {}
     }
 
-    // JVM (desktop) target: the fast loop for common tests and Compose UI tests.
-    jvm()
-
-    // iOS: arm64 device and arm64 simulator only (no Intel simulator).
     listOf(iosArm64(), iosSimulatorArm64()).forEach { target ->
         target.binaries.framework {
             baseName = "Shared"
@@ -39,21 +36,17 @@ kotlin {
     sourceSets {
         commonMain.dependencies {
             api(project(":core"))
-
             implementation(libs.compose.runtime)
             implementation(libs.compose.foundation)
             implementation(libs.compose.ui)
-            implementation(libs.compose.material3)
-
-            // AndroidX multiplatform ViewModel is part of the shared module's API.
-            api(libs.androidx.lifecycle.viewmodel)
+            implementation(libs.compose.components.resources)
+            implementation(libs.compose.ui.tooling.preview)
             implementation(libs.jetbrains.lifecycle.viewmodel.compose)
-
+            implementation(libs.jetbrains.lifecycle.runtime.compose)
+            implementation(libs.jetbrains.navigation3.ui)
             implementation(libs.kotlinx.coroutines.core)
 
             api(libs.koin.core)
-            implementation(libs.koin.compose)
-            implementation(libs.koin.compose.viewmodel)
 
             api(libs.gitlive.firebase.app)
             implementation(libs.gitlive.firebase.auth)
@@ -62,23 +55,16 @@ kotlin {
         commonTest.dependencies {
             implementation(libs.kotlin.test)
             implementation(libs.kotlinx.coroutines.test)
-            implementation(libs.compose.ui.test)
         }
-        jvmTest.dependencies {
-            // Desktop Compose runtime for the host the tests run on.
-            implementation(compose.desktop.currentOs)
-            implementation(libs.kotlinx.coroutines.swing)
+        androidMain.dependencies {
+            implementation(libs.androidx.activity.compose)
+        }
+        getByName("androidHostTest").dependencies {
             implementation(libs.gitlive.firebase.common.internal)
         }
     }
 }
 
-// Compose UI specs run on the JVM/desktop host only; keep them out of Android host tests.
-tasks.withType<Test>().configureEach {
-    if (name.contains("AndroidHostTest", ignoreCase = true)) {
-        filter {
-            excludeTestsMatching("*UiTest")
-            isFailOnNoMatchingTests = false
-        }
-    }
+compose.resources {
+    packageOfResClass = "app.depressify.shared.resources"
 }

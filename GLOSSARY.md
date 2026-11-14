@@ -1,4 +1,4 @@
-# 2am Depressify
+# Depressify
 
 A wellbeing companion that helps a person stay well at home after depression treatment, and lets their clinician see how they are doing between visits.
 

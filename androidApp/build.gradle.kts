@@ -3,7 +3,7 @@ import java.util.Properties
 // Android application entry point. Shared code lives in `shared` and `core`.
 //
 // Firebase configuration: no google-services.json and no Google Services plugin. Firebase is
-// initialised in code (CompanionApplication) from BuildConfig fields read here:
+// initialised in code (DepressifyApplication) from BuildConfig fields read here:
 //   - Defaults: the emulator-only demo project `demo-twoam`, which needs no credentials. Debug
 //     builds talk to the local emulators on 127.0.0.1 (use `adb reverse`, see README).
 //   - A real project: put its values in the gitignored `secrets.properties` at the repository root
@@ -13,8 +13,8 @@ import java.util.Properties
 // from code (the repository is public). Only the emulator project falls back to the placeholder;
 // a real project without it fails the build rather than linking Patients to a placeholder.
 plugins {
-    alias(libs.plugins.androidApplication)
-    alias(libs.plugins.composeCompiler)
+    alias(libs.plugins.android.application)
+    alias(libs.plugins.compose.compiler)
 }
 
 val secrets = Properties().apply {
@@ -38,13 +38,13 @@ val clinicianEmail: String = secrets.getProperty("demo.clinicianEmail")?.trim()?
 fun quoted(value: String): String = "\"" + value.replace("\\", "\\\\").replace("\"", "\\\"") + "\""
 
 android {
-    namespace = "app.depressify"
+    namespace = "app.depressify.android"
     compileSdk = libs.versions.android.compileSdk.get().toInt()
 
     defaultConfig {
-        // The installed app's id, which is also the package name registered in Firebase. It is set
-        // here, apart from `namespace` above.
-        applicationId = "app.depressify"
+        // The installed app's id, which is also the package name registered in Firebase
+        // (`firebase.applicationId` in secrets.properties must be the app registered for it).
+        applicationId = "app.depressify.patient"
         minSdk = libs.versions.android.minSdk.get().toInt()
         targetSdk = libs.versions.android.targetSdk.get().toInt()
         versionCode = 1
@@ -59,7 +59,6 @@ android {
         buildConfigField("String", "FIREBASE_API_KEY", quoted(secret("firebase.apiKey", "demo-api-key")))
         buildConfigField("String", "CLINICIAN_EMAIL", quoted(clinicianEmail))
     }
-
     buildTypes {
         debug {
             buildConfigField("String", "FIREBASE_EMULATOR_HOST", quoted(secret("firebase.emulatorHost", "127.0.0.1")))
@@ -69,20 +68,14 @@ android {
             buildConfigField("String", "FIREBASE_EMULATOR_HOST", quoted(""))
         }
     }
-
-    buildFeatures {
-        compose = true
-        buildConfig = true
-    }
-
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
-}
-
-kotlin {
-    jvmToolchain(21)
+    buildFeatures {
+        compose = true
+        buildConfig = true
+    }
 }
 
 dependencies {
