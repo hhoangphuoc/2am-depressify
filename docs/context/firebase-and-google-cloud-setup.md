@@ -17,7 +17,7 @@ The repository is public. No key, token, password or personal email address appe
 ## 1. Firebase console steps (done by the user)
 
 1. **Created the project** and **upgraded it to Blaze**.
-2. **Authentication → Sign-in method:** enabled **Anonymous** (Patients) and **Email/Password** (the Clinician). Google sign-in and SMS multi-factor were left off.
+2. **Authentication → Sign-in method:** enabled **Anonymous** (Patients) and **Email/Password** (the Clinician). Google sign-in and SMS multi-factor were left off. Since [ADR 0010](../adr/0010-patients-sign-in-with-their-own-account.md) Patients sign in with email and password or Google, so Google is to be enabled and Anonymous disabled later (see [Still to do](#8-still-to-do)).
 3. **Authentication → Users:** added the Clinician account (`<clinician-email>`).
 4. **Firestore:**
    - Created the `(default)` database in `europe-north1` in production mode.
@@ -153,5 +153,7 @@ Full details and fixtures: `docs/spike-results.md` and `fixtures/spike/`.
 | User | Add each teammate's debug SHA-1/SHA-256 to `app.depressify.patient`. |
 | User, for Calendar (#19) | A consent screen in Testing mode with test users, scope `calendar.events.owned`, enable the Calendar API, and Android/iOS OAuth clients. |
 | Backend | Deploy `redFlagAlert`, `silenceCheck` and the Check-in functions after review. Grant Cloud Run Invoker to each new callable. |
-| Before real Patients | Require `email_verified` in the rules (`authEmail()` in `firestore.rules`). |
+| User, for Patient accounts (ADR 0010) | Authentication → Sign-in method → enable **Google** (with a support email), then download `google-services.json` / `GoogleService-Info.plist` again for the OAuth client ids the app's Google sign-in needs. Optionally turn on **Email enumeration protection** (Authentication → Settings → User actions). |
+| User, before deploying the ADR 0010 rules | Run `npm run allow-clinician -- --email <clinician-email> --project junction26hel-7400` with the new script, so the Clinician's account has the `role: "clinician"` claim and a verified email; the deployed dashboard needs both under the new rules. Then deploy the rules only once the app ships the new sign-in. |
+| User, after the app ships the new sign-in | Authentication → Sign-in method → **Anonymous** → Disable, once testers have upgraded their anonymous accounts or signed up. Existing records stay their owners'. |
 | Optional | Remove the unused `app.depressify` Android app; restrict the Android API key to `app.depressify.patient` plus its fingerprints. |

@@ -31,7 +31,7 @@ The mirrors are kept in step by tests. The `core` JVM tests export the Kotlin co
 ## Collections
 
 ```
-patients/{patientId}                 PatientDoc      patientId = the Patient's anonymous auth uid
+patients/{patientId}                 PatientDoc      patientId = the Patient's auth uid
   daily/{date}                       DailyDoc        date = yyyy-MM-dd
   consents/{subject}                 Consent         subject = a Signal key or a ConsentPurpose
   checkIns/{checkInId}               CheckIn
@@ -222,7 +222,7 @@ Each run logs one line: the Patient and flag ids, the flag's kind (a `FlagKind`,
 
 ### `clinicians/{email}`: allowlist
 
-The Clinicians a new Patient may link to, one document per email. The document id is the email in lower case, exactly as the Clinician's sign-in token carries it and as the app writes `clinicianEmail`. The rules only check that the document exists. No client may read or write the collection; it is written with the Admin SDK by `npm run allow-clinician -- --email <addr>` and by the seed (for the Clinician it seeds for). This keeps the real Clinician's email out of the repository. Removing a document stops new Patients linking to that Clinician; Patients already linked keep their link.
+The Clinicians a new Patient may link to, one document per email. The document id is the email in lower case, exactly as the Clinician's sign-in token carries it and as the app writes `clinicianEmail`. The rules only check that the document exists. No client may read or write the collection; it is written with the Admin SDK by `npm run allow-clinician -- --email <addr>` and by the seed (for the Clinician it seeds for). Being on the allowlist does not make an account a Clinician: that is the `role: "clinician"` custom claim on the Auth account, which `allow-clinician` also sets (see [Security rules](#security-rules)). This keeps the real Clinician's email out of the repository. Removing a document stops new Patients linking to that Clinician; Patients already linked keep their link.
 
 | Field | Type | Notes |
 |---|---|---|
@@ -250,16 +250,18 @@ The list query must carry the sharing filter (built by `clinicianListFilters` in
 
 ## Security rules
 
-[`firebase/firestore.rules`](../firebase/firestore.rules) encodes who may see a Patient's progress: the Patient themselves, their Clinician, and, as a demo shortcut, any signed-in user for a Patient marked `synthetic`. The tests are in [`firebase/functions/test/rules/`](../firebase/functions/test/rules/firestore-rules.test.ts). Functions and the seed use the Admin SDK, which bypasses the rules.
+[`firebase/firestore.rules`](../firebase/firestore.rules) encodes who may see a Patient's progress: the Patient themselves, their Clinician, and, as a demo shortcut, any verified account for a Patient marked `synthetic`. The tests are in [`firebase/functions/test/rules/`](../firebase/functions/test/rules/firestore-rules.test.ts). Functions and the seed use the Admin SDK, which bypasses the rules.
 
-- **Patient**: the anonymous auth uid equal to `patientId`.
-- **Clinician**: a signed-in user whose token email equals the record's `clinicianEmail`, while the record's `sharingConsent` is `granted`. A new record may only name a Clinician in the `clinicians` allowlist. The demo does not require `email_verified` because emulator accounts are unverified; production must.
-- **Demo shortcut**: on a record with `synthetic == true`, any signed-in user has the Patient's access, with the Patient's limits.
+Accounts ([ADR 0010](adr/0010-patients-sign-in-with-their-own-account.md)): a *verified account* has a `sign_in_provider` other than `anonymous` and `email_verified == true` (Google accounts at once, email and password accounts after the verification link).
 
-| | Patient (or anyone on a Demo Patient) | Clinician of the Patient, while sharing is granted | Anyone else signed in | Signed out |
+- **Patient**: the auth uid equal to `patientId`. Creating the record needs a verified account. An existing record stays its owner's whatever the account, so Patients who signed in anonymously before ADR 0010 keep their records (and upgrading with `linkWithCredential` keeps the uid).
+- **Clinician**: a verified account with the custom claim `role == "clinician"` (set only by the Admin, with `npm run allow-clinician`) whose token email equals the record's `clinicianEmail`, while the record's `sharingConsent` is `granted`. A Patient's account never has the claim, so a matching email alone reads nothing. A new record may only name a Clinician in the `clinicians` allowlist. The claim reaches the token at the next sign-in or token refresh.
+- **Demo shortcut**: on a record with `synthetic == true`, any verified account has the Patient's access, with the Patient's limits. Anonymous and unverified accounts have none.
+
+| | Patient (or any verified account on a Demo Patient) | Clinician of the Patient (claim and verified email), while sharing is granted | Anyone else signed in, including a matching email without the claim | Signed out |
 |---|---|---|---|---|
 | Patient record: read | yes | yes | no | no |
-| Patient record: create | own id only, `clinicianEmail` a Clinician in `clinicians`, `synthetic` false, `tmsEndDate` null, `intakeHighlights` empty | no | no | no |
+| Patient record: create | own id only, from a verified account (not anonymous, email verified), `clinicianEmail` a Clinician in `clinicians`, `synthetic` false, `tmsEndDate` null, `intakeHighlights` empty | no | no | no |
 | Patient record: update | `quietHoursStart`, `quietHoursEnd`, `lastSeenAtMillis`, `lastCheckInAtMillis`, `healthSource`, `sharingConsent` (to `granted` or `declined`, always with a new `sharingChangedAtMillis`), `sharingChangedAtMillis`; `flagLevel` and `flagReasons` only to raise (level never lower, reasons kept) | `displayName`, `tmsEndDate`, and a reset of `flagLevel` and `flagReasons` | no | no |
 | Patient record: delete | no | no | no | no |
 | `daily` | read, write (create stamped as now; the stamp never changes) | read documents stamped `true` | no | no |
@@ -295,5 +297,5 @@ Re-consent shares future records only. Every document in `daily`, `checkIns`, `s
 - **Rules.** On a client create the stamp must equal `patient.sharingConsent == 'granted'` as it stands before the write; on a client update it must not change (nor be dropped). The Clinician reads a stamped document only when `clinicianCanRead` holds and the document is stamped `true`, and clears only flags stamped `true`. The Patient, and the demo shortcut, read everything.
 - **Writers.** The app stamps with `PatientDoc.sharingStamp()` (core) and functions with `sharingStamp(patient)` (`firebase/functions/src/sharing.ts`); the Admin SDK bypasses the rules, so every function writer must call it: the Digest functions and the silence check (#28) today, and Finish Check-in (#14) and any other writer of these collections later. A writer that rewrites an existing document (the daily job's later runs, a retried finish) keeps the stamp the document has; it never deletes and recreates a document to change it.
 - **Flags and the Patient's level.** The Clinician can read only flags stamped `true`, so the record's `flagLevel` and `flagReasons` count only those: a flag raised while not sharing is stamped `false`, leaves the level and reasons alone, and does not block raising a shared flag of the same kind later. That keeps the record free of reasons the Clinician must not see, and lets "Clear after follow-up" recompute the level from all the flags that make it. The dashboard shows the level and reasons from the visible open flags once they load (`shownAttention` in `firebase/hosting/js/lib/clear.js`), and from the record only until then.
-- **Dashboard.** Every query on a stamped collection goes through `patientCollectionQuery` (`firebase/hosting/js/lib/sharing.js`). On a Demo Patient any signed-in user has the Patient's access, so there the rules do not hide unshared documents; the dashboard's filter does.
+- **Dashboard.** Every query on a stamped collection goes through `patientCollectionQuery` (`firebase/hosting/js/lib/sharing.js`). On a Demo Patient any verified account has the Patient's access, so there the rules do not hide unshared documents; the dashboard's filter does.
 - **Not stamped.** `consents` (the current permissions the dashboard needs), `visits` (written by the Clinician) and the Patient record. The record's `lastSeenAtMillis` and `lastCheckInAtMillis` are current values, not records: after sharing again, `lastCheckInAtMillis` can be the time of a Check-in saved while not sharing.

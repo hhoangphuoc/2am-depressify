@@ -18,6 +18,7 @@ Kept up to date as PRs are opened and merged. Each PR also updates its own rows 
 | #57 | `feat/14-typed-checkin-on-49` (on #50, merges #52) | #14, backend: `startCheckIn`, `finishCheckIn`, and `LiveProtocol` in `core` | Open; tested (functions 249, core 39, emulators 87 + 14). Not deployed. |
 | — | — | #20 (Decisions into flags), then #21 (Outcomes) | Next, after #14 |
 | — | — | #18 (Map tool) | Waits on enabling `mapstools.googleapis.com` and the #17 tool catalog |
+| (to open) | `feat/patient-accounts` → `main` | Patients sign in with their own account ([ADR 0010](adr/0010-patients-sign-in-with-their-own-account.md)), backend half: rules, callables, `allow-clinician`, dashboard | Open; tested (functions 311, hosting 311, seed 91, emulators 104 + 1 skipped, seed emulators 18). Not deployed; the app's sign-in is the app team's half. |
 
 The stacked PRs #34–#45 are superseded by #49 and can be closed once it lands. `integrate/ui-main` is kept as a reference only; it also wired the ratings and Voice cue Consents into the app, which #49 doesn't yet.
 
@@ -46,7 +47,7 @@ Left behind: the stack's own Patient screens, theme, app shell, startup screen a
 
 ### What the Patient app does with the backend
 
-- On start it signs in anonymously and creates the Patient record linked to the configured Clinician. A Patient who has not chosen yet is taken to the welcome and the sharing choice.
+- On start it signs in anonymously and creates the Patient record linked to the configured Clinician. A Patient who has not chosen yet is taken to the welcome and the sharing choice. Under the ADR 0010 rules a new anonymous record is refused, so this changes with the app's [Patient sign-in](../README.md#patient-sign-in).
 - "Share my progress", "Continue without sharing", "Stop sharing" and "Share future progress" save the sharing Consent before the screen changes. A failed save changes nothing and shows a notice.
 - "Explore the demo" records no sharing choice.
 - When Firebase cannot be reached at start (no emulator, no network), the app stays on local demo data, as on `main`.
@@ -70,16 +71,26 @@ Left behind: the stack's own Patient screens, theme, app shell, startup screen a
 | | Writes `daily`, `consents`, `checkIns` (timing only) and `suggestions` (status and booked only). |
 | | Raises flags but never lowers them. |
 | | Can't write Summaries, Visits, Digests, ratings, Voice cues, the crisis marker or Outcome fields. |
-| Clinician (email matches `clinicianEmail` and sharing is `granted`) | Reads only records stamped `sharedWithClinician == true`. |
+| Clinician (custom claim `role: "clinician"`, verified email matching `clinicianEmail`, sharing `granted`) | Reads only records stamped `sharedWithClinician == true`. |
 | | Writes Visits, the TMS end date and the display name. |
 | | Clears a flag by setting `clearedAtMillis` only, and can reset the Patient's level and reasons. |
-| Anyone signed in, on a Patient marked synthetic | The Patient's access (demo shortcut). |
-| Patient, creating their record | Links only to a Clinician whose email has a document in `clinicians` (the allowlist). |
+| Any verified account, on a Patient marked synthetic | The Patient's access (demo shortcut). Anonymous and unverified accounts have none. |
+| Patient, creating their record | Needs a verified account (not anonymous, email verified). Links only to a Clinician whose email has a document in `clinicians` (the allowlist). |
 | Everyone | No client reads or writes `mail` or `clinicians`. Signed-out users read nothing. |
 
 The Clinician's email is configuration, never code: the rules check the `clinicians/{email}` allowlist, which only the Admin SDK writes (`npm run allow-clinician`, and the seed for the Clinician it seeds for). The app reads the email from `secrets.properties` (Android) or `Secrets.plist` (iOS).
 
-Not enforced for the demo: `email_verified`. Production must require it (see the comment in the rules).
+### Accounts ([ADR 0010](adr/0010-patients-sign-in-with-their-own-account.md))
+
+| Part | Status |
+|---|---|
+| Rules: a new Patient record, and the demo shortcut, need a verified account; the Clinician needs the `role: "clinician"` claim and a verified email; existing records stay their owners' (anonymous included) | **Built**, rules tests 74 (6 new) |
+| `assertActsAsPatient` (Start and Finish Check-in): verified account, else `failed-precondition` "Verify your account to start a Check-in." | **Built**, `test/accounts.test.ts` and the Functions emulator |
+| `assertClinicianOf` (Intake, Digest): claim and verified email | **Built** |
+| `npm run allow-clinician`: also sets the claim and marks the email verified; says so when the account does not exist yet | **Built**, Auth emulator tests |
+| Dashboard: an account without the claim or a verified email is signed out with "This account isn't set up as a Clinician yet…" | **Built**, `node --test` and the walking skeleton |
+| App: sign-up, verification gate, Google, password reset, `PatientSession` | **Not built** (app team); contract in the [README](../README.md#patient-sign-in) |
+
 
 ### Sharing (issue #29 and the review decisions)
 
@@ -221,6 +232,17 @@ The end-to-end run on the Android emulator:
 4. With the connection to Firestore cut, "Stop sharing" showed "Your sharing choice could not be saved" after the timeout, and both the screen and the record stayed on `granted`.
 5. After a restart the app opened on Today with the stored choice, and the Patient was listed again.
 
+### Patient accounts (ADR 0010), on `feat/patient-accounts`
+
+| Suite | Result |
+|---|---|
+| `cd firebase/functions && npm test` | 311 pass (20 new in `test/accounts.test.ts`) |
+| `cd firebase/hosting && node --test` | 311 pass (3 new) |
+| `cd firebase/seed && npm test` | 91 pass (2 new) |
+| Functions emulator suite (`auth,firestore,functions`) | 104 pass, 1 skipped (the opt-in real Gemini run); 6 new rules tests, an anonymous Patient refused by both Check-in callables, sign-up before and after verification and the dashboard's claim check in the walking skeleton |
+| Seed emulator suite (`auth,firestore`) | 18 pass (2 new: `allow-clinician` against the Auth emulator) |
+| `./gradlew :core:jvmTest :shared:testAndroidHostTest :androidApp:assembleDebug` | core 39 and shared 16 pass, the APK builds; the app is unchanged |
+
 ### Live deployment (14 November 2026)
 
 The real project `junction26hel-7400` ("Hack Junction 2026-7400", Blaze plan) is set up. It was deployed from the backend stack (`chore/real-project-config`), whose `firebase/` matches this branch's:
@@ -242,6 +264,7 @@ Deploy notes:
 `redFlagAlert` and `silenceCheck` are not deployed yet: deploy them with `firebase deploy --only functions:redFlagAlert,functions:silenceCheck --project prod` together with the Trigger Email extension.
 
 **Not verified (needs a person, hardware or credentials):**
+- Patient accounts (ADR 0010): real Google sign-in on a device (needs the Google provider enabled and the app's half), a real verification email arriving, `allow-clinician` against the real project's Auth, and the new rules deployed. Deploy them only after `allow-clinician` has run for the live Clinician and the app ships the new sign-in.
 - The Patient app against the real project, and on iOS beyond the build.
 - A full Intake extraction or Digest through the deployed callables, signed in as the Clinician. Only the one direct call to `gemini-4-hydrogen` above has been made.
 - The app on the S24+ and on an iPhone.
