@@ -9,6 +9,10 @@ packages:
   Firebase:
     url: https://github.com/firebase/firebase-ios-sdk
     from: 12.19.3
+  # The map of places on Today. Kotlin cannot link it, so GooglePlacesMap.swift draws it for the shared UI.
+  GoogleMaps:
+    url: https://github.com/googlemaps/ios-maps-sdk
+    from: 11.2.0
 targets:
   Depressify:
     type: application
@@ -23,6 +27,8 @@ targets:
         product: FirebaseFirestore
       - package: Firebase
         product: FirebaseFunctions
+      - package: GoogleMaps
+        product: GoogleMaps
     info:
       path: Depressify/Info.plist
       properties:

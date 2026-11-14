@@ -98,7 +98,7 @@ What the references contribute: one soft card per subject, an icon tile beside e
 
 Progress rules. Studies of people with depression report that streaks and achievement rewards feel goal-driven and that a lost streak leads some people to disengage ([Frontiers in Digital Health 2022](https://www.frontiersin.org/journals/digital-health/articles/10.3389/fdgth.2022.1045765/full), [JMIR mHealth 2025](https://mhealth.jmir.org/2025/1/e67141), [JMIR mHealth 2026](https://mhealth.jmir.org/2026/1/e95414)). So the week row only counts what happened: no goal, no streak, no reset, no percentage, and a day without a Check-in is never marked as missed.
 
-Places rules. The map shows synthetic demo places on an illustrated map, labelled `Demo places`. A live Google Maps view needs an API key and the Patient's location Consent; the map image is the one part to replace. Links open Google Maps outside the app.
+Places rules. With a Patient signed in, Today's Suggestion draws its places as icon pins on a calm Google map (Maps SDK for Android and iOS: shops and transit hidden, parks kept), with the Patient's area as a blue dot. One row under the map names the chosen place, how far it is in a straight line, and links to Google Maps; the link's words carry the source. Without a Maps key the same rows list every place. The demo Today keeps the illustrated map, labelled `Demo places`. Links open Google Maps outside the app.
 
 ## Patient screens and states
 
