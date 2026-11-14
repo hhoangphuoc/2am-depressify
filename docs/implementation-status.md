@@ -64,7 +64,7 @@ Not enforced for the demo: `email_verified`. Production must require it (see the
   - Every function that writes must stamp what it writes.
 - **Flag level on the Patient record:** `flagLevel` and `flagReasons` count only flags stamped `true`, so a flag raised while sharing was off doesn't leak its reason to the Clinician.
 
-### Cloud Functions (`firebase/functions`, TypeScript, region `europe-north1`)
+### Cloud Functions (`firebase/functions`, TypeScript, region `europe-north1`; the scheduled job in `europe-west1`)
 
 | Function in [system design](context/system-design.md#cloud-functions) | Status | Notes |
 |---|---|---|
@@ -77,6 +77,18 @@ Not enforced for the demo: `email_verified`. Production must require it (see the
 | Silence check | Not built | #28 |
 
 There is also a trivial `health` endpoint.
+
+Deployed on the project `junction26hel-7400`, with `GEMINI_API_KEY` set as a function secret:
+
+| Function | Type | Endpoint |
+|---|---|---|
+| `extractIntake` | Callable, Clinician only | `https://europe-north1-junction26hel-7400.cloudfunctions.net/extractIntake` |
+| `saveIntake` | Callable, Clinician only | `https://europe-north1-junction26hel-7400.cloudfunctions.net/saveIntake` |
+| `generateDigest` | Callable, Clinician only | `https://europe-north1-junction26hel-7400.cloudfunctions.net/generateDigest` |
+| `health` | HTTP | `https://europe-north1-junction26hel-7400.cloudfunctions.net/health` (answered `{"ok":true}` on 14 November 2026) |
+| `weeklyDigest` | Scheduled, Mondays 07:00 Helsinki | `europe-west1`. Private: only Google's scheduler can call it. |
+
+The callables are reached through the Firebase SDK (`httpsCallable` in `europe-north1`), which adds the caller's sign-in token; they are not plain REST endpoints. `weeklyDigest` is deployed in `europe-west1`, and `SCHEDULED_REGION` in `src/region.ts` now says so.
 
 ### Seed (`firebase/seed`)
 
@@ -122,7 +134,7 @@ There is also a trivial `health` endpoint.
 | No name or id sent to Gemini | Gemini research, data handling | Holds for the Digest. An Intake report is sent as the Clinician pasted it, so paste only reports without identifiers. |
 | Paid tier and AI Studio logging off | Gemini research, data handling | A setup step, now in the README. Not something the code can enforce. |
 | Live tokens and Decisions need `v1beta` | Gemini research, API versions | Noted in `src/gemini.ts`; the SDK defaults to `v1`. |
-| EU region | System design, ADR 0008 | `europe-north1` for the functions and the dashboard. |
+| EU region | System design, ADR 0008 | `europe-north1` for the callables and the dashboard; `europe-west1` for the scheduled Digest. |
 | GitLive `firebase-kotlin-sdk` 2.8.0 in shared code | ADR 0008 | Holds. |
 | Anonymous Patient sign-in, linked to the one Clinician on first open | System design, roles | Holds, now behind `main`'s screens. |
 
@@ -160,12 +172,21 @@ Results on this branch, all from local runs on 14 November 2026:
 | Dashboard helpers | `cd firebase/hosting && node --test` | 308 pass |
 | Rules, functions and end-to-end on the emulators | `firebase emulators:exec --only auth,firestore,functions --project demo-twoam "npm --prefix functions run test:emulator"` | Pass with Firebase CLI 15.36.0 |
 | Seed on the emulator | `... "npm --prefix seed run test:emulator"` | 14 pass |
+| Patient app on an Android emulator (API 36) against the Firebase emulators, with the dashboard open | By hand, see below | Pass |
 
 The emulator suite needs Firebase CLI 15 or newer. With CLI 14.22.0 the Functions emulator kills every function built with `firebase-functions` 7, and the six callable tests time out.
 
+The end-to-end run on the Android emulator:
+
+1. First open: the app signed in anonymously and created `patients/{uid}` under the rules, linked to `clinician@example.com`, with `sharingConsent: undecided`. It showed the welcome. The dashboard's Patient list was empty.
+2. "Share my progress": the record changed to `granted` with a timestamp, the app landed on Today, and "Live patient" appeared on the open dashboard without a reload.
+3. "Stop sharing": the record changed to `declined` and the Patient left the open dashboard at once.
+4. With the connection to Firestore cut, "Stop sharing" showed "Your sharing choice could not be saved" after the timeout, and both the screen and the record stayed on `granted`.
+5. After a restart the app opened on Today with the stored choice, and the Patient was listed again.
+
 **Not verified (needs a person, hardware or credentials):**
-- The Patient app against the emulators or a real project on a phone or simulator. The wiring is tested with fakes only.
-- Deploying to a real Firebase project, including whether Cloud Scheduler accepts `europe-north1` for `weeklyDigest`.
+- The Patient app against the real project, and on iOS beyond the build.
+- Deploying from this branch.
 - A real Gemini call.
 - The app on the S24+ and on an iPhone.
 
@@ -175,7 +196,7 @@ The emulator suite needs Firebase CLI 15 or newer. With CLI 14.22.0 the Function
 2. **Re-consent shares future records only.** Only the off period is hidden, using the sharing stamp.
 3. **Ratings and Voice cues** are included until the Patient leaves them out.
 4. **Clearing a flag.** The dashboard computes the new level when a flag is cleared; the rules don't check it.
-5. **Region: `europe-north1` (Finland).** The real Firestore database is there, and every function runs there too. It is set once for the functions (`REGION` in `firebase/functions/src/region.ts`) and once for the dashboard (`FUNCTIONS_REGION` in `firebase/hosting/js/functions.js`); `firebase/functions/test/region.test.ts` keeps the two in step. The database location itself is chosen when the database is created, not in this repository.
+5. **Region: `europe-north1` (Finland).** The real Firestore database is there, and every callable function runs there too; the scheduled `weeklyDigest` runs in `europe-west1`. It is set once for the functions (`REGION` in `firebase/functions/src/region.ts`) and once for the dashboard (`FUNCTIONS_REGION` in `firebase/hosting/js/functions.js`); `firebase/functions/test/region.test.ts` keeps the two in step. The database location itself is chosen when the database is created, not in this repository.
 6. **Values the spec didn't fix:**
    - The Baseline spread floor: `max(sample SD, 0.05 × |median|, 0.001)`.
    - A 28-day window for "what seems to help".

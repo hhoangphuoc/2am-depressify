@@ -118,12 +118,13 @@ class PatientViewModel(
         val id = patientId
         if (backend == null || id == null) return onSaved()
         val choice = if (share) SharingConsent.granted else SharingConsent.declined
+        state.update { it.copy(sheet = null, notice = "Saving your sharing choice…") }
         viewModelScope.launch {
             // A lost reply can hide a write that did commit, so a failure re-reads what is stored.
             val saved = attempt { backend.patients.setSharingConsent(id, choice, nowMillis()) } != null ||
                 attempt { backend.patients.get(id) }?.sharingConsent == choice
+            state.update { it.copy(notice = if (saved) null else "Your sharing choice could not be saved. Check your connection and try again.") }
             if (saved) onSaved()
-            else state.update { it.copy(sheet = null, notice = "Your sharing choice could not be saved. Check your connection and try again.") }
         }
     }
 
