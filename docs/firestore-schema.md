@@ -48,7 +48,7 @@ mail/{autoId}                        MailDoc         written by functions only; 
 |---|---|---|---|
 | `displayName` | string | `"Live patient"` (app) | The Clinician may rename. |
 | `clinicianEmail` | string | the demo Clinician (`DemoConfig.CLINICIAN_EMAIL`) | Links the Patient to the Clinician; the dashboard queries on it. |
-| `intakeHighlights` | string | `""` | Extracted from the Intake, at most 120 words. Written by the Intake function; no client writes it. |
+| `intakeHighlights` | string | `""` | Extracted from the Intake, at most 120 words, reviewed by the Clinician. Written only by the `saveIntake` function (Clinician only); no client writes it. The report itself is never stored. |
 | `tmsEndDate` | date string or null | `null` | Set by the Clinician. Week 1 starts the day after. |
 | `flagLevel` | FlagLevel | `green` | The highest uncleared flag. Never shown to the Patient. |
 | `flagReasons` | string[] | `[]` | Plain sentences, never a number. |

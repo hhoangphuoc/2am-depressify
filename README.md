@@ -100,3 +100,23 @@ This starts Auth (9099), Firestore (8080), Functions (5001), Hosting (5002) and 
 3. Run the Android debug build (after `adb reverse`, above). The app signs in anonymously, creates the Patient record and lands on Today. "Live patient" appears on the dashboard without a reload.
 
 Use only the `demo-twoam` project with the emulators. Do not run `firebase deploy` against it.
+
+### Intake
+
+On the dashboard, open a Patient from the list (`#/patient/{id}`) to reach the Intake section. The Clinician pastes the clinical report, reviews and edits the extracted highlights (at most 120 words) and saves them. Two callables do the work, both for the Patient's Clinician only:
+
+| Callable | Request | Response |
+|---|---|---|
+| `extractIntake` | `{patientId, reportText}` | `{highlights, wordCount, trimmed}`; writes nothing |
+| `saveIntake` | `{patientId, highlights}` | `{intakeHighlights, wordCount}`; writes `patients/{patientId}.intakeHighlights` only |
+
+`extractIntake` calls the text model with storage off and needs the `GEMINI_API_KEY` function secret (`firebase functions:secrets:set GEMINI_API_KEY` on a real project). The emulator has no secret, so extraction there fails with a retry and nothing is sent to Gemini. To try a real extraction locally, put `GEMINI_API_KEY=...` in `firebase/functions/.secret.local` (gitignored); the pasted text then goes to Gemini with storage off, so paste only fictional reports. The report is never stored or logged.
+
+The emulator tests also call the Intake callables through the Functions emulator when it is running:
+
+```sh
+cd firebase/functions && npm run build && cd ..
+firebase emulators:exec --only auth,firestore,functions --project demo-twoam "npm --prefix functions run test:emulator"
+```
+
+The fictional Intake for the live demo Patient is in [docs/demo/intake-live-patient.md](docs/demo/intake-live-patient.md).
