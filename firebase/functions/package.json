@@ -1,0 +1,29 @@
+{
+  "name": "twoam-functions",
+  "private": true,
+  "description": "Cloud Functions for the 2am companion (TypeScript).",
+  "main": "lib/index.js",
+  "engines": {
+    "node": "22"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.test.json",
+    "test": "npm run typecheck && vitest run",
+    "test:emulator": "vitest run --config vitest.emulator.config.mts",
+    "serve": "npm run build && firebase emulators:start --only functions --project demo-twoam"
+  },
+  "dependencies": {
+    "@google/genai": "3.3.0",
+    "firebase-admin": "14.5.1",
+    "firebase-functions": "7.4.0"
+  },
+  "devDependencies": {
+    "@firebase/rules-unit-testing": "6.0.0",
+    "@types/node": "22.20.5",
+    "express": "5.3.0",
+    "firebase": "13.3.0",
+    "typescript": "6.0.3",
+    "vitest": "4.1.12"
+  }
+}

@@ -1,0 +1,253 @@
+{
+  "description": "Shared Baseline fixture: inputs and the expected comparison with Baseline. Read by the seed tests (firebase/seed) and by the Kotlin Baseline tests in core. The rule is described in docs/firestore-schema.md, section 'Baseline'. Compare numbers with an absolute tolerance of `tolerance`; null means no comparison.",
+  "rule": {
+    "windowDays": 14,
+    "minValidDays": 5,
+    "window": "the 14 calendar dates strictly before today's date; a date counts only if its value is not null",
+    "centre": "median of the valid values (mean of the two middle values for an even count)",
+    "spread": "sample standard deviation of the valid values (divide by n - 1)",
+    "spreadFloor": "spread used = max(spread, 0.05 * |median|, 0.001)",
+    "comparison": "(today - median) / spread used; null with fewer than 5 valid days or a null today",
+    "oriented": "the comparison negated for lower_is_better Signals; null for Signals with direction none",
+    "composite": "mean of the oriented comparisons that are not null; null if there are none",
+    "tolerance": 1e-9
+  },
+  "comparisons": [
+    {
+      "name": "fewer than 5 valid prior days gives null",
+      "today": { "date": "2026-11-14", "value": 400 },
+      "history": [
+        { "date": "2026-11-10", "value": 420 },
+        { "date": "2026-11-11", "value": 430 },
+        { "date": "2026-11-12", "value": 410 },
+        { "date": "2026-11-13", "value": 440 }
+      ],
+      "expected": null
+    },
+    {
+      "name": "a null today gives null, never zero",
+      "today": { "date": "2026-11-14", "value": null },
+      "history": [
+        { "date": "2026-11-09", "value": 400 },
+        { "date": "2026-11-10", "value": 410 },
+        { "date": "2026-11-11", "value": 420 },
+        { "date": "2026-11-12", "value": 430 },
+        { "date": "2026-11-13", "value": 440 }
+      ],
+      "expected": null
+    },
+    {
+      "name": "exactly 5 valid days, low spread: the floor of 5% of the median applies",
+      "today": { "date": "2026-11-14", "value": 380 },
+      "history": [
+        { "date": "2026-11-09", "value": 400 },
+        { "date": "2026-11-10", "value": 410 },
+        { "date": "2026-11-11", "value": 420 },
+        { "date": "2026-11-12", "value": 430 },
+        { "date": "2026-11-13", "value": 440 }
+      ],
+      "expected": -1.9047619047619047
+    },
+    {
+      "name": "constant history uses the spread floor (five days of 420, today 399)",
+      "today": { "date": "2026-11-14", "value": 399 },
+      "history": [
+        { "date": "2026-11-09", "value": 420 },
+        { "date": "2026-11-10", "value": 420 },
+        { "date": "2026-11-11", "value": 420 },
+        { "date": "2026-11-12", "value": 420 },
+        { "date": "2026-11-13", "value": 420 }
+      ],
+      "expected": -1.0
+    },
+    {
+      "name": "constant zero history uses the absolute floor and never divides by zero (today equal)",
+      "today": { "date": "2026-11-14", "value": 0 },
+      "history": [
+        { "date": "2026-11-09", "value": 0 },
+        { "date": "2026-11-10", "value": 0 },
+        { "date": "2026-11-11", "value": 0 },
+        { "date": "2026-11-12", "value": 0 },
+        { "date": "2026-11-13", "value": 0 }
+      ],
+      "expected": 0.0
+    },
+    {
+      "name": "constant zero history uses the absolute floor and never divides by zero (today above)",
+      "today": { "date": "2026-11-14", "value": 3 },
+      "history": [
+        { "date": "2026-11-09", "value": 0 },
+        { "date": "2026-11-10", "value": 0 },
+        { "date": "2026-11-11", "value": 0 },
+        { "date": "2026-11-12", "value": 0 },
+        { "date": "2026-11-13", "value": 0 }
+      ],
+      "expected": 3000.0
+    },
+    {
+      "name": "spread above the floor, even count: median of the two middle values, positive direction",
+      "today": { "date": "2026-11-14", "value": 600 },
+      "history": [
+        { "date": "2026-11-08", "value": 300 },
+        { "date": "2026-11-09", "value": 360 },
+        { "date": "2026-11-10", "value": 420 },
+        { "date": "2026-11-11", "value": 480 },
+        { "date": "2026-11-12", "value": 540 },
+        { "date": "2026-11-13", "value": 600 }
+      ],
+      "expected": 1.3363062095621219
+    },
+    {
+      "name": "the centre is the median, not the mean: one long night does not move it",
+      "today": { "date": "2026-11-14", "value": 380 },
+      "history": [
+        { "date": "2026-11-08", "value": 400 },
+        { "date": "2026-11-09", "value": 500 },
+        { "date": "2026-11-10", "value": 405 },
+        { "date": "2026-11-11", "value": 410 },
+        { "date": "2026-11-12", "value": 415 },
+        { "date": "2026-11-13", "value": 420 }
+      ],
+      "expected": -0.8685990362153791
+    },
+    {
+      "name": "null days are skipped: 4 valid days among 7 gives null",
+      "today": { "date": "2026-11-14", "value": 5000 },
+      "history": [
+        { "date": "2026-11-07", "value": 7000 },
+        { "date": "2026-11-08", "value": null },
+        { "date": "2026-11-09", "value": 8000 },
+        { "date": "2026-11-10", "value": null },
+        { "date": "2026-11-11", "value": 6000 },
+        { "date": "2026-11-12", "value": null },
+        { "date": "2026-11-13", "value": 9000 }
+      ],
+      "expected": null
+    },
+    {
+      "name": "null days are skipped: 5 valid days among 8, negative direction",
+      "today": { "date": "2026-11-14", "value": 5000 },
+      "history": [
+        { "date": "2026-11-06", "value": 7500 },
+        { "date": "2026-11-07", "value": 7000 },
+        { "date": "2026-11-08", "value": null },
+        { "date": "2026-11-09", "value": 8000 },
+        { "date": "2026-11-10", "value": null },
+        { "date": "2026-11-11", "value": 6000 },
+        { "date": "2026-11-12", "value": null },
+        { "date": "2026-11-13", "value": 9000 }
+      ],
+      "expected": -2.23606797749979
+    },
+    {
+      "name": "only the 14 days strictly before today count: older days and today's own record are ignored",
+      "today": { "date": "2026-11-14", "value": 60 },
+      "history": [
+        { "date": "2026-10-28", "value": 1000 },
+        { "date": "2026-10-29", "value": 1000 },
+        { "date": "2026-10-30", "value": 1000 },
+        { "date": "2026-10-31", "value": 40 },
+        { "date": "2026-11-03", "value": 42 },
+        { "date": "2026-11-06", "value": 44 },
+        { "date": "2026-11-09", "value": 46 },
+        { "date": "2026-11-12", "value": 48 },
+        { "date": "2026-11-13", "value": 50 },
+        { "date": "2026-11-14", "value": 9999 }
+      ],
+      "expected": 4.008918628686366
+    },
+    {
+      "name": "the window is counted in calendar dates, not records: 3 valid days inside it gives null",
+      "today": { "date": "2026-11-14", "value": 420 },
+      "history": [
+        { "date": "2026-10-20", "value": 420 },
+        { "date": "2026-10-22", "value": 430 },
+        { "date": "2026-10-25", "value": 410 },
+        { "date": "2026-11-11", "value": 400 },
+        { "date": "2026-11-12", "value": 415 },
+        { "date": "2026-11-13", "value": 425 }
+      ],
+      "expected": null
+    },
+    {
+      "name": "an unsorted history gives the same answer as a sorted one",
+      "today": { "date": "2026-11-14", "value": 9100 },
+      "history": [
+        { "date": "2026-11-13", "value": 7100 },
+        { "date": "2026-11-08", "value": 7200 },
+        { "date": "2026-11-11", "value": 7300 },
+        { "date": "2026-11-09", "value": 6800 },
+        { "date": "2026-11-12", "value": 6900 },
+        { "date": "2026-11-10", "value": 7500 },
+        { "date": "2026-11-07", "value": 7000 }
+      ],
+      "expected": 5.633802816901408
+    },
+    {
+      "name": "a lower-is-better Signal is compared as measured (resting heart rate above usual is positive)",
+      "today": { "date": "2026-11-14", "value": 65 },
+      "history": [
+        { "date": "2026-11-09", "value": 60 },
+        { "date": "2026-11-10", "value": 62 },
+        { "date": "2026-11-11", "value": 58 },
+        { "date": "2026-11-12", "value": 61 },
+        { "date": "2026-11-13", "value": 59 }
+      ],
+      "expected": 1.6666666666666667
+    }
+  ],
+  "oriented": [
+    { "name": "higher is better keeps the sign", "signal": "sleepMinutes", "comparison": -1.5, "expected": -1.5 },
+    { "name": "lower is better flips the sign", "signal": "restingHeartRate", "comparison": 1.6666666666666667, "expected": -1.6666666666666667 },
+    { "name": "lower is better flips a negative too", "signal": "timeAtHomeMinutes", "comparison": -0.5, "expected": 0.5 },
+    { "name": "no direction gives null", "signal": "meanHeartRate", "comparison": 2.0, "expected": null },
+    { "name": "a null comparison stays null", "signal": "steps", "comparison": null, "expected": null }
+  ],
+  "composites": [
+    {
+      "name": "mean of the oriented comparisons; Signals with no direction stay out",
+      "vsBaseline": {
+        "sleepMinutes": -1.0,
+        "steps": -2.0,
+        "meanHeartRate": 5.0,
+        "restingHeartRate": 1.0,
+        "hrv": null,
+        "timeAtHomeMinutes": null,
+        "movementRadiusKm": null,
+        "calendarBusyMinutes": -4.0,
+        "lateNightScreenMinutes": null
+      },
+      "expected": -1.3333333333333333
+    },
+    {
+      "name": "nulls are skipped, not counted as zero",
+      "vsBaseline": {
+        "sleepMinutes": 0.5,
+        "steps": null,
+        "meanHeartRate": null,
+        "restingHeartRate": null,
+        "hrv": null,
+        "timeAtHomeMinutes": null,
+        "movementRadiusKm": 1.5,
+        "calendarBusyMinutes": null,
+        "lateNightScreenMinutes": null
+      },
+      "expected": 1.0
+    },
+    {
+      "name": "no oriented comparison gives null",
+      "vsBaseline": {
+        "sleepMinutes": null,
+        "steps": null,
+        "meanHeartRate": 1.0,
+        "restingHeartRate": null,
+        "hrv": null,
+        "timeAtHomeMinutes": null,
+        "movementRadiusKm": null,
+        "calendarBusyMinutes": 2.0,
+        "lateNightScreenMinutes": null
+      },
+      "expected": null
+    }
+  ]
+}
