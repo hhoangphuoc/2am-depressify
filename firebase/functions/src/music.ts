@@ -63,10 +63,11 @@ export function buildArtworkRequest(mood: string) {
     store: false,
     input: buildMusicRequest(mood).input + "\n\n" +
       "Create cover artwork matching this musical brief, the same mood and gentle hopeful intent. " +
-      "A simple, natural flat illustration: one subject, a peaceful adult in profile OR a single calm nature subject, adapting to the mood. " +
-      "Use just two or three solid colors: muted teal, sage and warm peach on a mostly empty cream background. " +
-      "Few clean, gently curved shapes. Keep the subject small with generous breathing room. " +
-      "No texture, gradients, shading, patterns, decorative flourishes, detailed scenery, text, logos, photographs or medical claims.",
+      "Show one peaceful nature view: a still lakeshore in soft morning light, a sunlit meadow, or a gentle forest clearing. " +
+      "Choose one scene to complement the music's mood, always feeling restful, welcoming and quietly hopeful. " +
+      "A simple flat illustration with a few broad, gently curved shapes and two or three muted colors: teal, sage and warm peach with cream sky. " +
+      "Let the landscape fill the square, with an open horizon and generous uncluttered space. Suggest still water, soft daylight or gentle greenery rather than intricate detail. " +
+      "No people, faces, buildings, dramatic cliffs, storms, darkness, harsh contrast, texture, patterns, text, logos, photographs or medical claims.",
     response_format: { type: "image", mime_type: "image/jpeg", aspect_ratio: "1:1", image_size: "1K" },
   };
 }

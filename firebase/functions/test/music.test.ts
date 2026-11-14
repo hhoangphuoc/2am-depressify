@@ -59,7 +59,7 @@ describe("generateMusic", () => {
       response_format: { type: "image", mime_type: "image/jpeg", aspect_ratio: "1:1", image_size: "1K" },
     });
     expect(body.input.startsWith(buildMusicRequest(mood).input + "\n\n")).toBe(true);
-    for (const instruction of ["one subject", "two or three solid colors", "mostly empty cream background", "adapting to the mood", "No texture, gradients, shading", "text, logos, photographs or medical claims"]) {
+    for (const instruction of ["one peaceful nature view", "complement the music's mood", "two or three muted colors", "landscape fill the square", "open horizon", "No people, faces", "text, logos, photographs or medical claims"]) {
       expect(body.input).toContain(instruction);
     }
   });
