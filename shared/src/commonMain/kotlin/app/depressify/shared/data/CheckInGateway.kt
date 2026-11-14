@@ -20,7 +20,7 @@ data class CheckInDraft(val turns: List<DraftTurn>, val suggestions: List<Sugges
 /** Where the Patient is, for a place lookup. Sent only with that lookup and never stored. */
 data class PatientLocation(val label: String, val latitude: Double, val longitude: Double) {
     companion object {
-        // shortcut: every Patient is at the Junction venue (Dipoli, Aalto University); replace with the phone's last known location once location Consent and sampling exist (#18).
+        // shortcut: a Patient without a stored location is at the Junction venue (Dipoli, Aalto University); replace with the phone's last known location once location Consent and sampling exist (#18).
         val Sample = PatientLocation("Otaniemi, Espoo", 60.1850, 24.8324)
     }
 }

@@ -126,6 +126,7 @@ The Patient app runs on local demo data until Firebase answers. With a backend i
 | 3. Dashboard helpers (Node test runner) | `cd firebase/hosting && node --test` |
 | 3. Seed generator and Baseline fixture (Node test runner, plus a type check) | `cd firebase/seed && npm install && npm test` |
 | 4. `shared` common tests (the session and the view model's backend wiring, with fakes) | `./gradlew :shared:testAndroidHostTest` |
+| 5. `shared` Compose UI tests (the voice Check-in screen), on a running emulator or device | `./gradlew :shared:connectedAndroidDeviceTest` |
 
 `./gradlew :core:jvmTest` also regenerates `firebase/functions/test/fixtures/contract.json`, which the functions tests compare with the TypeScript and dashboard mirrors. Commit that file when it changes.
 

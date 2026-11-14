@@ -99,7 +99,7 @@ fun CheckInScreen(vm: PatientViewModel, s: PatientState) {
 }
 
 @Composable
-private fun VoiceCheckInScreen(vm: PatientViewModel, s: PatientState, snap: LiveSnapshot, playback: MusicPlayback, onOpenMusic: () -> Unit) {
+internal fun VoiceCheckInScreen(vm: PatientViewModel, s: PatientState, snap: LiveSnapshot, playback: MusicPlayback, onOpenMusic: () -> Unit) {
     val c = Theme.colors
     val density = LocalDensity.current
     val state = snap.shownState
@@ -216,6 +216,7 @@ private fun VoiceCheckInScreen(vm: PatientViewModel, s: PatientState, snap: Live
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
+                snap.cards.filterIsInstance<ToolCard.Weather>().lastOrNull()?.let { WeatherCard(it) }
                 AnimatedVisibility(
                     visible = snap.suggestions.isNotEmpty() && !sheetOpen,
                     enter = fadeIn() + slideInVertically { it / 2 },

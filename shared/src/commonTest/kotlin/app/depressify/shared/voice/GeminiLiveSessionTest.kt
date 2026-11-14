@@ -5,6 +5,7 @@ import app.depressify.core.live.LiveEvent as ServerEvent
 import app.depressify.core.model.DailyDoc
 import app.depressify.core.model.FlagLevel
 import app.depressify.core.model.PatientDoc
+import app.depressify.core.model.PatientLocation as StoredPatientLocation
 import app.depressify.core.model.SharingConsent
 import app.depressify.core.model.Signal
 import app.depressify.core.model.SuggestionStatus
@@ -12,6 +13,7 @@ import app.depressify.shared.data.FakeCheckInGateway
 import app.depressify.shared.data.FakePatientStore
 import app.depressify.shared.data.MusicClip
 import app.depressify.shared.data.NearbyPlace
+import app.depressify.shared.data.PatientLocation
 import app.depressify.shared.data.Weather
 import app.depressify.shared.voice.live.LiveClient
 import app.depressify.shared.voice.live.AudioIO
@@ -168,6 +170,23 @@ class GeminiLiveSessionTest {
     }
 
     @Test
+    fun theVoiceSheetsPlaceCardNamesTheNearestPlaceAndOpensItInGoogleMaps() {
+        gateway.places = listOf(
+            NearbyPlace("Karhupuisto", "https://maps.google.com/?cid=1", 350, walkMinutes = 5),
+            NearbyPlace("Kaisaniemi Park", "https://maps.google.com/?cid=2", 1400, walkMinutes = 18),
+        )
+        val client = FakeLiveClient(listOf(
+            call("record_suggestion", "kind" to JsonPrimitive("walk"), "details" to JsonPrimitive("Ten minutes outside before dark")),
+            call("find_places", "query" to JsonPrimitive("park")),
+        ))
+        session(client).apply { start(returning = true) }.let { live ->
+            val card = live.snapshot.value.suggestions.single()
+            assertEquals("Karhupuisto · 5 min walk" to "https://maps.google.com/?cid=1", card.actionLabel to card.actionUrl)
+            live.stop()
+        }
+    }
+
+    @Test
     fun getWeatherShowsTheWeatherWithItsSourceAndAFailedLookupIsANamedError() {
         gateway.weather = Weather("Cloudy", 3, -3, 10, 26, goodForAWalk = true, sourceTitle = "Weather for Espoo - Google", sourceUrl = "https://www.google.com/search?q=Weather")
         val found = FakeLiveClient(listOf(call("get_weather")))
@@ -182,6 +201,16 @@ class GeminiLiveSessionTest {
         session(failed).apply { start(returning = true) }.let { live ->
             assertEquals(emptyList(), live.snapshot.value.cards)
             assertTrue(failed.sent.any { it.contains("backend_failed") })
+            live.stop()
+        }
+    }
+
+    @Test
+    fun theCompanionLooksForPlacesAroundThePatientsOwnLocation() {
+        patients.records["p1"] = patients.records.getValue("p1").copy(location = StoredPatientLocation("Kallio, Helsinki", 60.1841, 24.9497))
+        val client = FakeLiveClient(listOf(call("find_places", "query" to JsonPrimitive("park"))))
+        session(client).apply { start(returning = true) }.let { live ->
+            assertEquals(PatientLocation("Kallio, Helsinki", 60.1841, 24.9497), gateway.lookedNear)
             live.stop()
         }
     }

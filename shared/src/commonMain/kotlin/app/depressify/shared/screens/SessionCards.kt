@@ -19,19 +19,23 @@ internal fun SessionToolCards(cards: List<ToolCard>, playback: MusicPlayback, on
     cards.asReversed().filterNot { it is ToolCard.Music }.forEach { card ->
         when (card) {
             is ToolCard.Places -> PlacesSessionCard(card)
-            is ToolCard.Weather -> {
-                val uri = LocalUriHandler.current
-                SoftCard {
-                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                        Icon(PhosphorIcons.sunHorizon, 24.dp, Theme.colors.accent)
-                        Txt("Outside right now", DepressifyType.titleSmall, Theme.colors.ink)
-                    }
-                    Txt(card.line, DepressifyType.body, Theme.colors.ink)
-                    TextLink(card.sourceTitle, { uri.openUri(card.sourceUrl) })
-                }
-            }
+            is ToolCard.Weather -> WeatherCard(card)
             is ToolCard.Music -> Unit
         }
+    }
+}
+
+/** The weather the Companion looked up, with the Google source its terms ask for beside it. */
+@Composable
+internal fun WeatherCard(card: ToolCard.Weather) {
+    val uri = LocalUriHandler.current
+    SoftCard {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            Icon(PhosphorIcons.sunHorizon, 24.dp, Theme.colors.accent)
+            Txt("Outside right now", DepressifyType.titleSmall, Theme.colors.ink)
+        }
+        Txt(card.line, DepressifyType.body, Theme.colors.ink)
+        TextLink(card.sourceTitle, { uri.openUri(card.sourceUrl) })
     }
 }
 
