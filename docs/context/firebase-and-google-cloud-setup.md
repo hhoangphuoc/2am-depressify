@@ -147,13 +147,13 @@ Full details and fixtures: `docs/spike-results.md` and `fixtures/spike/`.
 
 | Who | What |
 |---|---|
-| User | Enable **Maps Tools** (`mapstools.googleapis.com`) for #18. |
 | User | Provide SMTP details (a connection URI, password and From address) to install the **Trigger Email** extension: `firebase ext:install firebase/firestore-send-email`, collection `mail`, location europe-north1. Steps are in the README. |
 | User | Register the **Web** app (for Hosting) and the **iOS** app (`app.depressify.patient`); put `GoogleService-Info.plist` and `Secrets.plist` in `iosApp/Depressify/`. |
 | User | Add each teammate's debug SHA-1/SHA-256 to `app.depressify.patient`. |
 | User, for Calendar (#19) | A consent screen in Testing mode with test users, scope `calendar.events.owned`, enable the Calendar API, and Android/iOS OAuth clients. |
 | Backend | Deploy `redFlagAlert`, `silenceCheck` and the Check-in functions after review. Grant Cloud Run Invoker to each new callable. |
-| User, for Patient accounts (ADR 0010) | Authentication → Sign-in method → enable **Google** (with a support email), then download `google-services.json` / `GoogleService-Info.plist` again for the OAuth client ids the app's Google sign-in needs. Optionally turn on **Email enumeration protection** (Authentication → Settings → User actions). |
-| User, before deploying the ADR 0010 rules | Run `npm run allow-clinician -- --email <clinician-email> --project junction26hel-7400` with the new script, so the Clinician's account has the `role: "clinician"` claim and a verified email; the deployed dashboard needs both under the new rules. Then deploy the rules only once the app ships the new sign-in. |
+| Done (14 November 2026) | **Google** sign-in enabled, with its web OAuth client and the Android OAuth client for `app.depressify.patient` (from the SHA-1). **Email enumeration protection** is on. The app's Google sign-in needs the web client id (`client_type: 3` in a freshly downloaded `google-services.json`) as its server client id. |
+| Done (14 November 2026) | `allow-clinician` (the new script) ran against the real project: the Clinician's account has `role: "clinician"` and a verified email. A teammate's test Clinician email is also on the allowlist without an account yet; run `allow-clinician` again for it once its account exists. |
+| Backend, after the app ships the new sign-in | Deploy the ADR 0010 rules. |
 | User, after the app ships the new sign-in | Authentication → Sign-in method → **Anonymous** → Disable, once testers have upgraded their anonymous accounts or signed up. Existing records stay their owners'. |
 | Optional | Remove the unused `app.depressify` Android app; restrict the Android API key to `app.depressify.patient` plus its fingerprints. |

@@ -18,7 +18,7 @@ Kept up to date as PRs are opened and merged. Each PR also updates its own rows 
 | #57 | `feat/14-typed-checkin-on-49` (on #50, merges #52) | #14, backend: `startCheckIn`, `finishCheckIn`, and `LiveProtocol` in `core` | Open; tested (functions 249, core 39, emulators 87 + 14). Not deployed. |
 | — | — | #20 (Decisions into flags), then #21 (Outcomes) | Next, after #14 |
 | — | — | #18 (Map tool) | Waits on enabling `mapstools.googleapis.com` and the #17 tool catalog |
-| (to open) | `feat/patient-accounts` → `main` | Patients sign in with their own account ([ADR 0010](adr/0010-patients-sign-in-with-their-own-account.md)), backend half: rules, callables, `allow-clinician`, dashboard | Open; tested (functions 311, hosting 311, seed 91, emulators 104 + 1 skipped, seed emulators 18). Not deployed; the app's sign-in is the app team's half. |
+| #67 | `feat/patient-accounts` → `main` | Patients sign in with their own account ([ADR 0010](adr/0010-patients-sign-in-with-their-own-account.md)), backend half: rules, callables, `allow-clinician`, dashboard | Open; tested (functions 311, hosting 311, seed 91, emulators 104 + 1 skipped, seed emulators 18). Not deployed; the app's sign-in is the app team's half. |
 
 The stacked PRs #34–#45 are superseded by #49 and can be closed once it lands. `integrate/ui-main` is kept as a reference only; it also wired the ratings and Voice cue Consents into the app, which #49 doesn't yet.
 
@@ -264,7 +264,7 @@ Deploy notes:
 `redFlagAlert` and `silenceCheck` are not deployed yet: deploy them with `firebase deploy --only functions:redFlagAlert,functions:silenceCheck --project prod` together with the Trigger Email extension.
 
 **Not verified (needs a person, hardware or credentials):**
-- Patient accounts (ADR 0010): real Google sign-in on a device (needs the Google provider enabled and the app's half), a real verification email arriving, `allow-clinician` against the real project's Auth, and the new rules deployed. Deploy them only after `allow-clinician` has run for the live Clinician and the app ships the new sign-in.
+- Patient accounts (ADR 0010): real Google sign-in on a device (the Google provider is enabled on `junction26hel-7400`; the app's half is still to do), a real verification email arriving, and the new rules deployed. `allow-clinician` has run against the real project: the live Clinician has `role: "clinician"` and a verified email. Deploy the new rules only once the app ships the new sign-in.
 - The Patient app against the real project, and on iOS beyond the build.
 - A full Intake extraction or Digest through the deployed callables, signed in as the Clinician. Only the one direct call to `gemini-4-hydrogen` above has been made.
 - The app on the S24+ and on an iPhone.
