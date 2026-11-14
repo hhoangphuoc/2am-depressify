@@ -21,6 +21,22 @@ export function signInErrorMessage(error) {
   }
 }
 
+// Shown after a correct password when the account lacks the Clinician's claim or a verified email
+// (ADR 0010). Both come from the admin's `npm run allow-clinician`, so the message names that step.
+const NOT_CLINICIAN_MESSAGE =
+  "This account isn't set up as a Clinician yet. Ask the admin to add it as a Clinician, then sign in again.";
+
+/**
+ * Why a signed-in account may not use the dashboard, or null when it may. The Clinician's ID token
+ * carries the custom claim `role: "clinician"` and a verified email, as the security rules require;
+ * any other account (a Patient's included) would see nothing, so it is turned away with a reason.
+ * @param {Record<string, unknown> | null | undefined} claims the ID token's claims
+ * @returns {string | null}
+ */
+export function clinicianAccessMessage(claims) {
+  return claims?.role === "clinician" && claims?.email_verified === true ? null : NOT_CLINICIAN_MESSAGE;
+}
+
 /**
  * The emulator host to use for a page served from `hostname`, or null to use the real project.
  * @param {string} hostname

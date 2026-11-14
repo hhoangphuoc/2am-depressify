@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { signInErrorMessage, emulatorHostFor } from "../js/lib/auth.js";
+import { clinicianAccessMessage, signInErrorMessage, emulatorHostFor } from "../js/lib/auth.js";
 
 test("wrong password and unknown account give the same message", () => {
   const codes = [
@@ -31,4 +31,27 @@ test("the dashboard talks to the emulators only when served locally", () => {
   assert.equal(emulatorHostFor("localhost"), "127.0.0.1");
   assert.equal(emulatorHostFor("127.0.0.1"), "127.0.0.1");
   assert.equal(emulatorHostFor("twoam.web.app"), null);
+});
+
+test("a Clinician's account, with the claim and a verified email, may use the dashboard", () => {
+  assert.equal(clinicianAccessMessage({ role: "clinician", email_verified: true, email: "clinician@example.com" }), null);
+});
+
+test("an account without the claim or a verified email is told it isn't set up as a Clinician yet", () => {
+  const refused = [
+    { email_verified: true, email: "clinician@example.com" }, // a Patient's account, or before allow-clinician
+    { role: "clinician", email_verified: false },
+    { role: "clinician" },
+    { role: "admin", email_verified: true },
+    {},
+    null,
+    undefined,
+  ];
+  for (const claims of refused) {
+    assert.match(clinicianAccessMessage(claims) ?? "", /isn't set up as a Clinician yet/);
+  }
+});
+
+test("the message is not a credentials error, so it never reads as a wrong password", () => {
+  assert.notEqual(clinicianAccessMessage({}), signInErrorMessage({ code: "auth/wrong-password" }));
 });
