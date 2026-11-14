@@ -17,6 +17,7 @@ Kept up to date as PRs are opened and merged. Each PR also updates its own rows 
 | #56 | `docs/cloud-setup-on-49` | Firebase and Google Cloud setup record | Open |
 | #57 | `feat/14-typed-checkin-on-49` (on #50, merges #52) | #14, backend: `startCheckIn`, `finishCheckIn`, and `LiveProtocol` in `core` | Open; tested (functions 249, core 39, emulators 87 + 14). Not deployed. |
 | — | — | #20 (Decisions into flags), then #21 (Outcomes) | Next, after #14 |
+| (to open) | `feat/dashboard-backend-sync` → `main` | Dashboard design ↔ backend sync: the design adapter, live data helpers, `Digest.sourceCheckInIds`, two indexes | To open; tested (hosting 371, functions 292, seed 89, emulators 91 + 1 skipped and 23, core 39). See [Dashboard backend sync](#dashboard-backend-sync). |
 | — | — | #18 (Map tool) | Waits on enabling `mapstools.googleapis.com` and the #17 tool catalog |
 
 The stacked PRs #34–#45 are superseded by #49 and can be closed once it lands. `integrate/ui-main` is kept as a reference only; it also wired the ratings and Voice cue Consents into the app, which #49 doesn't yet.
@@ -188,11 +189,63 @@ Differences that remain between `main`'s Patient UI and the contract, for the ne
   - Sign-in, a live Patient list sorted by Attention flag, search and a level filter.
   - The red-flag banner with an optional sound, flag detail, and the "Clear after follow-up" dialog.
   - The Patient page in four sections: Overview, Summaries, Signals, and Intake and Visits.
-- `design/clinician` on `main` is a separate design prototype. It is not connected to Firebase.
+- `design/clinician` on `main` is a separate design prototype. It is not connected to Firebase, but `firebase/hosting/js/lib/design-model.js` and `design-live.js` give it live data in its own shapes (see [Dashboard backend sync](#dashboard-backend-sync)).
 
 Useful when the dashboard design is merged:
 - `firebase/hosting/js/lib/*` holds pure helpers (sorting, Phases, Baseline, series, what helps, clearing) with tests that don't depend on the UI.
 - Dashboard queries go through `patientCollectionQuery` in `js/lib/sharing.js`, which adds the sharing-stamp filter the rules require.
+
+## Dashboard backend sync
+
+Branch `feat/dashboard-backend-sync` (to open). It gives the Clinician dashboard design (`design/clinician`, specified in [interface-design.md](design/interface-design.md)) every piece of data and every backend call it shows. The UI itself is built separately. The full item-by-item map is in [design/dashboard-backend-sync.md](design/dashboard-backend-sync.md).
+
+**Already available.** Most of the design was already served by the backend and the dashboard's pure helpers:
+- the roster: the sharing-filtered list, ordering, search, the level filter, the red banner, the sound and phone freshness;
+- flags: several reasons, red kept over a new amber, history, and clearing several flags in one transaction with a new review if a reason arrives;
+- the Phase timeline, PHQ lanes and Signals with Baseline and their states;
+- Summaries;
+- the Digest with Generate now, pending, error and retry;
+- what seems to help;
+- Intake extract and save;
+- Visit and TMS checks;
+- the quiet-phone flag;
+- withdrawal hiding everything at once;
+- sign-in errors.
+
+**Added:**
+- `Digest.sourceCheckInIds`: the shared Summaries the Digest drew on, oldest first, written by `writeDigestFor`. It is in Kotlin, `types.ts`, `contract.js` and `contract.json`, and documented in the schema. The design's "View source Summaries" needs it; older Digests show the count only.
+- Composite indexes `daily (sharedWithClinician, date DESC)` and `checkIns (sharedWithClinician, startedAtMillis DESC)` for the roster's 14-day sleep sparkline and the latest Check-in's assessment.
+- `firebase/hosting/js/lib/design-model.js` (pure): maps Firestore documents to the shapes in `design/clinician/src/data.mjs`. It reuses the existing helpers, and its tests run the design's own `attentionFor`, `baseline`, `orderPatients`, `validateVisit` and `timelinePhases` on its output. The shapes are the patient object, Signals, levels including `unknown` and `hidden`, the timeline, the Digest with sources, and what helps.
+- `firebase/hosting/js/lib/design-live.js`, with the Firestore functions injected:
+  - `subscribeRoster`, `subscribePatient` and per-section wrappers, with loading, ok, denied, expired, withdrawn and error states, and `fromCache` for offline or stale data;
+  - `recordVisit`, `setTmsEndDate`, `clearAttention`, `generateDigestNow`, `extractIntake` and `saveIntake`, which return vetted copy on failure.
+- `js/data/design-data.js` binds them to the browser SDK. A React port passes `firebase/firestore` instead.
+- **Tests:** unit tests on the seed generator's Demo Patients and an in-memory Firestore stand-in. `firebase/seed/test/emulator/design-live.test.js` runs the helpers as the Clinician under the rules on the seeded Demo Patients.
+
+**Conflicts left for the user** (details and options in the sync note):
+1. **"Retry automatic assessment"** can't run after the Summary, because the transcript is dropped (ADR 0006). Proposal: retry only within the finish window (#60's `unavailable`), and optionally a Clinician "mark reviewed".
+2. **The design deletes data on withdrawal.** The decision is future-only sharing that hides the off period, and deletion is still open. The adapter hides; it never says "removed".
+3. **The Clinician's optional action note when clearing** is not stored. It needs a new field, rules, and a home the Patient cannot read (proposed: a Clinician-only `clinicianNotes` subcollection).
+4. **"Felt x/5 on average"** in what helps. The existing dashboard shows grouped counts and never a mean; the adapter gives both.
+5. **An anonymous withdrawn row in the roster** is session-only (`keepWithdrawn`), because the rules drop the Patient from the list.
+
+**How the UI uses it:**
+- Subscribe with `subscribeRoster` / `subscribePatient`, and render `rosterView(roster, { search, filter })` and `state.patient`. These have the design's shapes.
+- Call the action helpers, and show their `message` on failure.
+- See the README, "Dashboard data layer".
+
+**Not done here:**
+- The UI. The existing views and styles are unchanged.
+- `intakeSavedAtMillis` (the design's "saved 2 Oct").
+- The HRV statistic.
+- Email delivery state.
+- The flag-supporting `quote`, which becomes possible with #62's flag ids.
+
+**Interactions:**
+- #62 adds `CheckIn.assessment`, which the adapter already reads. Expect text conflicts in the contract files.
+- #65's `outcomeCheckInId` is preferred when linking a Summary to its previous Outcome.
+- After #67, the emulator test's Clinician token needs the `role` claim and a verified email.
+- #70's live profile is a fixture to add once it lands.
 
 ## Verification
 

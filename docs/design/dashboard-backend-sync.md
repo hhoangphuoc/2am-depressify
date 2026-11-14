@@ -186,7 +186,7 @@ The design's `createPatients()` builds one object per Patient. Each design field
 |---|---|---|
 | Email + password sign-in, wrong-credentials message without account enumeration | Firebase Auth, `signInErrorMessage` (`js/lib/auth.js`) | available |
 | Retry after a network failure | `auth/network-request-failed` message | available |
-| Session expired | `onAuthStateChanged(null)` → sign-in page. The subscriptions report `error.code`, and `unauthenticated` maps to the expired state. | available-with-adapter (`statusFromError`) |
+| Session expired | `onAuthStateChanged(null)` → sign-in page. A refused roster query with `unauthenticated` becomes `status: "expired"`. | available-with-adapter (`rosterStatusFromError`) |
 | Permission denied | List query `permission-denied` → `status: "denied"` | available-with-adapter |
 | Clinician claim (`role == "clinician"` and a verified email) | #67: rules, `assertClinicianOf`, and `clinicianAccessMessage(claims)` in `js/lib/auth.js` | missing-backend on `main`, **#67 adds it**; nothing to do here |
 
@@ -240,7 +240,8 @@ None of these is implemented. Each needs a decision first.
 | `Digest.sourceCheckInIds: string[]`: the Summaries the Digest drew on, oldest first; `[]` for a week with no Check-ins | Kotlin `core.model.Digest` (+ serialization test), `functions/src/types.ts`, `hosting/js/lib/contract.js` (`DIGEST_FIELDS`), `contract.json` (regenerated), `writeDigestFor`, firestore-schema.md, rules fixture |
 | Composite indexes `daily (sharedWithClinician ASC, date DESC)` and `checkIns (sharedWithClinician ASC, startedAtMillis DESC)` for the roster's sparkline and latest Check-in | `firebase/firestore.indexes.json` |
 | The adapter `js/lib/design-model.js` (pure) | `firebase/hosting/js/lib/design-model.js`, `test/design-model.test.mjs` |
-| The live helpers `js/lib/design-live.js` (Firestore functions injected) and the browser binding `js/data/design-data.js` | `firebase/hosting/js/lib/design-live.js`, `firebase/hosting/js/data/design-data.js`, `test/design-live.test.mjs`, `seed/test/emulator/design-live.test.js` |
+| The live helpers `js/lib/design-live.js` (Firestore functions injected) and the browser binding `js/data/design-data.js` | `firebase/hosting/js/lib/design-live.js`, `firebase/hosting/js/data/design-data.js`, `test/design-live.test.mjs`, `seed/test/emulator/design-live.test.js` (under the rules) |
+| JSDoc param types on `digestStatus` and `isBusy`, so the seed's strict type check accepts the new imports | `hosting/js/lib/digest.js`, `hosting/js/lib/intake.js` (no behaviour change) |
 
 No rules change: Digests stay function-written, and the indexes do not change access.
 
@@ -260,7 +261,26 @@ No rules change: Digests stay function-written, and the indexes do not change ac
 
 ## Using it from the UI
 
-The React prototype can swap `createPatients()` for the live data with no other change in shape:
+The adapter's objects use the field names of `createPatients()`, so the prototype's components can take them. The live data differs from the invented data in these places, and the UI must handle each:
+
+- **Empty or missing data.**
+  - `intake` can be `null`, and `intake.date` is always `null` (not stored).
+  - `summaries` can be empty: the Overview's "Latest Summary" reads `summaries[0]`.
+  - `digest` can be `null`, and `digest.ids` is `null` on Digests written before `sourceCheckInIds`; show `summaryCount` then.
+  - `quote` is always `null`.
+- **Dates.**
+  - `daily` runs from the TMS end date (or the first record) to today, at most 120 days. The prototype's charts hard-code `START` and a 42-day axis; use `patient.range` and `patient.today` instead.
+  - Display strings (`observed`, `history[].date`, `digest.time`) are "13 Nov, 14:20" in Helsinki time, without a year. Use `raisedAtMillis` / `atMillis` / `generatedAtMillis` to format otherwise.
+- **Levels.**
+  - `level` is `unknown` only with #62's `assessment` field, and `hidden` only for a withdrawn Patient.
+  - The roster's withdrawn rows exist only with `keepWithdrawn: true`.
+- **Wording.** The HRV label is "HRV": the statistic is not stored. `note` is the first open reason, not free text.
+- **Extra fields** the prototype can use:
+  - `signals[]`: state, Baseline, source label;
+  - `timeline`: Phases, weekly mood, PHQ lanes;
+  - `whatHelps`: rows and window;
+  - `freshness`, `storedLevel`, `levelWord`, `flagsLoaded`, and `history[].emailStatus`;
+  - on a Summary: `voiceCues`, `sleepLine` and `quotes`.
 
 ```js
 import * as fs from "firebase/firestore";                       // or the gstatic URLs, see js/data/design-data.js

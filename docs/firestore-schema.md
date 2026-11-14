@@ -237,6 +237,8 @@ The Clinicians a new Patient may link to, one document per email. The document i
 | Dashboard newest-flag order, banner and level | `patients/{id}/flags` where `sharedWithClinician == true`, for each listed Patient | none: one equality filter |
 | Dashboard Patient page | `daily`, `checkIns`, `summaries`, `suggestions`, `flags` where `sharedWithClinician == true`; `consents`, `visits` unfiltered | none: one equality filter, sorted in the browser |
 | Dashboard latest Digest | `patients/{id}/digests` where `sharedWithClinician == true`, order by `isoWeek` descending, limit 1 | composite `digests (sharedWithClinician ASC, isoWeek DESC)` in [`firestore.indexes.json`](../firebase/firestore.indexes.json). The emulator does not enforce indexes; production does. |
+| Dashboard roster sparkline (design) | `patients/{id}/daily` where `sharedWithClinician == true`, order by `date` descending, limit 28, for each listed Patient | composite `daily (sharedWithClinician ASC, date DESC)` |
+| Dashboard roster assessment (design) | `patients/{id}/checkIns` where `sharedWithClinician == true`, order by `startedAtMillis` descending, limit 1, for each listed Patient | composite `checkIns (sharedWithClinician ASC, startedAtMillis DESC)` |
 | Clear after follow-up | `patients/{id}/flags` where `sharedWithClinician == true`, then the reviewed flags by id in a transaction | none |
 | Digest functions | `summaries` by `createdAtMillis` range, `daily` by `date` range (Admin SDK); the stamp is filtered in code | single field (automatic) |
 | Seed reset | `patients` where `synthetic == true` (Admin SDK) | single field (automatic) |
