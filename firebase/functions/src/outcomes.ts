@@ -142,10 +142,15 @@ export function outcomeDailyRange(date: string): { start: string; end: string } 
  * has left steps out.
  */
 export function outcomeDailyNeeded(target: StoredSuggestion | undefined, plan: OutcomePlan | null): { start: string; end: string } | null {
-  if (plan === null || target === undefined || target.id !== plan.suggestionId) return null;
-  const s = target.suggestion;
-  if (s.status !== "accepted" || hasOutcome(s) || plan.answer.tried === null || !plan.stepsAllowed || !isNumber(s.suggestedAtMillis)) return null;
-  return outcomeDailyRange(outcomeDay(s.suggestedAtMillis));
+  if (plan === null || plan.answer.tried === null || !plan.stepsAllowed) return null;
+  const s = openTarget(target, plan);
+  return s !== null && isNumber(s.suggestedAtMillis) ? outcomeDailyRange(outcomeDay(s.suggestedAtMillis)) : null;
+}
+
+/** The target's Suggestion while `plan` may still record its Outcome: the same target, accepted, no Outcome yet. */
+function openTarget(target: StoredSuggestion | undefined, plan: OutcomePlan): Partial<Suggestion> | null {
+  const s = target?.id === plan.suggestionId ? target.suggestion : null;
+  return s !== null && s.status === "accepted" && !hasOutcome(s) ? s : null;
 }
 
 /**
@@ -196,14 +201,14 @@ export function outcomeWrite(
   daily: readonly Partial<DailyDoc>[],
   checkInId: string,
 ): { id: string; fields: OutcomeFields } | null {
-  if (plan === null || target === undefined || target.id !== plan.suggestionId) return null;
-  const s = target.suggestion;
-  if (s.status !== "accepted" || hasOutcome(s)) return null;
+  if (plan === null || openTarget(target, plan) === null) return null;
   const { tried } = plan.answer;
-  const change = tried !== null && plan.stepsAllowed && isNumber(s.suggestedAtMillis) ? objectiveChange(daily, outcomeDay(s.suggestedAtMillis)) : null;
+  // The steps count exactly when the transaction read the day's records for them.
+  const range = outcomeDailyNeeded(target, plan);
+  const change = range !== null ? objectiveChange(daily, range.end) : null;
   const felt = tried === true && isRating(plan.answer.felt) ? plan.answer.felt : null;
   return {
-    id: target.id,
+    id: plan.suggestionId,
     fields: { tried, felt, objectiveChange: change, outcomeScore: outcomeScore(tried, felt, change), outcomeCheckInId: checkInId },
   };
 }
