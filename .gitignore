@@ -75,3 +75,32 @@ outputs/
 # --- Local-only: Claude Code project config and design prompts ---
 .claude/
 docs/design/
+
+# --- Firebase and app secrets (never committed) ---
+google-services.json
+GoogleService-Info.plist
+secrets.properties
+local.properties
+
+# --- Gradle / Kotlin ---
+.gradle/
+**/build/
+.kotlin/
+*.hprof
+
+# --- Firebase tooling ---
+firebase/functions/node_modules/
+firebase/functions/lib/
+.firebase/
+firebase-debug.log*
+firestore-debug.log*
+ui-debug.log*
+database-debug.log*
+pubsub-debug.log*
+emulator-data/
+
+# --- iOS ---
+iosApp/Pods/
+xcuserdata/
+DerivedData/
+*.xcuserstate
