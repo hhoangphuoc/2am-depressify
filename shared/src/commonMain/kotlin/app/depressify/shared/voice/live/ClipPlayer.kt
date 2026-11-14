@@ -4,8 +4,14 @@ import app.depressify.shared.data.MusicClip
 
 /** Plays one generated music clip from memory; the clip never touches disk (ADR 0006). */
 interface ClipPlayer {
-    /** Starts [clip] from the beginning, replacing anything playing. [onDone] runs when it ends. */
-    fun play(clip: MusicClip, onDone: () -> Unit)
+    val positionMillis: Int
+    val durationMillis: Int
+
+    /** Starts from the beginning. Callbacks distinguish preparation, completion and playback errors. */
+    fun play(clip: MusicClip, onReady: () -> Unit, onDone: () -> Unit, onError: () -> Unit)
+
+    fun pause()
+    fun resume()
 
     fun stop()
 }

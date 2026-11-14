@@ -4,6 +4,7 @@ import app.depressify.core.model.Flag
 import app.depressify.core.model.FlagKind
 import app.depressify.core.model.FlagLevel
 import app.depressify.core.model.Signal
+import app.depressify.core.model.Summary
 import app.depressify.core.model.Suggestion
 import app.depressify.core.model.SuggestionKind
 import app.depressify.core.model.sharingStamp
@@ -23,9 +24,11 @@ import kotlinx.serialization.json.intOrNull
 import kotlinx.serialization.json.put
 
 /** Something a tool call puts on the Check-in screen. */
+data class SignalComparison(val label: String, val signal: Signal, val direction: Int)
+
 sealed interface ToolCard {
     /** What the Companion read from the Patient's own records, in plain words and never as a score. */
-    data class Insight(val title: String, val lines: List<String>) : ToolCard
+    data class Insight(val title: String, val lines: List<String>, val comparisons: List<SignalComparison> = emptyList(), val summaries: List<Summary> = emptyList()) : ToolCard
 
     /** Music being made for [mood]: [clip] once ready, or [failed]. Held in memory only. */
     data class Music(val mood: String, val clip: MusicClip? = null, val failed: Boolean = false) : ToolCard
@@ -94,18 +97,15 @@ class CompanionTools(
     private suspend fun healthSummary(days: Int): JsonObject {
         val records = checkIns.recentDays(patientId, days)
         // The comparison with the Patient's own Baseline, in words. Missing days are missing, never zero.
-        val lines = Signal.entries.mapNotNull { signal ->
+        val comparisons = Signal.entries.mapNotNull { signal ->
             val compared = records.mapNotNull { it.vsBaseline[signal.key] }
             if (compared.isEmpty()) return@mapNotNull null
             val mean = compared.average()
-            SIGNAL_LABELS.getValue(signal) + ": " + when {
-                mean <= -1 -> "lower than usual"
-                mean >= 1 -> "higher than usual"
-                else -> "about the same as usual"
-            }
+            SignalComparison(SIGNAL_LABELS.getValue(signal), signal, if (mean <= -1) -1 else if (mean >= 1) 1 else 0)
         }
+        val lines = comparisons.map { it.label + ": " + when (it.direction) { -1 -> "lower than usual"; 1 -> "higher than usual"; else -> "about the same as usual" } }
         if (lines.isEmpty()) return buildJsonObject { put("status", "no_data"); put("days_with_records", records.size) }
-        effects.show(ToolCard.Insight("Your last " + records.size + " days", lines))
+        effects.show(ToolCard.Insight("Your last " + records.size + " days", lines, comparisons = comparisons))
         return buildJsonObject {
             put("days_with_records", records.size)
             put("compared_with_their_own_usual", buildJsonArray { lines.forEach { add(JsonPrimitive(it)) } })
@@ -118,7 +118,7 @@ class CompanionTools(
         effects.show(ToolCard.Insight("Your recent Check-ins", summaries.map { s ->
             listOfNotNull(s.mood?.let { "Mood " + it + " of 5" }, s.themes.takeIf { it.isNotEmpty() }?.joinToString(", "), s.suggestion)
                 .joinToString(" · ").ifEmpty { "A short Check-in" }
-        }))
+        }, summaries = summaries))
         return buildJsonObject {
             put("summaries", buildJsonArray {
                 summaries.forEach { s ->

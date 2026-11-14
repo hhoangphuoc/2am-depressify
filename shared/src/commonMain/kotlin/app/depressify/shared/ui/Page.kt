@@ -5,6 +5,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
@@ -30,6 +31,7 @@ fun Page(
     top: @Composable () -> Unit = {},
     bottom: (@Composable () -> Unit)? = null,
     notice: String? = null,
+    scrollState: ScrollState = rememberScrollState(),
     content: @Composable ColumnScope.() -> Unit,
 ) {
     val c = Theme.colors
@@ -38,7 +40,7 @@ fun Page(
             .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Top + WindowInsetsSides.Horizontal)),
     ) {
         top()
-        Box(Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()), contentAlignment = Alignment.TopCenter) {
+        Box(Modifier.weight(1f).fillMaxWidth().verticalScroll(scrollState), contentAlignment = Alignment.TopCenter) {
             Column(
                 Modifier.widthIn(max = 560.dp).fillMaxWidth().padding(horizontal = 24.dp).padding(top = 8.dp, bottom = 32.dp)
                     .then(if (bottom == null) Modifier.windowInsetsPadding(WindowInsets.navigationBars) else Modifier),

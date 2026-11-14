@@ -53,6 +53,7 @@ class GeminiLiveSession(
     private var job: Job? = null
     private var outgoing: Channel<String>? = null
     private var scripted = true
+    private var companionAudioPaused = false
 
     /** The Patient and the Check-in that [finish] closes. A reconnect starts a new Check-in id. */
     private var patient: String? = null
@@ -117,7 +118,7 @@ class GeminiLiveSession(
                 if (!listening) state.update { it.copy(muted = true) }
                 show(LiveState.Thinking, tool = "Getting ready")
             }
-            is ServerEvent.AudioOut -> audio?.play(event.pcm)
+            is ServerEvent.AudioOut -> if (!companionAudioPaused) audio?.play(event.pcm) else Unit
             is ServerEvent.OutputText -> say(Speaker.Companion, event.text, LiveState.Speaking)
             is ServerEvent.InputText -> say(Speaker.You, event.text, LiveState.Listening)
             is ServerEvent.ToolCall -> {
@@ -186,6 +187,11 @@ class GeminiLiveSession(
         if (scripted) fallback.interrupt() else audio?.stopPlayback()
     }
 
+    override fun setCompanionAudioPaused(paused: Boolean) {
+        companionAudioPaused = paused
+        if (paused) audio?.stopPlayback()
+    }
+
     override fun setMuted(muted: Boolean) {
         if (scripted) return fallback.setMuted(muted)
         state.update { it.copy(muted = muted) }
@@ -204,6 +210,7 @@ class GeminiLiveSession(
     }
 
     override fun stop() {
+        companionAudioPaused = false
         job?.cancel()
         job = null
         outgoing = null

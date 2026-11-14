@@ -9,20 +9,33 @@ actual fun createClipPlayer(): ClipPlayer = AndroidClipPlayer()
 
 private class AndroidClipPlayer : ClipPlayer {
     private var player: MediaPlayer? = null
+    private var prepared = false
+    override val positionMillis: Int get() = if (prepared) runCatching { player?.currentPosition ?: 0 }.getOrDefault(0) else 0
+    override val durationMillis: Int get() = if (prepared) runCatching { player?.duration ?: 0 }.getOrDefault(0) else 0
 
-    override fun play(clip: MusicClip, onDone: () -> Unit) {
+    override fun play(clip: MusicClip, onReady: () -> Unit, onDone: () -> Unit, onError: () -> Unit) {
         stop()
-        player = MediaPlayer().apply {
-            setAudioAttributes(AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_MEDIA).setContentType(AudioAttributes.CONTENT_TYPE_MUSIC).build())
-            setDataSource(BytesSource(clip.bytes))
-            setOnPreparedListener { it.start() }
-            setOnCompletionListener { onDone() }
-            setOnErrorListener { _, _, _ -> onDone(); true }
-            prepareAsync()
-        }
+        runCatching {
+            player = MediaPlayer().also { media ->
+                media.apply {
+                    setAudioAttributes(AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_MEDIA).setContentType(AudioAttributes.CONTENT_TYPE_MUSIC).build())
+                    setDataSource(BytesSource(clip.bytes))
+                    setOnPreparedListener {
+                        runCatching { prepared = true; it.start(); onReady() }.onFailure { stop(); onError() }
+                    }
+                    setOnCompletionListener { onDone() }
+                    setOnErrorListener { _, _, _ -> stop(); onError(); true }
+                    prepareAsync()
+                }
+            }
+        }.onFailure { stop(); onError() }
     }
 
+    override fun pause() { if (prepared) player?.pause() }
+    override fun resume() { if (prepared) player?.start() }
+
     override fun stop() {
+        prepared = false
         player?.release()
         player = null
     }

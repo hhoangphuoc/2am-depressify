@@ -7,6 +7,8 @@ import androidx.compose.ui.unit.dp
 
 // Phosphor Icons, regular weight (MIT License, phosphoricons.com). Path data copied from the official SVGs.
 object PhosphorIcons {
+    val play: ImageVector by lazy { icon("play", "M232,128a16,16,0,0,1-7.69,13.67L88.35,224.82A16,16,0,0,1,64,211.15V44.85A16,16,0,0,1,88.35,31.18l135.96,83.15A16,16,0,0,1,232,128ZM80,44.85V211.15L216,128Z") }
+    val pause: ImageVector by lazy { icon("pause", "M96,32H64A16,16,0,0,0,48,48V208A16,16,0,0,0,64,224H96A16,16,0,0,0,112,208V48A16,16,0,0,0,96,32ZM64,208V48H96V208ZM192,32H160A16,16,0,0,0,144,48V208A16,16,0,0,0,160,224H192A16,16,0,0,0,208,208V48A16,16,0,0,0,192,32ZM160,208V48H192V208Z") }
     val arrowLeft: ImageVector by lazy { icon("arrow-left", "M224,128a8,8,0,0,1-8,8H59.31l58.35,58.34a8,8,0,0,1-11.32,11.32l-72-72a8,8,0,0,1,0-11.32l72-72a8,8,0,0,1,11.32,11.32L59.31,120H216A8,8,0,0,1,224,128Z") }
     val arrowRight: ImageVector by lazy { icon("arrow-right", "M221.66,133.66l-72,72a8,8,0,0,1-11.32-11.32L196.69,136H40a8,8,0,0,1,0-16H196.69L138.34,61.66a8,8,0,0,1,11.32-11.32l72,72A8,8,0,0,1,221.66,133.66Z") }
     val caretRight: ImageVector by lazy { icon("caret-right", "M181.66,133.66l-80,80a8,8,0,0,1-11.32-11.32L164.69,128,90.34,53.66a8,8,0,0,1,11.32-11.32l80,80A8,8,0,0,1,181.66,133.66Z") }

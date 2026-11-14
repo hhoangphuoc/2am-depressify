@@ -70,6 +70,8 @@ interface LiveSession {
     fun start(returning: Boolean, typed: Boolean = false)
     fun interrupt()
     fun setMuted(muted: Boolean)
+    /** Suppresses Companion speech while generated music is playing. */
+    fun setCompanionAudioPaused(paused: Boolean) {}
     fun respond(reply: Reply)
     fun setConnected(connected: Boolean)
     fun stop()

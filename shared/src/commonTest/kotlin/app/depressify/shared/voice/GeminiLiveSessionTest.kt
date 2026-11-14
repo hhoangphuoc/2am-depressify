@@ -14,6 +14,7 @@ import app.depressify.shared.data.MusicClip
 import app.depressify.shared.data.NearbyPlace
 import app.depressify.shared.data.Weather
 import app.depressify.shared.voice.live.LiveClient
+import app.depressify.shared.voice.live.AudioIO
 import app.depressify.shared.voice.live.ToolCard
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -31,12 +32,14 @@ import kotlin.test.assertTrue
 
 /** Plays scripted server events and keeps what the session sent. */
 private class FakeLiveClient(private val events: List<ServerEvent>, private val thenDrop: Boolean = false) : LiveClient {
+    var eventSink: (suspend (ServerEvent) -> Unit)? = null
     val sent = mutableListOf<String>()
     var token: String? = null
     private val open = CompletableDeferred<Unit>()
 
     override suspend fun run(endpoint: String, token: String, model: String, outgoing: ReceiveChannel<String>, onEvent: suspend (ServerEvent) -> Unit) {
         this.token = token
+        eventSink = onEvent
         events.forEach { onEvent(it) }
         while (true) sent += outgoing.tryReceive().getOrNull() ?: break
         if (!thenDrop) open.await()
@@ -54,6 +57,27 @@ class GeminiLiveSessionTest {
         GeminiLiveSession(scope, patients, gateway, client, audio = null, { patientId }, ScriptedLiveSession(scope), onCrisis = { crisisShown++ }, nowMillis = { 1000 })
 
     private fun call(name: String, vararg args: Pair<String, JsonPrimitive>) = ServerEvent.ToolCall("c-$name", name, JsonObject(args.toMap()))
+
+    @Test
+    fun generatedMusicSuppressesNewCompanionAudioUntilItIsPausedOrFinished() = runTest {
+        val client = FakeLiveClient(emptyList())
+        var played = 0
+        val audio = object : AudioIO {
+            override fun start(onFrame: (ByteArray) -> Unit) = true
+            override fun play(pcm24k: ByteArray) { played++ }
+            override fun stopPlayback() = Unit
+            override fun stop() = Unit
+        }
+        val live = GeminiLiveSession(scope, patients, gateway, client, audio, { "p1" }, ScriptedLiveSession(scope), {}, { 1000 })
+        live.start(returning = true)
+        live.setCompanionAudioPaused(true)
+        client.eventSink!!.invoke(ServerEvent.AudioOut(byteArrayOf(1, 2), 24000))
+        assertEquals(0, played)
+        live.setCompanionAudioPaused(false)
+        client.eventSink!!.invoke(ServerEvent.AudioOut(byteArrayOf(1, 2), 24000))
+        assertEquals(1, played)
+        live.stop()
+    }
 
     @Test
     fun withoutASignedInPatientItPlaysTheScript() {
@@ -109,6 +133,7 @@ class GeminiLiveSessionTest {
 
         // A missing day stays missing: only the day with a value is described, in words.
         assertEquals(listOf("Sleep: lower than usual", "Steps: about the same as usual"), assertIs<ToolCard.Insight>(snap.cards[0]).lines)
+        assertEquals(listOf(-1, 0), assertIs<ToolCard.Insight>(snap.cards[0]).comparisons.map { it.direction })
         // The fake has no music, so the card ends in its failed state while the Check-in goes on.
         assertEquals(ToolCard.Music("tired after a long week", null, failed = true), snap.cards.filterIsInstance<ToolCard.Music>().single())
         assertEquals("https://www.google.com/maps/search/?api=1&query=park%20near%20me", snap.cards.filterIsInstance<ToolCard.Places>().single().url)

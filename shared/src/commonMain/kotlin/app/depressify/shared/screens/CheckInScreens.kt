@@ -18,7 +18,6 @@ import app.depressify.shared.ui.*
 import app.depressify.shared.ui.theme.Theme
 import app.depressify.shared.ui.theme.DepressifyType
 import app.depressify.shared.resources.Res
-import app.depressify.shared.resources.open_window
 import app.depressify.shared.resources.quiet_path
 import org.jetbrains.compose.resources.painterResource
 import androidx.compose.foundation.text.BasicText
@@ -26,7 +25,6 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
@@ -37,11 +35,13 @@ import app.depressify.core.Outcome
 import app.depressify.core.SignalId
 import app.depressify.core.SuggestionKind
 import app.depressify.shared.voice.*
-import app.depressify.shared.voice.live.CompanionTools
 import app.depressify.shared.voice.live.ToolCard
 import app.depressify.shared.voice.live.createClipPlayer
-import androidx.compose.ui.platform.LocalUriHandler
-import kotlinx.coroutines.delay
+import app.depressify.shared.voice.live.MusicPlayback
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.compose.ui.platform.LocalFocusManager
 
 @Composable
 fun CheckInIntroScreen(vm: PatientViewModel, s: PatientState) {
@@ -56,7 +56,7 @@ fun CheckInIntroScreen(vm: PatientViewModel, s: PatientState) {
         }
         Disclosure("About your conversation") {
             Txt("Voice audio streams to the AI provider. The transcript is used for your Summary, then deleted. Provider retention is separate.", DepressifyType.meta)
-            Txt("Places may use Google Maps, with sources beside them. This prototype is scripted: no audio is recorded and no AI is called.", DepressifyType.meta)
+            Txt("Place suggestions may use Google Maps, with sources beside them. Music made during a Check-in stays here only for this conversation.", DepressifyType.meta)
         }
         if (mustType) Notice("Microphone access was declined. You can still type.")
         val typed = s.typed || mustType
@@ -68,19 +68,29 @@ fun CheckInIntroScreen(vm: PatientViewModel, s: PatientState) {
 @Composable
 fun CheckInScreen(vm: PatientViewModel, s: PatientState) {
     val snap by vm.live.snapshot.collectAsStateWithLifecycle()
-    if (s.typed) TypedCheckInScreen(vm, s) else VoiceCheckInScreen(vm, s, snap)
+    val scope = rememberCoroutineScope()
+    val playback = remember(vm.live) {
+        MusicPlayback(createClipPlayer(), scope, { vm.live.snapshot.value.muted }, vm.live::setMuted, vm.live::interrupt, vm.live::setCompanionAudioPaused)
+    }
+    val lifecycle = LocalLifecycleOwner.current.lifecycle
+    DisposableEffect(playback, lifecycle) {
+        val observer = LifecycleEventObserver { _, event -> if (event == Lifecycle.Event.ON_STOP) { playback.pause(); vm.live.setMuted(true) } }
+        lifecycle.addObserver(observer)
+        onDispose { lifecycle.removeObserver(observer); playback.stop() }
+    }
+    if (s.typed) TypedCheckInScreen(vm, s, playback) else VoiceCheckInScreen(vm, s, snap, playback)
 }
 
 @Composable
-private fun VoiceCheckInScreen(vm: PatientViewModel, s: PatientState, snap: LiveSnapshot) {
+private fun VoiceCheckInScreen(vm: PatientViewModel, s: PatientState, snap: LiveSnapshot, playback: MusicPlayback) {
     val c = Theme.colors
     val state = snap.shownState
     val line = snap.event.speaker?.let { sp -> snap.event.text?.let { TranscriptLine(sp, it) } }
-    val compact = snap.offer != null
+    val compact = snap.offer != null || snap.cards.isNotEmpty()
     val isLive = vm.live.isLive
     Page(
-        top = { TopBar(null, onBack = { vm.showSheet(Sheet.Leave) }, center = { if (!isLive) CheckSteps(snap.event.step) }, trailing = { Spacer(Modifier.width(48.dp)) }) },
-        bottom = { LiveControls(muted = snap.muted, onType = { vm.setTyped(true) }, onMic = { vm.live.setMuted(!snap.muted) }, onEnd = vm::finishCheckIn) },
+        top = { TopBar("Check-in", onBack = { vm.showSheet(Sheet.Leave) }, trailing = { TextLink("Finish", vm::finishCheckIn, Modifier.padding(end = 12.dp)) }) },
+        bottom = { LiveControls(muted = snap.muted, onType = { playback.pause(); vm.setTyped(true) }, onMic = { val muted = !snap.muted; playback.pause(); vm.live.setMuted(muted) }, onEnd = vm::finishCheckIn) },
     ) {
         if (!snap.connected) {
             Notice("What you’ve said so far is kept.", title = "Connection lost") {
@@ -89,7 +99,7 @@ private fun VoiceCheckInScreen(vm: PatientViewModel, s: PatientState, snap: Live
             }
         }
         Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(if (compact) 6.dp else 12.dp)) {
-            Orb(state, if (compact) 112.dp else 188.dp, onInterrupt = vm.live::interrupt)
+            Orb(state, if (compact) 88.dp else 164.dp, onInterrupt = vm.live::interrupt)
             val label = when {
                 !snap.connected -> "Not connected"
                 state == LiveState.Thinking -> snap.event.tool ?: state.label
@@ -117,15 +127,16 @@ private fun VoiceCheckInScreen(vm: PatientViewModel, s: PatientState, snap: Live
             }
         }
         snap.offer?.let { kind ->
+            if (kind != SuggestionKind.Music || snap.cards.none { it is ToolCard.Music })
             SuggestionCard(kind, accepted = snap.accepted, booked = s.booking != null, showFinish = false, detail = snap.offerDetails,
-                onAccept = { vm.reply(Reply.Accept) }, onSmaller = { vm.reply(Reply.Smaller) }, onDecline = { vm.reply(Reply.Decline) },
+                onAccept = { playback.pause(); vm.reply(Reply.Accept) }, onSmaller = { playback.pause(); vm.reply(Reply.Smaller) }, onDecline = { playback.pause(); vm.reply(Reply.Decline) },
                 onBook = { vm.showSheet(Sheet.Booking) }, onFinish = vm::finishCheckIn)
         }
         // What the Companion's tool calls found or opened, newest first.
-        snap.cards.asReversed().forEach { ToolCardView(it) }
+        SessionToolCards(snap.cards, playback, musicActions = { MusicOfferActions(vm, s, snap, playback) }) { vm.live.sendText("Could you try making that music again?") }
         if (snap.wrapped) PrimaryButton(if (s.consents[SignalId.Ratings] == true) "Continue to ratings" else "Finish Check-in", vm::finishCheckIn)
         if (snap.transcript.isNotEmpty()) {
-            Disclosure("Transcript so far") {
+            Disclosure("Conversation · ${snap.transcript.size} messages") {
                 snap.transcript.forEach { t ->
                     Column { Txt(t.speaker.label, DepressifyType.small, c.muted); Txt(t.text, DepressifyType.meta.copy(fontSize = DepressifyType.body.fontSize)) }
                 }
@@ -135,72 +146,28 @@ private fun VoiceCheckInScreen(vm: PatientViewModel, s: PatientState, snap: Live
     }
 }
 
-/** A card a tool call puts on the Check-in screen: what the Companion read, or something to open. */
 @Composable
-private fun ToolCardView(card: ToolCard) {
-    val c = Theme.colors
-    val uri = LocalUriHandler.current
-    SoftCard(Modifier.semantics { liveRegion = LiveRegionMode.Polite }) {
-        when (card) {
-            is ToolCard.Insight -> {
-                Txt(card.title, DepressifyType.meta, c.muted)
-                card.lines.forEach { Txt(it, DepressifyType.meta, c.ink) }
-                Txt("From your own records · compared with your usual, never with anyone else", DepressifyType.small, c.muted)
-            }
-            is ToolCard.Music -> {
-                Txt("A little music, made for you", DepressifyType.meta, c.muted)
-                Txt("Calm and instrumental, about a minute", DepressifyType.bodyStrong, c.ink)
-                val clip = card.clip
-                when {
-                    clip != null -> {
-                        val player = remember(clip) { createClipPlayer() }
-                        var playing by remember(clip) { mutableStateOf(false) }
-                        DisposableEffect(player) { onDispose { player.stop() } }
-                        SecondaryButton(if (playing) "Stop" else "Play", {
-                            if (playing) player.stop() else player.play(clip) { playing = false }
-                            playing = !playing
-                        })
-                    }
-                    card.failed -> Txt("The music could not be made this time.", DepressifyType.meta, c.muted)
-                    else -> Txt("Being made · about half a minute", DepressifyType.meta, c.muted)
-                }
-                Txt("Made by AI (Lyria) for this Check-in, and not saved", DepressifyType.small, c.muted)
-            }
-            is ToolCard.Places -> {
-                Txt("A place nearby", DepressifyType.meta, c.muted)
-                Txt(card.query, DepressifyType.bodyStrong, c.ink)
-                card.places.forEach { p ->
-                    val how = p.walkMinutes?.let { "$it min walk" } ?: (CompanionTools.distanceLabel(p.distanceMeters) + " away")
-                    TextLink(p.name + " · " + how, { uri.openUri(p.mapsUrl) })
-                }
-                TextLink(if (card.places.isEmpty()) "Open in Google Maps" else "See more in Google Maps", { uri.openUri(card.url) })
-                Txt("Results come from Google Maps", DepressifyType.small, c.muted)
-            }
-            is ToolCard.Weather -> {
-                Txt("The weather near you", DepressifyType.meta, c.muted)
-                Txt(card.line, DepressifyType.bodyStrong, c.ink)
-                TextLink(card.sourceTitle, { uri.openUri(card.sourceUrl) })
-            }
-        }
-    }
-}
-
-@Composable
-private fun TypedCheckInScreen(vm: PatientViewModel, s: PatientState) {
+private fun TypedCheckInScreen(vm: PatientViewModel, s: PatientState, playback: MusicPlayback) {
     val c = Theme.colors
     val t = s.typedCheckIn
     val snap by vm.live.snapshot.collectAsStateWithLifecycle()
+    val scroll = rememberScrollState()
+    LaunchedEffect(t.lines.size) { scroll.scrollTo(0) }
     Page(
         top = { TopBar("Check-in", onBack = { vm.showSheet(Sheet.Leave) }, trailing = { TextLink("Finish", vm::finishCheckIn, Modifier.padding(end = 12.dp)) }) },
-        bottom = { Composer(onSend = vm::sendTyped, onVoice = if (s.scenario == Scenario.MicDeclined) null else ({ vm.setTyped(false) })) },
+        bottom = { Composer(onSend = { text -> playback.pause(); vm.sendTyped(text) }, onVoice = if (s.scenario == Scenario.MicDeclined) null else ({ playback.pause(); vm.setTyped(false) })) },
+        scrollState = scroll,
     ) {
-        Txt(if (vm.live.isLive) "Typing · live with your Companion" else "Typing · demo conversation", DepressifyType.small, c.muted, Modifier.semantics { liveRegion = LiveRegionMode.Polite })
-        t.lines.forEach { l ->
+        Txt(if (vm.live.isLive) "Type at your own pace. Your microphone is off." else "Typing · demo conversation", DepressifyType.small, c.muted)
+        if (!snap.connected) Notice("Your conversation is still here. Reconnect to continue.", title = "Connection lost") {
+            TextLink("Try again", { vm.live.setConnected(true) })
+        }
+        t.lines.takeLast(2).forEach { l ->
             if (l.speaker == Speaker.You) {
                 Column(Modifier.padding(start = 20.dp).fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(c.soft).padding(16.dp)) {
                     Txt(l.speaker.label, DepressifyType.small, c.muted); Txt(l.text, DepressifyType.body, c.ink)
                 }
-            } else Column { Txt(l.speaker.label, DepressifyType.small, c.muted); Txt(l.text, DepressifyType.caption, c.ink) }
+            } else Column(verticalArrangement = Arrangement.spacedBy(6.dp)) { Txt(l.speaker.label, DepressifyType.small, c.muted); Txt(l.text, DepressifyType.bodyLarge, c.ink) }
         }
         if (t.outcome == null && t.offer == null && s.hasHistory && !vm.live.isLive) {
             Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -215,13 +182,35 @@ private fun TypedCheckInScreen(vm: PatientViewModel, s: PatientState) {
             RatingRow(o.feeling, vm::typedFeeling, "Not helpful", "Very helpful", "Feeling")
         }
         t.offer?.let { kind ->
+            if (kind != SuggestionKind.Music || snap.cards.none { it is ToolCard.Music })
             SuggestionCard(kind, accepted = t.accepted, booked = s.booking != null, showFinish = true, detail = t.offerDetails,
-                onAccept = { vm.reply(Reply.Accept) }, onSmaller = { vm.reply(Reply.Smaller) }, onDecline = { vm.reply(Reply.Decline) },
+                onAccept = { playback.pause(); vm.reply(Reply.Accept) }, onSmaller = { playback.pause(); vm.reply(Reply.Smaller) }, onDecline = { playback.pause(); vm.reply(Reply.Decline) },
                 onBook = { vm.showSheet(Sheet.Booking) }, onFinish = vm::finishCheckIn)
         }
         // What the Companion's tool calls found or made, newest first.
-        if (vm.live.isLive) snap.cards.asReversed().forEach { ToolCardView(it) }
-        MapsNotice { vm.showSheet(Sheet.MapsSources) }
+        if (vm.live.isLive) SessionToolCards(snap.cards, playback, musicActions = { MusicOfferActions(vm, s, snap, playback) }) { vm.sendTyped("Could you try making that music again?") }
+        if (t.lines.size > 2) Disclosure("Earlier messages · ${t.lines.size - 2}") {
+            t.lines.dropLast(2).forEach { line -> Column {
+                Txt(line.speaker.label, DepressifyType.small, c.muted)
+                Txt(line.text, DepressifyType.body, c.ink)
+            } }
+        }
+        if (!vm.live.isLive || snap.cards.any { it is ToolCard.Places }) MapsNotice { vm.showSheet(Sheet.MapsSources) }
+    }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun MusicOfferActions(vm: PatientViewModel, s: PatientState, snap: LiveSnapshot, playback: MusicPlayback) {
+    if (snap.offer != SuggestionKind.Music) return
+    fun reply(value: Reply) { playback.pause(); vm.reply(value) }
+    if (snap.accepted) {
+        Txt("Chosen for this Check-in", DepressifyType.meta, Theme.colors.ok)
+        TextLink(if (s.booking == null) "Make a little time" else "View your plan", { vm.showSheet(Sheet.Booking) })
+    } else FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        TextLink("That works", { reply(Reply.Accept) }, Modifier.heightIn(min = 48.dp).padding(horizontal = 8.dp))
+        TextLink("Smaller", { reply(Reply.Smaller) }, Modifier.heightIn(min = 48.dp).padding(horizontal = 8.dp))
+        TextLink("Not now", { reply(Reply.Decline) }, Modifier.heightIn(min = 48.dp).padding(horizontal = 8.dp))
     }
 }
 
@@ -271,16 +260,10 @@ fun CheckSteps(step: Int) {
     }
 }
 
-/** Caption words appear as the transcript streams; screen readers get the whole line once. */
+/** The provider already streams words; show them immediately, without a second typewriter delay. */
 @Composable
 fun LiveCaption(line: TranscriptLine?, placeholder: String, compact: Boolean) {
     val c = Theme.colors
-    val words = line?.text?.split(' ') ?: emptyList()
-    var shown by remember(line) { mutableIntStateOf(0) }
-    LaunchedEffect(line) {
-        shown = 0
-        while (shown < words.size) { delay(if (line?.speaker == Speaker.You) 220 else 170); shown++ }
-    }
     Column(
         Modifier.fillMaxWidth().heightIn(min = if (compact) 0.dp else 116.dp)
             .clearAndSetSemantics { liveRegion = LiveRegionMode.Polite; contentDescription = line?.let { it.speaker.label + ": " + it.text } ?: placeholder },
@@ -289,10 +272,7 @@ fun LiveCaption(line: TranscriptLine?, placeholder: String, compact: Boolean) {
     ) {
         if (line != null) {
             Txt(line.speaker.label.uppercase(), DepressifyType.label, c.muted)
-            val text = buildAnnotatedString {
-                words.forEachIndexed { i, w -> withStyle(SpanStyle(color = if (i < shown) c.ink else Color.Transparent)) { append(w); append(" ") } }
-            }
-            BasicText(text, style = (if (compact) DepressifyType.titleSmall.copy(fontWeight = null) else DepressifyType.caption).copy(color = c.ink, textAlign = TextAlign.Center))
+            BasicText(line.text, style = (if (compact) DepressifyType.body else DepressifyType.bodyLarge).copy(color = c.ink, textAlign = TextAlign.Center))
         } else if (placeholder.isNotEmpty()) {
             Txt(placeholder, DepressifyType.body.copy(fontSize = DepressifyType.titleSmall.fontSize), c.muted, align = TextAlign.Center)
         }
@@ -313,7 +293,7 @@ private fun LiveControls(muted: Boolean, onType: () -> Unit, onMic: () -> Unit, 
                 .semantics { contentDescription = if (muted) "Turn microphone on" else "Turn microphone off"; stateDescription = if (muted) "Off" else "On" },
             contentAlignment = Alignment.Center,
         ) { Icon(if (muted) PhosphorIcons.microphoneSlash else PhosphorIcons.microphone, 30.dp, if (muted) c.ink else c.onInk) }
-        SideControl(PhosphorIcons.x, "End", onEnd, Modifier.weight(1f), Alignment.End)
+        SideControl(PhosphorIcons.x, "Finish", onEnd, Modifier.weight(1f), Alignment.End)
     }
 }
 
@@ -330,8 +310,9 @@ private fun SideControl(icon: androidx.compose.ui.graphics.vector.ImageVector, l
 @Composable
 private fun Composer(onSend: (String) -> Unit, onVoice: (() -> Unit)?) {
     val c = Theme.colors
+    val focus = LocalFocusManager.current
     var text by rememberSaveable { mutableStateOf("") }
-    val send = { onSend(text); text = "" }
+    val send = { text.trim().takeIf { it.isNotEmpty() }?.let { focus.clearFocus(); onSend(it); text = "" }; Unit }
     Column(Modifier.fillMaxWidth().background(c.ground).imePadding().windowInsetsPadding(WindowInsets.navigationBars).padding(horizontal = 20.dp, vertical = 8.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Txt("Typing", DepressifyType.small, c.muted, Modifier.weight(1f))
@@ -343,7 +324,7 @@ private fun Composer(onSend: (String) -> Unit, onVoice: (() -> Unit)?) {
         ) {
             BasicTextField(
                 text, { text = it }, Modifier.weight(1f).padding(vertical = 12.dp).semantics { contentDescription = "Write a reply" },
-                textStyle = DepressifyType.body.copy(color = c.ink), cursorBrush = SolidColor(c.ink), singleLine = true,
+                textStyle = DepressifyType.body.copy(color = c.ink), cursorBrush = SolidColor(c.ink), maxLines = 4,
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send), keyboardActions = KeyboardActions(onSend = { send() }),
                 decorationBox = { inner -> Box { if (text.isEmpty()) Txt("Write a reply", DepressifyType.body, c.muted); inner() } },
             )
