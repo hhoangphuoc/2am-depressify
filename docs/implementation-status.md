@@ -19,8 +19,8 @@ Kept up to date as PRs are opened and merged. Each PR also updates its own rows 
 | #68 | `feat/27-nudge-rules` → `main` | #27, pure logic: the Nudge decision and quiet-hours rules in `core` | **Merged** |
 | #69 | `feat/26-daily-job-rules` → `main` | #26, pure logic: the daily job as one pure pipeline in `core` | **Merged** |
 | #70 | `feat/live-demo-patient` → `main` | Live demo Patient: `npm run seed-live-patient` gives one real Patient account six weeks of seeded history | **Merged.** **Run on `junction26hel-7400` on 14 November 2026** for the team's test Gmail account: account created (verified, no password), 42 daily, 24 Check-ins and Summaries, 24 Suggestions, 3 flags (level amber), 2 Visits, 12 Consents. Seeded before the Intake label: `--reset` once to add it. |
-| #74 | `feat/dashboard-backend-sync` → `main` | Dashboard design ↔ backend sync: the design adapter, live data helpers, `Digest.sourceCheckInIds`, two indexes | Open; see [design/dashboard-backend-sync.md](design/dashboard-backend-sync.md). TESTCOUNTS74 |
-| #78 | `feat/dashboard-design-ui` → `feat/dashboard-backend-sync` (stacked on #74) | Dashboard UI restyled to the design system of `design/clinician`: sidebar workspace, roster, Patient page tabs, dialogs, chart lanes | Open. See [Dashboard UI restyled to the design system](#dashboard-ui-restyled-to-the-design-system). TESTCOUNTS78 |
+| #74 | `feat/dashboard-backend-sync` → `main` | Dashboard design ↔ backend sync: the design adapter, live data helpers, `Digest.sourceCheckInIds`, two indexes | Open; see [design/dashboard-backend-sync.md](design/dashboard-backend-sync.md). Tested on top of the latest `main` (with #67), after the review fixes: hosting 395, functions 498, seed 158, `core` 161 (`contract.json` stable), emulators 110 (1 skipped) + 37. |
+| #78 | `feat/dashboard-design-ui` → `feat/dashboard-backend-sync` (stacked on #74) | Dashboard UI restyled to the design system of `design/clinician`: sidebar workspace, roster, Patient page tabs, dialogs, chart lanes | Open. See [Dashboard UI restyled to the design system](#dashboard-ui-restyled-to-the-design-system). Tested after merging #74 (with `main` and #67) and the review fixes: hosting 416, functions 498, seed 158, emulators 110 (1 skipped) + 37. Smoke-checked in Chrome against the emulators. |
 
 **Deployed on `junction26hel-7400`:**
 - Rules and indexes.
@@ -328,7 +328,7 @@ Branch `feat/dashboard-design-ui` (open, stacked on #74). The real dashboard (`f
 - "Felt x/5 on average": what seems to help keeps the grouped feeling counts.
 - Also left out: the prototype's "Prototype states" footer, the "View source Summaries" list in the Digest (the count is shown), and the Intake saved date (not stored).
 
-**Tests:** TESTS78DETAIL
+**Tests:** after merging #74 (with `main` and #67) and the review fixes: hosting `node --test` 416 pass (including `design-view.test.mjs` and `views-data.test.mjs`); functions `npm test` 498; seed `npm test` 158; the functions emulator suite 110 pass, 1 skipped; the seed emulator suite 37 pass. Smoke-checked in Chrome against the emulators (auth, firestore, hosting from this branch): sign-in as the emulator Clinician; an account without the Clinician claim is signed out with "This account isn't set up as a Clinician yet…"; the roster with sparklines, a row keeping focus while another Patient's row updates, and "Sleep not shared" once the sleep Consent is withheld; a Patient page with every tab, charts redrawn after data changed while their tab was hidden, a Visit on the TMS end date refused, a flag cleared with the confirmation checkbox; withdrawal of a non-demo Patient moving focus to "Sharing withdrawn", and the page coming back without a reload when the Patient shared again. No console errors.
 
 **Preview:**
 - With the emulators running, serve the folder on another port: `python3 -m http.server 5010 --bind 127.0.0.1` in `firebase/hosting`.
