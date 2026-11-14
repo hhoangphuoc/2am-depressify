@@ -91,3 +91,73 @@ test("lane ticks: weekly back from today, at each date's centre, thinned at narr
   const narrow = laneTicks({ origin: "2026-10-02", span: 42, today: "2026-11-13", plotWidth: 300 });
   assert.deepEqual(narrow.map((t) => t.at), [13.5, 27.5, 41.5]);
 });
+
+// ---- Review fixes -----------------------------------------------------------------------------
+
+import { generateDemoPatients } from "../../seed/src/generate.js";
+import { zonedMillis } from "../../seed/src/dates.js";
+import { designPatient, designRosterPatient } from "../js/lib/design-model.js";
+import { ATTENTION_COPY, attentionBand, chartDrawPlan, needsRedraw, rosterFor, rosterRowKey } from "../js/lib/design-view.js";
+
+const REVIEW_TODAY = "2026-11-13";
+const REVIEW_CLOCK = { nowMillis: zonedMillis(REVIEW_TODAY, 14, 20, "Europe/Helsinki"), timeZone: "Europe/Helsinki" };
+const reviewDemo = generateDemoPatients({ today: REVIEW_TODAY, nowMillis: REVIEW_CLOCK.nowMillis });
+const shared = (entries) => entries.filter((e) => e.data.sharedWithClinician !== false).map((e) => ({ id: e.id, ...e.data }));
+const demoOf = (key) => reviewDemo.find((d) => d.profile === key);
+
+test("the Attention band never shows green when the flags could not be loaded", () => {
+  for (const flagLevel of ["red", "amber", "green"]) {
+    const d = demoOf("declining");
+    const patient = designPatient({ id: d.id, patient: { ...d.patient, flagLevel, flagReasons: flagLevel === "green" ? [] : ["Sleep is well below the usual."] }, flags: null, flagsError: true, checkIns: [] }, REVIEW_CLOCK);
+    const band = attentionBand(patient);
+    assert.notEqual(band.level, "green", flagLevel);
+    assert.notEqual(band.word, "Green · No current flag", flagLevel);
+    assert.equal(band.notice, ATTENTION_COPY.flagsFailed, flagLevel);
+    assert.equal(band.clearable, false, "nothing can be cleared without the flags");
+    if (flagLevel !== "green") assert.equal(band.level, flagLevel, "the record's stored level");
+  }
+  const ok = attentionBand(designPatient({ id: "x", patient: { ...demoOf("steady").patient }, flags: [], checkIns: [] }, REVIEW_CLOCK));
+  assert.equal(ok.level, "green");
+  assert.equal(ok.notice, null);
+});
+
+test("a chart skipped while its tab is hidden is drawn again when the tab is shown", () => {
+  let drawn = chartDrawPlan(800).drawnWidth;
+  assert.equal(drawn, 800);
+  // A live update while the tab is hidden: width 0, nothing drawn, and the width is forgotten.
+  const hidden = chartDrawPlan(0);
+  assert.deepEqual(hidden, { draw: false, drawnWidth: 0 });
+  drawn = hidden.drawnWidth;
+  // Shown again at the same width: the ResizeObserver must redraw.
+  assert.equal(needsRedraw(drawn, 800), true);
+  assert.equal(needsRedraw(800, 800), false);
+  assert.equal(needsRedraw(800, 804), false, "a few pixels are not worth a redraw");
+  assert.equal(needsRedraw(800, 0), false, "never draw at width 0");
+});
+
+test("a filter that disappears falls back to All before the roster is shown", () => {
+  const rows = ["steady", "declining"].map((k) => {
+    const d = demoOf(k);
+    return designRosterPatient({ id: d.id, patient: d.patient, flags: shared(d.flags), daily: [], checkIns: [], sleepConsent: null }, REVIEW_CLOCK);
+  });
+  for (const filter of ["unknown", "hidden"]) {
+    const { view, filter: shownFilter } = rosterFor({ patients: rows }, { search: "", filter });
+    assert.equal(shownFilter, "all", filter);
+    assert.deepEqual(view.patients.map((p) => p.id), view.all.map((p) => p.id), "every Patient, not an empty list");
+    assert.notEqual(view.message.kind, "noMatch");
+  }
+  assert.equal(rosterFor({ patients: rows }, { search: "", filter: "red" }).filter, "red");
+});
+
+test("a roster row's key changes with what the row shows, and only then", () => {
+  const d = demoOf("steady");
+  const make = (patient, sleepConsent = { granted: true }) =>
+    designRosterPatient({ id: d.id, patient, flags: shared(d.flags), daily: shared(d.daily).slice(-28), checkIns: [], sleepConsent }, REVIEW_CLOCK);
+  const a = make(d.patient);
+  assert.equal(rosterRowKey(a), rosterRowKey(make(d.patient)), "same content, same key");
+  assert.notEqual(rosterRowKey(a), rosterRowKey(make({ ...d.patient, displayName: "Someone else" })));
+  assert.notEqual(rosterRowKey(a), rosterRowKey(make({ ...d.patient, lastCheckInAtMillis: REVIEW_CLOCK.nowMillis - 60_000 })), "the latest Check-in");
+  const amber = designRosterPatient({ id: d.id, patient: d.patient, flags: [{ id: "f", level: "amber", reason: "New.", raisedAtMillis: REVIEW_CLOCK.nowMillis, clearedAtMillis: null }], daily: shared(d.daily).slice(-28), checkIns: [], sleepConsent: { granted: true } }, REVIEW_CLOCK);
+  assert.notEqual(rosterRowKey(a), rosterRowKey(amber), "the level");
+  assert.notEqual(rosterRowKey(a), rosterRowKey(make(d.patient, { granted: false })), "the sparkline is part of the row");
+});

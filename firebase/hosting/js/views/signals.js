@@ -8,11 +8,10 @@
 // in the range, and insufficient Baseline. Time at home and movement radius are daily totals made on
 // the phone; no place or coordinate is ever read here.
 //
-// Listens to `daily` and `consents` only, and stops both in destroy().
-import { onSnapshot } from "https://www.gstatic.com/firebasejs/13.3.0/firebase-firestore.js";
-import { patientQuery } from "../queries.js";
-import { COLLECTIONS, SIGNALS } from "../lib/contract.js";
+// Draws `daily` and `consents` from the page's one subscription (`view.docs`); it opens no listener.
+import { SIGNALS } from "../lib/contract.js";
 import { daysBetween, shortDate } from "../lib/dates.js";
+import { chartDrawPlan, needsRedraw } from "../lib/design-view.js";
 import {
   SIGNAL_INFO,
   defaultSelection,
@@ -75,9 +74,8 @@ function phaseOptionText(phase, fallbackStart, today) {
 
 /**
  * @param {HTMLElement} container
- * @param {{ db: import("firebase/firestore").Firestore, patientId: string }} ctx
  */
-export function mountSignals(container, { db, patientId }) {
+export function mountSignals(container) {
   const id = `signals-${++counter}`;
   const block = el("section", { class: "content-section signals", "aria-labelledby": `${id}-heading` });
   const controls = el("div", { class: "signal-controls field" });
@@ -117,34 +115,25 @@ export function mountSignals(container, { db, patientId }) {
     render();
   });
 
-  /** @param {{ code?: string }} error */
-  const onError = (error) => {
-    // Withdrawn sharing is shown by the page; anything else is said here.
-    failed = error?.code !== "permission-denied";
-    dataVersion++;
-    daily ??= [];
-    consents ??= {};
-    render();
-  };
-  const stopDaily = onSnapshot(
-    patientQuery(db, patientId, COLLECTIONS.daily),
-    (snapshot) => {
-      daily = snapshot.docs.map((d) => ({ date: d.id, ...d.data() }));
-      failed = false;
-      dataVersion++;
-      render();
-    },
-    onError,
-  );
-  const stopConsents = onSnapshot(
-    patientQuery(db, patientId, COLLECTIONS.consents),
-    (snapshot) => {
-      consents = Object.fromEntries(snapshot.docs.map((d) => [d.id, d.data()]));
-      dataVersion++;
-      render();
-    },
-    onError,
-  );
+  /** The page's documents last read, to tell whether they changed. */
+  /** @type {object[] | null | undefined} */
+  let dailyDocs;
+  /** @type {object[] | null | undefined} */
+  let consentDocs;
+
+  /** Reads `daily` and `consents` from the page's view; a failed read is said here, withdrawal by the page. */
+  function read(/** @type {any} */ next) {
+    const errors = next.errors ?? {};
+    failed = errors.daily === "error" || errors.consents === "error";
+    const nextDaily = next.docs?.daily;
+    const nextConsents = next.docs?.consents;
+    if (nextDaily !== dailyDocs || nextConsents !== consentDocs) dataVersion++;
+    dailyDocs = nextDaily;
+    consentDocs = nextConsents;
+    // A failed read shows as empty with the notice; a Signal without a known Consent is not shown.
+    daily = nextDaily ? nextDaily.map((/** @type {any} */ d) => ({ ...d, date: d.date ?? d.id })) : failed ? [] : null;
+    consents = nextConsents ? Object.fromEntries(nextConsents.map((/** @type {any} */ d) => [d.id, d])) : failed ? {} : null;
+  }
 
   function drawOptions(phases, firstDate, today, selection) {
     const options = phases.map((p) => {
@@ -266,9 +255,11 @@ export function mountSignals(container, { db, patientId }) {
 
   function drawCharts() {
     if (!view) return;
-    // A hidden tab has no width; it is drawn when shown.
-    if (!grid.clientWidth) return;
-    drawnWidth = grid.clientWidth;
+    // A hidden tab has no width: nothing is drawn and the width is forgotten, so the ResizeObserver
+    // redraws when the tab is shown (render() rebuilt the cards with empty charts).
+    const plan = chartDrawPlan(grid.clientWidth);
+    drawnWidth = plan.drawnWidth;
+    if (!plan.draw) return;
     for (const { key, chart, series } of charts) {
       chart.replaceChildren(drawSignalChart(/** @type {any} */ (series), { key, today: view.today, width: chart.clientWidth || 320 }));
     }
@@ -276,18 +267,17 @@ export function mountSignals(container, { db, patientId }) {
 
   // Redraw at the new width when the page is resized, so the text stays readable on a phone.
   const resize = new ResizeObserver(() => {
-    if (view && Math.abs(grid.clientWidth - drawnWidth) > 8) drawCharts();
+    if (view && needsRedraw(drawnWidth, grid.clientWidth)) drawCharts();
   });
   resize.observe(grid);
 
   return {
     update(next) {
       view = next;
+      read(next);
       render();
     },
     destroy() {
-      stopDaily();
-      stopConsents();
       resize.disconnect();
       block.remove();
     },

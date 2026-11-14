@@ -5,9 +5,6 @@
 // reads the Patient's `digests` collection itself and calls `generateDigest` through `calls`, so it
 // can be mounted in any slot. The logic is the pure state machine in js/lib/digest.js; this file
 // only draws it and runs the call.
-import { limit, onSnapshot, orderBy } from "https://www.gstatic.com/firebasejs/13.3.0/firebase-firestore.js";
-import { COLLECTIONS } from "../lib/contract.js";
-import { patientQuery } from "../queries.js";
 import {
   digestButtonLabel,
   digestCoverage,
@@ -38,12 +35,13 @@ function el(tag, attrs = {}, text) {
 }
 
 /**
- * Mounts the Digest into `slot` and keeps it live. Call `destroy` to stop listening.
+ * Mounts the Digest into `slot`. The latest shared Digest comes from the page's one subscription
+ * (`view.docs.digests`, newest week first, at most one) through `update(view)`.
  * @param {HTMLElement} slot
- * @param {{ db: import("firebase/firestore").Firestore, patientId: string, compact?: boolean, calls: { generateDigest: (patientId: string) => Promise<{ digest: import("../lib/contract.js").Digest }> } }} options
- * @returns {{ destroy: () => void }}
+ * @param {{ patientId: string, compact?: boolean, calls: { generateDigest: (patientId: string) => Promise<{ digest: import("../lib/contract.js").Digest }> } }} options
+ * @returns {{ update: (view: { docs?: Record<string, object[] | null>, errors?: Record<string, string> }) => void, destroy: () => void }}
  */
-export function mountDigest(slot, { db, patientId, calls, compact = false }) {
+export function mountDigest(slot, { patientId, calls, compact = false }) {
   const id = `digest-${++instances}`;
   let state = initialDigestState();
   let destroyed = false;
@@ -117,21 +115,27 @@ export function mountDigest(slot, { db, patientId, calls, compact = false }) {
 
   button.addEventListener("click", () => dispatch({ type: "generate" }));
 
-  // The latest shared week first. Ids are zero-padded ISO weeks, so they sort by week. The sharing
-  // filter plus this order needs the composite index in firestore.indexes.json.
-  const stop = onSnapshot(
-    patientQuery(db, patientId, COLLECTIONS.digests, orderBy("isoWeek", "desc"), limit(1)),
-    (snapshot) => dispatch({ type: "loaded", digest: snapshot.empty ? null : snapshot.docs[0].data() }),
-    // Withdrawn sharing also lands here; the Patient page shows that state and hides this slot.
-    () => dispatch({ type: "loadFailed" }),
-  );
+  /** The page's Digest documents last read, to tell whether they changed. */
+  /** @type {object[] | null | undefined} */
+  let digestDocs;
+  let digestFailed = false;
 
   draw();
 
   return {
+    update(view) {
+      // The latest shared week first (the data layer orders by `isoWeek`, which the composite index
+      // in firestore.indexes.json serves). A failed read that is not a withdrawal is said here.
+      const docs = view.docs?.digests;
+      const failed = view.errors?.digests === "error";
+      if (docs === digestDocs && failed === digestFailed) return;
+      digestDocs = docs;
+      digestFailed = failed;
+      if (docs) dispatch({ type: "loaded", digest: /** @type {any} */ (docs[0] ?? null) });
+      else if (failed) dispatch({ type: "loadFailed" });
+    },
     destroy() {
       destroyed = true;
-      stop();
       section.remove();
     },
   };

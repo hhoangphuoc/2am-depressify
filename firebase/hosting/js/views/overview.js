@@ -5,16 +5,14 @@
 // calendar dates, no Phases, and a notice to add the date.
 //
 // The arithmetic is in js/lib/timeline.js (Phases, weekly means, Questionnaire points) and
-// js/lib/design-view.js (the strip and the ticks); the drawing is in views/timeline-chart.js.
-import { onSnapshot } from "https://www.gstatic.com/firebasejs/13.3.0/firebase-firestore.js";
-import { COLLECTIONS } from "../lib/contract.js";
+// js/lib/design-view.js (the strip and the ticks); the drawing is in views/timeline-chart.js. The
+// Check-ins (for the weekly Mood) come from the page's one subscription (`view.docs.checkIns`).
 import { addDays, daysBetween, isDateKey, shortDate } from "../lib/dates.js";
-import { laneTicks, phaseStrip } from "../lib/design-view.js";
+import { chartDrawPlan, laneTicks, needsRedraw, phaseStrip } from "../lib/design-view.js";
 import { moodByWeek, pointsByKind, questionnairePoints, timelineRows } from "../lib/timeline.js";
 import { QUESTIONNAIRE_RANGES, questionnaireLabel } from "../lib/visit.js";
 import { LANE, axisOrigin, drawLane, timelineTable, visitScoreText } from "./timeline-chart.js";
 import { mountTmsEndForm } from "./tms-end.js";
-import { patientQuery } from "../queries.js";
 
 const COPY = {
   phases: "Progress, Phase by Phase",
@@ -48,9 +46,9 @@ let counter = 0;
 
 /**
  * @param {HTMLElement} container
- * @param {{ db: import("firebase/firestore").Firestore, patientId: string }} ctx
+ * @param {{ data: ReturnType<typeof import("../data/design-data.js").designData>, patientId: string }} ctx
  */
-export function mountTimeline(container, { db, patientId }) {
+export function mountTimeline(container, { data, patientId }) {
   const id = `timeline-${++counter}`;
   const block = el("section", { class: "content-section progress", "aria-labelledby": `${id}-heading` });
   const heading = el("h2", { id: `${id}-heading` });
@@ -72,7 +70,7 @@ export function mountTimeline(container, { db, patientId }) {
   block.append(headingWrap, prompt, strip, status, lanes, note, details, markers);
   container.replaceChildren(block);
 
-  const tmsForm = mountTmsEndForm(prompt, { db, patientId, variant: "notice" });
+  const tmsForm = mountTmsEndForm(prompt, { data, patientId, variant: "notice" });
 
   /** @type {any} */
   let view = null;
@@ -83,22 +81,7 @@ export function mountTimeline(container, { db, patientId }) {
   /** @type {{ kind: "mood" | "phq2" | "phq9", chart: HTMLElement }[]} */
   let charts = [];
 
-  const stopCheckIns = onSnapshot(
-    patientQuery(db, patientId, COLLECTIONS.checkIns),
-    (snapshot) => {
-      checkIns = snapshot.docs.map((d) => d.data());
-      ratingsFailed = false;
-      render();
-    },
-    (error) => {
-      checkIns = [];
-      // Withdrawn sharing is shown by the page; anything else is said here.
-      ratingsFailed = error?.code !== "permission-denied";
-      render();
-    },
-  );
-
-  function data() {
+  function model() {
     const { patient, visits, phases, today, timeZone } = view;
     const tmsEndDate = isDateKey(patient.tmsEndDate) ? patient.tmsEndDate : null;
     const shown = visits.filter((/** @type {any} */ v) => isDateKey(v.date) && v.date <= today && (!tmsEndDate || v.date > tmsEndDate));
@@ -111,11 +94,13 @@ export function mountTimeline(container, { db, patientId }) {
 
   function drawCharts() {
     if (!view) return;
-    const width = lanes.clientWidth;
-    // A hidden tab has no width; it is drawn when shown.
-    if (!width) return;
-    drawnWidth = width;
-    const d = data();
+    // A hidden tab has no width: nothing is drawn and the width is forgotten, so the ResizeObserver
+    // redraws when the tab is shown (lanes were rebuilt empty by render()).
+    const plan = chartDrawPlan(lanes.clientWidth);
+    drawnWidth = plan.drawnWidth;
+    if (!plan.draw) return;
+    const width = plan.drawnWidth;
+    const d = model();
     const ticks = laneTicks({ origin: d.origin, span: d.span, today: d.today, plotWidth: width - LANE.left - LANE.right });
     for (const { kind, chart } of charts) chart.replaceChildren(drawLane(kind, { ...d, ticks }, width));
   }
@@ -133,7 +118,7 @@ export function mountTimeline(container, { db, patientId }) {
 
   function render() {
     if (!view) return;
-    const d = data();
+    const d = model();
     tmsForm.update(view);
     prompt.hidden = Boolean(d.tmsEndDate);
     heading.textContent = d.tmsEndDate ? COPY.phases : COPY.dates;
@@ -183,17 +168,19 @@ export function mountTimeline(container, { db, patientId }) {
 
   // Redraw at the new width when the page is resized or the tab is shown.
   const resize = new ResizeObserver(() => {
-    if (view && Math.abs(lanes.clientWidth - drawnWidth) > 8) drawCharts();
+    if (view && needsRedraw(drawnWidth, lanes.clientWidth)) drawCharts();
   });
   resize.observe(lanes);
 
   return {
     update(next) {
       view = next;
+      // Withdrawn sharing is shown by the page; any other failed read is said here.
+      checkIns = /** @type {any[]} */ (next.docs?.checkIns ?? []);
+      ratingsFailed = next.errors?.checkIns === "error";
       render();
     },
     destroy() {
-      stopCheckIns();
       resize.disconnect();
       tmsForm.destroy();
       block.remove();

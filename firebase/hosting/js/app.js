@@ -117,7 +117,6 @@ function applyRoute(firebase, data, signedIn) {
   if (onPatient) {
     stopPatient = showPatient({
       root: $("patient"),
-      db: firebase.db,
       data,
       patientId: route.patientId,
       calls: { ...intakeCalls(firebase.auth.app), ...digestCalls(firebase.auth.app) },

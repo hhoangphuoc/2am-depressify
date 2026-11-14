@@ -1,29 +1,22 @@
 // The Attention band at the top of the Patient page (`Attention` in design/clinician/src/App.jsx):
 // the level word with its dot, the open reasons with where each came from and when, "View history",
-// and "Clear after follow-up" for each open flag. Self-contained: it listens through the design data
-// layer (`subscribeAttention`: the Patient record, the visible flags and the Check-ins, with the
-// sharing filters the rules require), so it can be mounted into any slot.
+// and "Clear after follow-up" for each open flag. It draws the Patient page's one subscription
+// (`view.state`, the PatientState from `data.subscribePatient`: the record, the visible flags and the
+// Check-ins, with the sharing filters the rules require).
 //
-// Clearing runs the transaction in js/lib/clear.js: it sets the flag's `clearedAtMillis` and resets
-// the Patient's level and reasons to the flags still open. If anything new was raised since the
-// dialog opened, the transaction refuses and the dialog asks for a new review (`clearDialogReducer`).
+// Clearing goes through the data layer (`data.clearAttention`, js/lib/design-live.js), which runs the
+// transaction in js/lib/clear.js: it sets the flag's `clearedAtMillis` and resets the Patient's level
+// and reasons to the flags still open. If anything new was raised since the dialog opened, the
+// transaction refuses (`changed`) and the dialog asks for a new review (`clearDialogReducer`).
 // No note is stored with a clearing: the rules allow only `clearedAtMillis` (see
 // docs/design/dashboard-backend-sync.md, "Conflicts").
-import { doc, getDocs, runTransaction } from "https://www.gstatic.com/firebasejs/13.3.0/firebase-firestore.js";
-import {
-  clearDialogReducer,
-  clearErrorMessage,
-  clearFlags,
-  initialClearDialog,
-  levelAfterClearing,
-  reviewOf,
-} from "../lib/clear.js";
-import { DESIGN_LEVELS } from "../lib/design-model.js";
-import { QUERY_FUNCTIONS } from "../queries.js";
+//
+// If the flags could not be loaded (not a withdrawal), the band shows the level saved on the
+// Patient's record with a notice, never green, and offers no clearing (`attentionBand`).
+import { clearDialogReducer, initialClearDialog, levelAfterClearing, reviewOf } from "../lib/clear.js";
+import { attentionBand } from "../lib/design-view.js";
 import { createModal } from "./dialog.js";
 import { flagChip } from "./ui.js";
-
-const FIRESTORE = { ...QUERY_FUNCTIONS, doc, getDocs, runTransaction };
 
 const COPY = {
   label: "Attention flag",
@@ -73,12 +66,12 @@ function el(tag, attrs = {}, ...children) {
 const levelName = (/** @type {string} */ level) => (level === "red" ? "Red" : level === "amber" ? "Amber" : "Green");
 
 /**
- * Mounts the Attention band into `slot` and keeps it live.
+ * Mounts the Attention band into `slot`; `update(view)` draws the page's PatientState.
  * @param {HTMLElement} slot
- * @param {{ db: import("firebase/firestore").Firestore, data: ReturnType<typeof import("../data/design-data.js").designData>, patientId: string, timeZone?: string }} options
- * @returns {() => void} stops listening and removes the band and its dialogs
+ * @param {{ data: ReturnType<typeof import("../data/design-data.js").designData>, patientId: string }} options
+ * @returns {{ update: (view: { state: import("../lib/design-live.js").PatientState }) => void, destroy: () => void }}
  */
-export function mountFlagDetail(slot, { db, data, patientId, timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone }) {
+export function mountFlagDetail(slot, { data, patientId }) {
   /** @type {import("../lib/design-live.js").PatientState | null} */
   let state = null;
   let destroyed = false;
@@ -150,12 +143,15 @@ export function mountFlagDetail(slot, { db, data, patientId, timeZone = Intl.Dat
       return;
     }
     const p = state.patient;
+    const shown = attentionBand(p);
     const focusedId = /** @type {HTMLElement | null} */ (document.activeElement)?.closest?.("[data-flag-id]")?.getAttribute("data-flag-id");
-    const clearable = p.flagsLoaded ? p.activeFlags : [];
-    band.className = `attention ${p.level}`;
+    const clearable = shown.clearable ? p.activeFlags : [];
+    band.className = `attention ${shown.level}`;
     const historyButton = el("button", { type: "button", class: "text-button", text: COPY.history });
     historyButton.addEventListener("click", openHistory);
-    const top = el("div", { class: "between" }, flagChip(p.level, p.levelWord ?? DESIGN_LEVELS[/** @type {keyof typeof DESIGN_LEVELS} */ (p.level)]), historyButton);
+    // Without the flags there is no history to show either.
+    historyButton.hidden = !p.flagsLoaded;
+    const top = el("div", { class: "between" }, flagChip(shown.level, shown.word), historyButton);
     const several = p.activeFlags.length > 1;
     const reasons = several
       ? el(
@@ -166,14 +162,16 @@ export function mountFlagDetail(slot, { db, data, patientId, timeZone = Intl.Dat
               "li",
               {},
               el("div", {}, el("strong", { text: levelName(f.level) }), ` · ${f.reason}`, el("span", { class: "small muted", text: COPY.observed(f.observed, f.source) })),
-              p.flagsLoaded ? clearButton(f) : null,
+              shown.clearable ? clearButton(f) : null,
             ),
           ),
         )
-      : el("p", { text: p.reason ?? "" });
+      : // A stored green whose flags could not load is not shown as "No current Attention flag".
+        el("p", { text: shown.level === p.level ? p.reason ?? "" : "" });
     const assessment = p.assessmentStatus === "unavailable" && p.activeFlags.length > 0 ? el("p", { class: "small", text: COPY.assessment }) : null;
     const footerText = several ? COPY.several(p.activeFlags.length) : COPY.observed(p.observed, p.source);
     const footer = el("div", { class: "attention-footer" }, el("span", { class: "small muted", text: footerText }), !several && clearable.length === 1 ? clearButton(clearable[0]) : null);
+    const failedNotice = shown.notice ? el("p", { class: "notice error-text", role: "alert", text: shown.notice }) : null;
     const status = notice ? el("p", { class: "notice success", role: "status" }, el("span", { text: notice })) : null;
     if (status) {
       const dismiss = el("button", { type: "button", class: "text-button", text: COPY.dismiss });
@@ -184,7 +182,7 @@ export function mountFlagDetail(slot, { db, data, patientId, timeZone = Intl.Dat
       });
       status.append(dismiss);
     }
-    band.replaceChildren(top, reasons, assessment ?? "", footer, status ?? "");
+    band.replaceChildren(top, reasons, failedNotice ?? "", assessment ?? "", footer, status ?? "");
     if (focusedId && !band.contains(document.activeElement)) {
       const again = /** @type {HTMLElement | null} */ (band.querySelector(`[data-flag-id="${CSS.escape(focusedId)}"]`));
       (again ?? band).focus();
@@ -286,31 +284,29 @@ export function mountFlagDetail(slot, { db, data, patientId, timeZone = Intl.Dat
       return;
     }
     const { flagId, reviewed } = dialogState;
+    const current = raw();
+    if (!current) return;
     dispatch({ type: "save" });
-    try {
-      await clearFlags(FIRESTORE, db, { patientId, flagIds: [flagId], reviewed, nowMillis: Date.now() });
-      if (destroyed) return;
+    // The data layer's one write path: the transaction against the review the Clinician confirmed.
+    const result = await data.clearAttention({ patientId, raw: current, flagIds: [flagId], reviewed, nowMillis: Date.now() });
+    if (destroyed) return;
+    if (result.ok) {
       notice = COPY.cleared(displayName());
       dispatch({ type: "saved" });
       drawBand();
-    } catch (error) {
-      if (destroyed) return;
-      const code = /** @type {any} */ (error)?.code;
-      if (code === "flag/changed") {
-        // Show what is open now. If this view has not caught up yet, the next live update renews
-        // the review again; clearing stays refused until the Clinician confirms what is current.
-        checkbox.checked = false;
-        confirmed = false;
-        dispatch({ type: "changed", current: currentReview() });
-        if (dialogState.mode === "closed") {
-          notice = COPY.alreadyCleared;
-          drawBand();
-        }
-      } else if (code === "flag/not-open") {
-        dispatch({ type: "failed", message: COPY.alreadyCleared });
-      } else {
-        dispatch({ type: "failed", message: clearErrorMessage(error) });
+    } else if (result.changed) {
+      // Show what is open now. If this view has not caught up yet, the next live update renews
+      // the review again; clearing stays refused until the Clinician confirms what is current.
+      checkbox.checked = false;
+      confirmed = false;
+      dispatch({ type: "changed", current: currentReview() });
+      if (dialogState.mode === "closed") {
+        notice = COPY.alreadyCleared;
+        drawBand();
       }
+    } else {
+      // `notOpen` and every failure come with the data layer's vetted copy.
+      dispatch({ type: "failed", message: result.message });
     }
   }
 
@@ -323,7 +319,9 @@ export function mountFlagDetail(slot, { db, data, patientId, timeZone = Intl.Dat
 
   // ---- Live data -------------------------------------------------------------------------------
 
-  const stop = data.subscribeAttention(patientId, { clock: () => ({ nowMillis: Date.now(), timeZone }) }, (next) => {
+  /** @param {import("../lib/design-live.js").PatientState} next */
+  function onState(next) {
+    if (next === state) return;
     state = next;
     if (next.status === "withdrawn" || next.status === "error") {
       // Sharing withdrawn: the page says so; this band hides and its dialogs close.
@@ -335,15 +333,19 @@ export function mountFlagDetail(slot, { db, data, patientId, timeZone = Intl.Dat
     if (dialogState.mode !== "closed" && next.status === "ok" && next.raw?.flags) {
       dispatch({ type: "current", current: currentReview() });
     }
-  });
+  }
 
   drawBand();
 
-  return () => {
-    destroyed = true;
-    stop();
-    clearModal.remove();
-    historyModal.remove();
-    slot.replaceChildren();
+  return {
+    update(view) {
+      onState(view.state);
+    },
+    destroy() {
+      destroyed = true;
+      clearModal.remove();
+      historyModal.remove();
+      slot.replaceChildren();
+    },
   };
 }

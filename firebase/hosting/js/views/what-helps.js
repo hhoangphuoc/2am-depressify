@@ -5,9 +5,6 @@
 // never shown, and there is no effectiveness percentage or mean feeling (the design's "Felt x/5 on
 // average" is left out: docs/design/dashboard-backend-sync.md, Conflicts 4). The arithmetic is in js/lib/what-helps.js.
 // Listens to `suggestions` only, and stops in destroy().
-import { onSnapshot } from "https://www.gstatic.com/firebasejs/13.3.0/firebase-firestore.js";
-import { patientQuery } from "../queries.js";
-import { COLLECTIONS } from "../lib/contract.js";
 import { shortDate } from "../lib/dates.js";
 import { feelingText, whatHelps, whatHelpsWindow } from "../lib/what-helps.js";
 
@@ -36,9 +33,9 @@ function el(tag, attrs = {}, text) {
 
 /**
  * @param {HTMLElement} container
- * @param {{ db: import("firebase/firestore").Firestore, patientId: string }} ctx
+ * The Suggestions come from the page's one subscription (`view.docs.suggestions`).
  */
-export function mountWhatHelps(container, { db, patientId }) {
+export function mountWhatHelps(container) {
   const id = `what-helps-${++counter}`;
   const block = el("section", { class: "content-section helps", "aria-labelledby": `${id}-heading` });
   const about = el("p", { class: "small muted" });
@@ -54,20 +51,6 @@ export function mountWhatHelps(container, { db, patientId }) {
   let suggestions = null;
   let failed = false;
 
-  const stop = onSnapshot(
-    patientQuery(db, patientId, COLLECTIONS.suggestions),
-    (snapshot) => {
-      suggestions = snapshot.docs.map((d) => d.data());
-      failed = false;
-      render();
-    },
-    (error) => {
-      suggestions = [];
-      // Withdrawn sharing is shown by the page; anything else is said here.
-      failed = error?.code !== "permission-denied";
-      render();
-    },
-  );
 
   function render() {
     if (!view) return;
@@ -98,10 +81,12 @@ export function mountWhatHelps(container, { db, patientId }) {
   return {
     update(next) {
       view = next;
+      // Withdrawn sharing is shown by the page; any other failed read is said here.
+      failed = next.errors?.suggestions === "error";
+      suggestions = next.docs?.suggestions ?? (failed ? [] : null);
       render();
     },
     destroy() {
-      stop();
       block.remove();
     },
   };

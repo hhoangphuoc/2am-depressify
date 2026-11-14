@@ -5,12 +5,16 @@
 //
 // The data comes from the design data layer: `subscribeRoster` (js/lib/design-live.js) runs the
 // Patients query with the sharing filter the rules require, listens to each listed Patient's visible
-// flags, latest daily records and latest Check-in, and reports red flags that are new since the last
-// update; `rosterView` (js/lib/design-model.js) orders, counts, filters and builds the banner. The
-// banner is built from every listed Patient before any filter applies, so search and the filters
-// never hide it, and it stays until the flag is cleared.
-import { rosterView } from "./lib/design-model.js";
-import { FILTER_LABELS, connectionText, rosterCountText, sparkline } from "./lib/design-view.js";
+// flags, latest daily records, sleep Consent and latest Check-in, and reports red flags that are new
+// since the last update; it hands light rows (`designRosterPatient`) and reuses the row of a
+// Patient whose data did not change. `rosterFor` (js/lib/design-view.js, on `rosterView`) orders,
+// counts, filters and builds the banner, after falling back to "All" when the chosen filter is no
+// longer offered. The banner is built from every listed Patient before any filter applies, so search
+// and the filters never hide it, and it stays until the flag is cleared.
+//
+// The table is updated row by row, keyed by Patient id (`rosterRowKey`): a row whose content did not
+// change stays the same element, so focus on its link survives a live update.
+import { FILTER_LABELS, connectionText, rosterCountText, rosterFor, rosterRowKey, sparkline } from "./lib/design-view.js";
 import { patientHref } from "./lib/route.js";
 import { drawSparkline } from "./views/sparkline.js";
 import { blankState as blank, flagChip } from "./views/ui.js";
@@ -23,6 +27,7 @@ const COPY = {
   workQueue: "Each red flag stays here until it is cleared after follow-up. Search and filters never hide it.",
   open: "Open",
   noSleep: "No sleep data",
+  sleepNotShared: "Sleep not shared",
   checkIn: (/** @type {string} */ c, /** @type {string} */ p) => `Check-in ${c} · Phone ${p}`,
   reasons: (/** @type {number} */ n) => `${n} open reasons`,
   empty: ["No Patients linked yet", "Patients appear here once they choose to share their progress with you."],
@@ -110,7 +115,7 @@ export function createPatientList(data, elements, { clinicianEmail, timeZone, on
     if (focused) /** @type {HTMLElement | null} */ (filters.querySelector(`[data-filter="${focused}"]`))?.focus();
   }
 
-  /** @param {ReturnType<typeof import("./lib/design-model.js").designPatient>} p */
+  /** @param {ReturnType<typeof import("./lib/design-model.js").designRosterPatient>} p */
   function row(p) {
     const active = p.sharing === "active";
     const href = patientHref(p.id);
@@ -118,12 +123,56 @@ export function createPatientList(data, elements, { clinicianEmail, timeZone, on
     const mobile = active ? el("small", { class: "patient-mobile-meta" }, COPY.checkIn(p.checkIn ?? "—", p.lastPhone ?? "—")) : null;
     const name = el("th", { scope: "row" }, el("a", { class: "patient-name", href }, el("span", { class: "avatar", "aria-hidden": "true" }, p.initials), el("span", {}, el("strong", {}, p.name), subtitle, mobile)));
     const level = el("td", {}, flagChip(p.level, p.levelWord), p.activeFlags.length > 1 ? el("small", { class: "flag-count" }, COPY.reasons(p.activeFlags.length)) : null);
-    const model = active ? sparkline(p.daily) : null;
-    const sleep = el("td", { class: "desktop-column" }, model ? drawSparkline(model) : active ? COPY.noSleep : "Hidden");
+    // Sleep shows only while the Patient's sleep Consent is granted; the data layer puts no value in
+    // the row otherwise, and an unknown Consent (still loading) shows nothing yet.
+    const model = active && p.sleepConsent === "granted" ? sparkline(p.daily) : null;
+    const sleepText = !active ? "Hidden" : p.sleepConsent === "withheld" ? COPY.sleepNotShared : p.sleepConsent === "unknown" ? "" : COPY.noSleep;
+    const sleep = el("td", { class: "desktop-column" }, model ? drawSparkline(model) : sleepText);
     const checkIn = el("td", { class: "desktop-column" }, active ? p.checkIn ?? "—" : "Hidden");
     const phone = el("td", { class: `desktop-column${p.freshness?.stale ? " stale" : ""}` }, active ? p.lastPhone ?? "—" : "Hidden");
     const open = el("td", {}, el("a", { class: "text-button open-patient", href, "aria-label": `Open ${p.name}` }, COPY.open));
-    return el("tr", { "data-level": p.level }, name, level, sleep, checkIn, phone, open);
+    return el("tr", { "data-level": p.level, "data-patient-id": p.id }, name, level, sleep, checkIn, phone, open);
+  }
+
+  /** Each shown row's element and key, by Patient id. @type {Map<string, { tr: HTMLElement, key: string }>} */
+  const rows = new Map();
+
+  /**
+   * Puts the shown Patients' rows in the table in order, rebuilding only rows whose content changed
+   * and moving only rows out of place, so a focused link stays focused through a live update.
+   * @param {Parameters<typeof row>[0][]} patients
+   */
+  function renderRows(patients) {
+    const active = /** @type {HTMLElement | null} */ (document.activeElement);
+    const focusedRow = active && body.contains(active) ? active.closest("tr")?.getAttribute("data-patient-id") : null;
+    const focusedClass = focusedRow ? (active?.classList.contains("open-patient") ? "open-patient" : "patient-name") : null;
+    const shown = new Set(patients.map((p) => p.id));
+    for (const [id, { tr }] of rows) {
+      if (shown.has(id)) continue;
+      tr.remove();
+      rows.delete(id);
+    }
+    let rebuiltFocused = false;
+    patients.forEach((p, i) => {
+      const key = rosterRowKey(p);
+      let entry = rows.get(p.id);
+      if (!entry || entry.key !== key) {
+        const tr = row(p);
+        if (entry) {
+          entry.tr.replaceWith(tr);
+          if (p.id === focusedRow) rebuiltFocused = true;
+        }
+        entry = { tr, key };
+        rows.set(p.id, entry);
+      }
+      const at = body.children[i];
+      if (at !== entry.tr) body.insertBefore(entry.tr, at ?? null);
+    });
+    // A row rebuilt or moved under the focus: put focus back on the same link.
+    if (focusedRow && (rebuiltFocused || !body.contains(document.activeElement))) {
+      const again = rows.get(focusedRow)?.tr.querySelector(`.${focusedClass}`);
+      /** @type {HTMLElement | null | undefined} */ (again)?.focus({ preventScroll: true });
+    }
   }
 
   function clearFilters() {
@@ -144,6 +193,8 @@ export function createPatientList(data, elements, { clinicianEmail, timeZone, on
       tableWrap.hidden = true;
       status.textContent = "";
       navCount.textContent = "";
+      body.replaceChildren();
+      rows.clear();
       if (roster.status === "loading") {
         state.replaceChildren(el("div", { class: "loading-view", role: "status", "aria-busy": "true" }, el("p", {}, COPY.loading), el("div", { class: "skeleton" }), el("div", { class: "skeleton" }), el("div", { class: "skeleton" })));
       } else {
@@ -155,11 +206,13 @@ export function createPatientList(data, elements, { clinicianEmail, timeZone, on
       return;
     }
 
-    const view = rosterView(roster, { search: search.value, filter });
+    // A filter no longer offered falls back to "All" before anything is drawn.
+    const shown = rosterFor(roster, { search: search.value, filter });
+    const view = shown.view;
+    filter = /** @type {typeof filter} */ (shown.filter);
     navCount.textContent = String(view.counts.all);
     renderBanner(view.banner);
     controls.hidden = view.all.length === 0;
-    if (!view.filters.includes(filter)) filter = "all";
     renderFilters(view);
 
     if (view.all.length === 0) {
@@ -172,7 +225,7 @@ export function createPatientList(data, elements, { clinicianEmail, timeZone, on
       state.replaceChildren();
     }
     tableWrap.hidden = view.patients.length === 0;
-    body.replaceChildren(...view.patients.map(row));
+    renderRows(view.patients);
     status.textContent = view.all.length ? rosterCountText(view.patients.length, view.all.length) : "";
   }
 
@@ -193,6 +246,7 @@ export function createPatientList(data, elements, { clinicianEmail, timeZone, on
     search.removeEventListener("input", render);
     renderBanner(null);
     body.replaceChildren();
+    rows.clear();
     state.replaceChildren();
   };
 }

@@ -1,13 +1,11 @@
 // The TMS end date: a line with an "Add" or "Edit TMS end date" button that opens the design's modal
 // form (`TmsForm` in design/clinician/src/App.jsx). Used by the Overview (a notice while the date is
 // missing) and by Intake & Visits (a row under the Visits). The Clinician writes `tmsEndDate` on the
-// Patient record directly; the rules allow the Clinician that field. The checks are
-// `validateDesignTms` (js/lib/design-model.js): a real date, not in the future, and not after a
-// recorded Visit. A failed save keeps the date typed.
-import { doc, updateDoc } from "https://www.gstatic.com/firebasejs/13.3.0/firebase-firestore.js";
-import { COLLECTIONS } from "../lib/contract.js";
+// Patient record through the data layer (`data.setTmsEndDate`, js/lib/design-live.js); the rules
+// allow the Clinician that field. The checks are `validateDesignTms` (js/lib/design-model.js): a
+// real date, not in the future, and before every recorded Visit. A failed save keeps the date typed
+// and shows the data layer's copy.
 import { shortDate } from "../lib/dates.js";
-import { validateDesignTms } from "../lib/design-model.js";
 import { createModal } from "./dialog.js";
 
 const COPY = {
@@ -23,17 +21,16 @@ const COPY = {
   retry: "Try saving again",
   cancel: "Cancel",
   saved: "TMS end date saved. Weeks and Phases are updated.",
-  failed: "Could not save the date. Check the connection and try again; your entry is kept.",
 };
 
 let counter = 0;
 
 /**
  * @param {HTMLElement} container
- * @param {{ db: import("firebase/firestore").Firestore, patientId: string, variant?: "row" | "notice" }} options
+ * @param {{ data: ReturnType<typeof import("../data/design-data.js").designData>, patientId: string, variant?: "row" | "notice" }} options
  * @returns {{ update: (view: { patient: { tmsEndDate?: string | null }, today: string, visits?: { date: string }[] }) => void, destroy: () => void }}
  */
-export function mountTmsEndForm(container, { db, patientId, variant = "row" }) {
+export function mountTmsEndForm(container, { data, patientId, variant = "row" }) {
   const id = `tms-end-${++counter}`;
   let saved = /** @type {string | null} */ (null);
   let today = "";
@@ -127,36 +124,29 @@ export function mountTmsEndForm(container, { db, patientId, variant = "row" }) {
   form.addEventListener("submit", async (event) => {
     event.preventDefault();
     if (busy) return;
-    const result = validateDesignTms(input.value, { today, visits });
-    if (!result.ok) {
-      setError(result.message);
-      input.focus();
-      return;
-    }
     setError("");
     busy = true;
     drawForm();
-    try {
-      await updateDoc(doc(db, COLLECTIONS.patients, patientId), { tmsEndDate: result.date });
-      if (destroyed) return;
-      saved = result.date;
+    // The data layer checks the date (`validateDesignTms`) before writing, and maps a failure to copy.
+    const result = await data.setTmsEndDate(patientId, input.value, { today, visits });
+    if (destroyed) return;
+    busy = false;
+    if (result.ok) {
+      saved = /** @type {string} */ (result.date);
       failed = false;
       notice = COPY.saved;
-      busy = false;
       modal.close(button.isConnected ? button : null);
-    } catch {
-      if (destroyed) return;
+    } else if (result.invalid) {
+      setError(result.message);
+      input.focus();
+    } else {
       // Keep what was typed and say so.
       failed = true;
-      busy = false;
-      setError(COPY.failed);
+      setError(result.message);
       submit.focus();
-    } finally {
-      if (!destroyed) {
-        drawForm();
-        draw();
-      }
     }
+    drawForm();
+    draw();
   });
 
   return {

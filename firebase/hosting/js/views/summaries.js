@@ -9,9 +9,6 @@
 // Suggestion, the previous Outcome, Voice cues worded as observations and at most three short
 // quotes. There is no transcript or audio to show: js/lib/summaries.js picks out only those fields.
 // Each block listens to `summaries` only, and stops in destroy().
-import { onSnapshot } from "https://www.gstatic.com/firebasejs/13.3.0/firebase-firestore.js";
-import { patientQuery } from "../queries.js";
-import { COLLECTIONS } from "../lib/contract.js";
 import { selectSummary, sortSummaries, summaryView, summaryWhen } from "../lib/summaries.js";
 
 const COPY = {
@@ -53,18 +50,26 @@ function el(tag, attrs = {}, text) {
 }
 
 /**
- * Listens to the Patient's Summaries and calls `onChange(sorted | null, failed)`; null while loading.
- * @param {import("firebase/firestore").Firestore} db
- * @param {string} patientId
- * @param {(sorted: object[], failed: boolean) => void} onChange
+ * The Summaries from the page's one subscription (`view.docs.summaries`), sorted once per change.
+ * Returns a function that takes the page's view and gives `{ sorted, failed, changed }`: `sorted`
+ * is null while loading; a failed read (not a withdrawal, which the page shows) is empty with
+ * `failed`.
  */
-function listenSummaries(db, patientId, onChange) {
-  return onSnapshot(
-    patientQuery(db, patientId, COLLECTIONS.summaries),
-    (snapshot) => onChange(sortSummaries(snapshot.docs.map((d) => ({ id: d.id, ...d.data() }))), false),
-    // Withdrawn sharing is shown by the page; anything else is said here.
-    (error) => onChange([], error?.code !== "permission-denied"),
-  );
+function summariesFromView() {
+  /** @type {object[] | null | undefined} */
+  let docs;
+  /** @type {object[] | null} */
+  let sorted = null;
+  return (/** @type {any} */ view) => {
+    const next = view.docs?.summaries;
+    const failed = view.errors?.summaries === "error";
+    const changed = next !== docs;
+    if (changed) {
+      docs = next;
+      sorted = next ? sortSummaries(next.map((/** @type {any} */ d) => ({ ...d }))) : failed ? [] : null;
+    }
+    return { sorted, failed, changed };
+  };
 }
 
 /** The Summary's stored sentences joined, adding no words (as `designSummaries` does). @param {import("../lib/summaries.js").SummaryView} s */
@@ -138,9 +143,9 @@ function summaryDetail(summary, { today, timeZone, idPrefix }) {
 /**
  * Every Summary, newest first; choosing one shows it in full beside the list (below it on a phone).
  * @param {HTMLElement} container
- * @param {{ db: import("firebase/firestore").Firestore, patientId: string, page?: { on: (type: string, fn: (detail: any) => void) => () => void } }} ctx
+ * @param {{ page?: { on: (type: string, fn: (detail: any) => void) => () => void } }} ctx
  */
-export function mountSummaries(container, { db, patientId, page }) {
+export function mountSummaries(container, { page }) {
   const id = `summaries-${++counter}`;
   const block = el("section", { class: "content-section summaries", "aria-labelledby": `${id}-heading` });
   const heading = el("div", { class: "section-heading" });
@@ -166,12 +171,7 @@ export function mountSummaries(container, { db, patientId, page }) {
   /** What the last drawing was made from; a Patient record change that alters none of it redraws nothing. */
   let drawnFrom = "";
 
-  const stop = listenSummaries(db, patientId, (next, error) => {
-    sorted = next;
-    failed = error;
-    dataVersion++;
-    render();
-  });
+  const fromView = summariesFromView();
   const stopSelect =
     page?.on("select-summary", (summaryId) => {
       selectedId = summaryId;
@@ -214,10 +214,13 @@ export function mountSummaries(container, { db, patientId, page }) {
   return {
     update(next) {
       view = next;
+      const read = fromView(next);
+      if (read.changed || read.failed !== failed) dataVersion++;
+      sorted = read.sorted;
+      failed = read.failed;
       render();
     },
     destroy() {
-      stop();
       stopSelect();
       block.remove();
     },
@@ -227,9 +230,9 @@ export function mountSummaries(container, { db, patientId, page }) {
 /**
  * The newest Summary, compact, on the Overview.
  * @param {HTMLElement} container
- * @param {{ db: import("firebase/firestore").Firestore, patientId: string, page?: { showTab: (id: string) => void, emit: (type: string, detail?: unknown) => void } }} ctx
+ * @param {{ page?: { showTab: (id: string) => void, emit: (type: string, detail?: unknown) => void } }} ctx
  */
-export function mountLatestSummary(container, { db, patientId, page }) {
+export function mountLatestSummary(container, { page }) {
   const id = `latest-summary-${++counter}`;
   const block = el("section", { class: "content-section latest-summary", "aria-labelledby": `${id}-heading` });
   const when = el("p", { class: "small muted" });
@@ -253,11 +256,7 @@ export function mountLatestSummary(container, { db, patientId, page }) {
     page?.emit("select-summary", summaryView(latest).id);
   });
 
-  const stop = listenSummaries(db, patientId, (next, error) => {
-    sorted = next;
-    failed = error;
-    render();
-  });
+  const fromView = summariesFromView();
 
   function render() {
     if (!view) return;
@@ -278,10 +277,12 @@ export function mountLatestSummary(container, { db, patientId, page }) {
   return {
     update(next) {
       view = next;
+      const read = fromView(next);
+      sorted = read.sorted;
+      failed = read.failed;
       render();
     },
     destroy() {
-      stop();
       block.remove();
     },
   };

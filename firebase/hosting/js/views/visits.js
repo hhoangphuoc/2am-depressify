@@ -3,16 +3,14 @@
 // Visit" modal form (`VisitForm` in design/clinician/src/App.jsx), which the page header's button
 // opens too (`page.emit("record-visit")`).
 //
-// The Clinician writes Visits directly through the Firestore SDK; the rules allow the Clinician to
-// create and update them. A Visit is only { date, questionnaire, score }: recording one writes that
-// document and nothing else, so it never changes an Attention flag. The checks the rules do not make
-// (no future date, a score inside its range; and the design's: not before the TMS end date, one
-// Visit per date) are `validateDesignVisit` (js/lib/design-model.js, on js/lib/visit.js). A failed
-// save keeps the form.
-import { addDoc, collection, doc, setDoc } from "https://www.gstatic.com/firebasejs/13.3.0/firebase-firestore.js";
-import { COLLECTIONS } from "../lib/contract.js";
-import { shortDate } from "../lib/dates.js";
-import { validateDesignVisit } from "../lib/design-model.js";
+// The Clinician records and edits Visits through the data layer (`data.recordVisit`,
+// js/lib/design-live.js); the rules allow the Clinician to create and update them. A Visit is only
+// { date, questionnaire, score }: recording one writes that document and nothing else, so it never
+// changes an Attention flag. The checks the rules do not make (no future date, a score inside its
+// range; and the design's: after the TMS end date, one Visit per date) are `validateDesignVisit`
+// (js/lib/design-model.js, on js/lib/visit.js), run by the data layer before it writes. A failed
+// save keeps the form and shows the data layer's copy.
+import { addDays, shortDate } from "../lib/dates.js";
 import { QUESTIONNAIRE_RANGES, questionnaireLabel } from "../lib/visit.js";
 import { createModal } from "./dialog.js";
 import { mountTmsEndForm } from "./tms-end.js";
@@ -34,7 +32,6 @@ const COPY = {
   retry: "Try saving again",
   cancel: "Cancel",
   saved: (/** @type {string} */ date) => `Visit saved for ${date}. Attention flag unchanged.`,
-  failed: "Could not save the Visit. Check the connection and try again; your entries are kept.",
   noVisits: "No Visits recorded yet.",
   editButton: "Edit",
   columns: ["Date", "Questionnaire", "Score", ""],
@@ -57,9 +54,9 @@ function el(tag, attrs = {}, text) {
 
 /**
  * @param {HTMLElement} container
- * @param {{ db: import("firebase/firestore").Firestore, patientId: string, page?: { on: (type: string, fn: () => void) => () => void } }} ctx
+ * @param {{ data: ReturnType<typeof import("../data/design-data.js").designData>, patientId: string, page?: { on: (type: string, fn: () => void) => () => void } }} ctx
  */
-export function mountVisits(container, { db, patientId, page }) {
+export function mountVisits(container, { data, patientId, page }) {
   const id = `visit-${++counter}`;
   const block = el("section", { class: "content-section visits", "aria-labelledby": `${id}-heading` });
   const headingText = el("div");
@@ -73,7 +70,7 @@ export function mountVisits(container, { db, patientId, page }) {
   const tmsSlot = el("div");
   block.append(headingWrap, status, tableWrap, tmsSlot);
   container.replaceChildren(block);
-  const tmsForm = mountTmsEndForm(tmsSlot, { db, patientId, variant: "row" });
+  const tmsForm = mountTmsEndForm(tmsSlot, { data, patientId, variant: "row" });
 
   // ---- The modal form --------------------------------------------------------------------------
   const modal = createModal({ title: COPY.record, onCancel: () => !busy && modal.close() });
@@ -137,7 +134,8 @@ export function mountVisits(container, { db, patientId, page }) {
     submit.textContent = busy ? COPY.saving : failed ? COPY.retry : COPY.save;
     cancel.disabled = busy;
     dateInput.max = today;
-    if (tms) dateInput.min = tms;
+    // A Visit is after the TMS end date: the first day it may be on is the day after.
+    if (tms) dateInput.min = addDays(tms, 1);
     else dateInput.removeAttribute("min");
   }
 
@@ -168,37 +166,34 @@ export function mountVisits(container, { db, patientId, page }) {
   form.addEventListener("submit", async (event) => {
     event.preventDefault();
     if (busy) return;
-    const result = validateDesignVisit({ date: dateInput.value, type: select.value, score: scoreInput.value }, { today, tms, visits, editingId });
-    if (!result.ok) {
-      const scoreProblem = Boolean(result.errors?.score ?? result.errors?.questionnaire);
-      const field = scoreProblem && !result.errors?.date ? scoreInput : dateInput;
+    busy = true;
+    drawForm();
+    // The data layer checks the form (`validateDesignVisit`), then writes only the Visit itself:
+    // never a flag or the Patient record. A new Visit is added; an edited one replaced.
+    const result = await data.recordVisit(patientId, { date: dateInput.value, type: select.value, score: scoreInput.value }, { today, tms, visits, editingId });
+    if (destroyed) return;
+    busy = false;
+    if (result.ok) {
+      failed = false;
+      const visit = /** @type {{ date: string }} */ (result.visit);
+      status.textContent = COPY.saved(shortDate(visit.date, today));
+      status.hidden = false;
+      modal.close(recordButton);
+    } else if (result.invalid) {
+      const errors = /** @type {Record<string, string>} */ (result.errors ?? {});
+      const scoreProblem = Boolean(errors.score ?? errors.questionnaire);
+      const field = scoreProblem && !errors.date ? scoreInput : dateInput;
+      drawForm();
       setError(result.message, [field]);
       field.focus();
       return;
-    }
-    busy = true;
-    drawForm();
-    try {
-      const visitsRef = collection(db, COLLECTIONS.patients, patientId, COLLECTIONS.visits);
-      // Only the Visit itself is written: never a flag or the Patient record.
-      if (editingId) await setDoc(doc(visitsRef, editingId), result.visit);
-      else await addDoc(visitsRef, result.visit);
-      if (destroyed) return;
-      busy = false;
-      failed = false;
-      status.textContent = COPY.saved(shortDate(result.visit.date, today));
-      status.hidden = false;
-      modal.close(recordButton);
-    } catch {
-      if (destroyed) return;
-      busy = false;
+    } else {
       failed = true;
       // Keep every entry so the Clinician can try again.
-      setError(COPY.failed);
+      setError(result.message);
       submit.focus();
-    } finally {
-      if (!destroyed) drawForm();
     }
+    drawForm();
   });
 
   function drawTable() {

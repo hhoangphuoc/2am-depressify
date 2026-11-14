@@ -4,6 +4,7 @@
 // date ticks. No DOM, no Firebase, no clock reads, so `node --test` runs them.
 import { baselineFor } from "./baseline.js";
 import { addDays, daysBetween, isDateKey, shortDate } from "./dates.js";
+import { DESIGN_LEVELS, rosterView } from "./design-model.js";
 import { weekOf } from "./timeline.js";
 
 /** The roster's filter buttons, in the design's words. */
@@ -209,4 +210,92 @@ export function laneTicks({ origin, span, today, plotWidth }) {
     if (day <= span) ticks.push({ at: day - 0.5, date, label: shortDate(date, today) });
   }
   return ticks.reverse();
+}
+
+// ---------------------------------------------------------------------------------------------
+// The Attention band
+// ---------------------------------------------------------------------------------------------
+
+export const ATTENTION_COPY = Object.freeze({
+  flagsFailed: "Could not load the flags. The level shown is the one saved on the Patient's record. Reload the page to try again.",
+  notLoaded: "Attention flag not loaded",
+});
+
+/**
+ * What the Attention band shows for a design patient object (`designPatient`). When the flags
+ * could not be loaded (`flagsError`), the record's stored level stands in with a notice, nothing
+ * can be cleared, and the band is never green: a stored green shows as "not loaded" instead.
+ * @param {{ level: string, levelWord?: string, flagsLoaded?: boolean, flagsError?: boolean }} patient
+ * @returns {{ level: string, word: string, notice: string | null, clearable: boolean }}
+ */
+export function attentionBand(patient) {
+  const word = patient.levelWord ?? DESIGN_LEVELS[/** @type {keyof typeof DESIGN_LEVELS} */ (patient.level)] ?? patient.level;
+  if (patient.flagsError === true) {
+    if (patient.level === "green") return { level: "unknown", word: ATTENTION_COPY.notLoaded, notice: ATTENTION_COPY.flagsFailed, clearable: false };
+    return { level: patient.level, word, notice: ATTENTION_COPY.flagsFailed, clearable: false };
+  }
+  return { level: patient.level, word, notice: null, clearable: patient.flagsLoaded === true };
+}
+
+// ---------------------------------------------------------------------------------------------
+// Charts in tabs
+// ---------------------------------------------------------------------------------------------
+
+/**
+ * Whether to draw a chart at `width`, and the width to remember. A hidden tab has no width: nothing
+ * is drawn and the width is forgotten (0), so showing the tab again counts as a resize.
+ * @param {number} width
+ * @returns {{ draw: boolean, drawnWidth: number }}
+ */
+export function chartDrawPlan(width) {
+  return width > 0 ? { draw: true, drawnWidth: width } : { draw: false, drawnWidth: 0 };
+}
+
+/**
+ * Whether a resize to `width` needs a redraw of a chart last drawn at `drawnWidth`.
+ * @param {number} drawnWidth @param {number} width
+ */
+export function needsRedraw(drawnWidth, width) {
+  return width > 0 && Math.abs(width - drawnWidth) > 8;
+}
+
+// ---------------------------------------------------------------------------------------------
+// The roster
+// ---------------------------------------------------------------------------------------------
+
+/**
+ * `rosterView` with the filter checked first: a filter that is no longer offered (no Patient is
+ * unassessed or withdrawn any more) falls back to "all" before the view is built, so the roster
+ * never shows an empty "No matching Patients" with "All" pressed.
+ * @param {Parameters<typeof rosterView>[0]} roster
+ * @param {{ search?: string, filter?: string }} options
+ * @returns {{ view: ReturnType<typeof rosterView>, filter: string }}
+ */
+export function rosterFor(roster, { search = "", filter = "all" }) {
+  const view = rosterView(roster, { search, filter: /** @type {any} */ (filter) });
+  if (view.filters.includes(filter)) return { view, filter };
+  return { view: rosterView(roster, { search, filter: "all" }), filter: "all" };
+}
+
+/**
+ * Everything a roster row shows, as one string: a row whose key is unchanged is kept as it is
+ * (and keeps focus); any change rebuilds that row only.
+ * @param {{ id: string, sharing: string, name: string, initials?: string, note?: string | null, level: string, levelWord?: string, activeFlags?: unknown[], daily?: unknown[], sleepConsent?: string, checkIn?: string | null, lastPhone?: string | null, freshness?: { stale?: boolean } | null }} p
+ */
+export function rosterRowKey(p) {
+  return JSON.stringify([
+    p.id,
+    p.sharing,
+    p.name,
+    p.initials,
+    p.note,
+    p.level,
+    p.levelWord,
+    p.activeFlags?.length ?? 0,
+    p.sleepConsent ?? null,
+    p.daily ?? [],
+    p.checkIn,
+    p.lastPhone,
+    Boolean(p.freshness?.stale),
+  ]);
 }
