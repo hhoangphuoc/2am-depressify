@@ -4,6 +4,7 @@ import type { CallerAuth } from "../src/clinician";
 import type { AlertStore } from "../src/alertFunctions";
 import { finishWrites, type FinishContent } from "../src/checkIn";
 import type { CheckInStore } from "../src/checkInFunctions";
+import { withEmail, withStart, type CheckInStart } from "../src/limits";
 import type { LiveTokenClient, LiveTokenRequest } from "../src/live";
 import type { DigestStore } from "../src/digestFunctions";
 import type { PatientStore } from "../src/intakeFunctions";
@@ -112,6 +113,8 @@ export class FakeDigestStore implements DigestStore {
 /** Patient records and the `mail` collection; `createMail` refuses an id that exists, like `create()`. */
 export class FakeAlertStore implements AlertStore {
   readonly mail = new Map<string, MailDoc>();
+  /** When each Patient's emails were written, as `patientLimits` keeps them. */
+  readonly emailsAt = new Map<string, number[]>();
   reads = 0;
   creates = 0;
   failReads = false;
@@ -126,12 +129,15 @@ export class FakeAlertStore implements AlertStore {
     return patient ? { ...patient } : undefined;
   }
 
-  async createMail(id: string, mail: MailDoc) {
+  async createMail(id: string, mail: MailDoc, patientId: string, nowMillis: number) {
     this.creates += 1;
     if (this.failWrites) throw new Error("write failed");
-    if (this.mail.has(id)) return false;
+    if (this.mail.has(id)) return "duplicate" as const;
+    const emails = withEmail(this.emailsAt.get(patientId), nowMillis);
+    if (emails === null) return "capped" as const;
     this.mail.set(id, mail);
-    return true;
+    this.emailsAt.set(patientId, emails);
+    return "sent" as const;
   }
 }
 
@@ -209,6 +215,8 @@ export class FakeCheckInStore implements CheckInStore {
   readonly summaries = new Map<string, Summary>();
   readonly consents = new Map<string, boolean>();
   readonly suggestions = new Map<string, Partial<Suggestion>>();
+  /** Each Patient's recorded starts, as `patientLimits` keeps them. */
+  readonly starts = new Map<string, CheckInStart[]>();
   /** Every document write, in order, as `path` and the data written. */
   readonly writes: { path: string; data: unknown }[] = [];
   failReads = false;
@@ -243,6 +251,20 @@ export class FakeCheckInStore implements CheckInStore {
     if (this.failReads) throw new Error("read failed");
     const doc = this.suggestions.get(this.key(patientId, suggestionId));
     return doc ? structuredClone(doc) : undefined;
+  }
+
+  async reserveStart(patientId: string, start: CheckInStart) {
+    if (this.failWrites) throw new Error("write failed");
+    const starts = withStart(this.starts.get(patientId), start);
+    if (starts === null) return false;
+    this.starts.set(patientId, starts);
+    this.writes.push({ path: `patientLimits/${patientId}`, data: { checkInStarts: structuredClone(starts) } });
+    return true;
+  }
+
+  async getStart(patientId: string, checkInId: string) {
+    if (this.failReads) throw new Error("read failed");
+    return this.starts.get(patientId)?.find((start) => start.checkInId === checkInId);
   }
 
   async createCheckIn(patientId: string, checkIn: CheckIn) {

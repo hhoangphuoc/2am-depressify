@@ -325,6 +325,12 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
+    // Hourly caps and who started each recent Check-in, kept by functions with the Admin SDK
+    // (firebase/functions/src/limits.ts). No client access, so a client cannot reset a cap.
+    match /patientLimits/{patientId} {
+      allow read, write: if false;
+    }
+
     // The Clinician allowlist, keyed by email. Written with the Admin SDK only; no client may read
     // it (so it never lists who the Clinicians are) or write it. Rules read it through exists().
     match /clinicians/{email} {

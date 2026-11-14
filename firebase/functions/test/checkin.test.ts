@@ -326,7 +326,7 @@ describe("finishWrites", () => {
   const content: FinishContent = summaryContent(parseModelSummary(recordedOutput), DRAFT, ALL);
   const checkIn = newCheckIn("c1", sharing, 500);
 
-  it("writes a Summary keyed by the Check-in, stamped as the Patient shares now", () => {
+  it("writes a Summary keyed by the Check-in, shared when the Check-in is and the Patient shares now", () => {
     const writes = finishWrites({ patient: sharing, checkIn, summary: undefined }, "c1", content, 1_000);
     expect(writes.summary).toEqual({
       checkInId: "c1",
@@ -343,6 +343,9 @@ describe("finishWrites", () => {
       sharedWithClinician: true,
     });
     expect(finishWrites({ patient: notSharing, checkIn, summary: undefined }, "c1", content, 1_000).summary.sharedWithClinician).toBe(false);
+    // A Check-in started while not sharing stays unshared even if the Patient shares by the end.
+    const unshared = newCheckIn("c1", notSharing, 500);
+    expect(finishWrites({ patient: sharing, checkIn: unshared, summary: undefined }, "c1", content, 1_000).summary.sharedWithClinician).toBe(false);
   });
 
   it("on a retry keeps the existing stamp and creation time, and overwrites the content", () => {

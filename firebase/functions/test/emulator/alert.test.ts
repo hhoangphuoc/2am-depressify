@@ -13,12 +13,14 @@ import { getFirestore as getAdminFirestore } from "firebase-admin/firestore";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { mailIdFor } from "../../src/alerts";
 import { adminAlertStore, redFlagAlertHandler } from "../../src/alertFunctions";
+import { MAX_RED_FLAG_EMAILS_PER_HOUR, PATIENT_LIMITS } from "../../src/limits";
 import { newPatientDoc, type Flag, type MailDoc } from "../../src/types";
 
 const PROJECT_ID = "demo-twoam";
 const CLINICIAN = "clinician@example.com";
 const SHARING = "alert-emu-sharing";
 const NOT_SHARING = "alert-emu-not-sharing";
+const CAPPED = "alert-emu-capped";
 const DASHBOARD = "https://dashboard.example.test";
 
 const adminApp = initializeAdminApp({ projectId: PROJECT_ID }, "alert-admin");
@@ -55,6 +57,8 @@ async function patientsMail(): Promise<MailDoc[]> {
 
 beforeAll(async () => {
   for (const id of [SHARING, NOT_SHARING]) await adminDb.recursiveDelete(adminDb.collection("patients").doc(id));
+  // The caps outlive a run against a long-lived emulator; start each run with none used.
+  for (const id of [SHARING, NOT_SHARING, CAPPED]) await adminDb.collection(PATIENT_LIMITS).doc(id).delete();
   await adminDb.collection("patients").doc(SHARING).set({ ...newPatientDoc("Alex Example", CLINICIAN), sharingConsent: "granted" });
   await adminDb.collection("patients").doc(NOT_SHARING).set({ ...newPatientDoc("Sam Example", CLINICIAN), sharingConsent: "declined" });
 });
@@ -77,6 +81,19 @@ describe("redFlagAlertHandler with the Admin SDK on the Firestore emulator", () 
     expect(mail?.message.subject).toBe("[CRISIS] Red flag for Alex Example: crisis in a Check-in");
     expect(mail?.message.text).toContain(`${DASHBOARD}/#/patient/${SHARING}`);
     expect(await patientsMail()).toHaveLength(1);
+  });
+
+  it("the store stops creating email for one Patient past the hourly cap, in its transaction", async () => {
+    const now = Date.now();
+    const send = (n: number) => {
+      const id = mailIdFor(CAPPED, `cap-${n}-${RUN}`);
+      createdMail.push(id);
+      return store.createMail(id, { to: CLINICIAN, message: { subject: "s", text: "t" } }, CAPPED, now);
+    };
+    for (let i = 0; i < MAX_RED_FLAG_EMAILS_PER_HOUR; i++) expect(await send(i)).toBe("sent");
+    expect(await send(MAX_RED_FLAG_EMAILS_PER_HOUR)).toBe("capped");
+    expect((await adminDb.collection("mail").doc(mailIdFor(CAPPED, `cap-${MAX_RED_FLAG_EMAILS_PER_HOUR}-${RUN}`)).get()).exists).toBe(false);
+    expect(await send(0)).toBe("duplicate");
   });
 
   it("an amber flag writes no email", async () => {

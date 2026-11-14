@@ -5,6 +5,7 @@ import { join } from "node:path";
 import { beforeEach, describe, expect, it } from "vitest";
 import { finishCheckInHandler, startCheckInHandler } from "../src/checkInFunctions";
 import type { CallerAuth } from "../src/clinician";
+import { LIMIT_WINDOW_MS, MAX_CHECK_IN_STARTS_PER_HOUR } from "../src/limits";
 import { LIVE_ENDPOINT, LIVE_NEW_SESSION_WINDOW_MS, LIVE_TOKEN_LIFETIME_MS } from "../src/live";
 import { newPatientDoc, type PatientDoc } from "../src/types";
 import { CLINICIAN_EMAIL, FakeCheckInStore, FakeLiveTokens, FakeTextModel, PATIENT_ID, failingTextModel } from "./fakes";
@@ -136,7 +137,20 @@ describe("startCheckIn", () => {
   it("creates no Check-in when the token request fails", async () => {
     tokens.fail = 503;
     await expect(start({ patientId: PATIENT_ID, brief: BRIEF })).rejects.toMatchObject({ code: "unavailable" });
-    expect(store.writes).toHaveLength(0);
+    expect(store.checkIns.size).toBe(0);
+  });
+
+  it("refuses a start past the hourly cap without minting, and allows it again an hour later", async () => {
+    for (let i = 0; i < MAX_CHECK_IN_STARTS_PER_HOUR; i++) await started(DEMO_ID, otherAuth);
+    const minted = tokens.requests.length;
+    // The cap is per Patient record, whoever calls: anonymous accounts are free to make.
+    await expect(start({ patientId: DEMO_ID, brief: BRIEF }, { uid: "a-third-user", token: {} })).rejects.toMatchObject({ code: "resource-exhausted" });
+    expect(tokens.requests).toHaveLength(minted);
+    expect(store.checkIns.size).toBe(MAX_CHECK_IN_STARTS_PER_HOUR);
+    // Another Patient is not affected.
+    await started();
+    const later = () => NOW + LIMIT_WINDOW_MS;
+    await startCheckInHandler({ data: { patientId: DEMO_ID, brief: BRIEF }, auth: otherAuth }, { ...startDeps(), clock: later });
   });
 
   it("answers unavailable when the store fails", async () => {
@@ -231,8 +245,33 @@ describe("finishCheckIn", () => {
     expect(summary.sharedWithClinician).toBe(false);
   });
 
-  it("falls back to a minimal Summary when the model fails or replies with malformed output, and still succeeds", async () => {
-    for (const textModel of [failingTextModel(500), new FakeTextModel("not json at all"), new FakeTextModel(null), new FakeTextModel("[]")]) {
+  it("shares the Summary only when the Check-in was started while sharing and the Patient still shares", async () => {
+    const share = (sharingConsent: PatientDoc["sharingConsent"]) => store.patients.set(PATIENT_ID, { ...store.patients.get(PATIENT_ID)!, sharingConsent });
+    // Started while not sharing, then the Patient shares: the conversation was not for the Clinician.
+    share("declined");
+    const unshared = await started();
+    share("granted");
+    expect((await finish({ patientId: PATIENT_ID, checkInId: unshared, draft: DRAFT })).summary.sharedWithClinician).toBe(false);
+    // Started while sharing, then the Patient stops before the end.
+    const stopped = await started();
+    share("declined");
+    expect((await finish({ patientId: PATIENT_ID, checkInId: stopped, draft: DRAFT })).summary.sharedWithClinician).toBe(false);
+  });
+
+  it("answers unavailable and saves nothing when the model times out or fails, so the phone can retry", async () => {
+    const timeout = new FakeTextModel(async () => { throw new Error("timed out"); });
+    for (const textModel of [timeout, failingTextModel(500), failingTextModel(429)]) {
+      const checkInId = await started();
+      await expect(finish({ patientId: PATIENT_ID, checkInId, draft: DRAFT }, textModel)).rejects.toMatchObject({ code: "unavailable" });
+      expect(store.summaries.has(`${PATIENT_ID}/${checkInId}`)).toBe(false);
+      expect(store.checkIns.get(`${PATIENT_ID}/${checkInId}`)?.endedAtMillis).toBeNull();
+      const retry = await finish({ patientId: PATIENT_ID, checkInId, draft: DRAFT });
+      expect(retry.minimal).toBe(false);
+    }
+  });
+
+  it("falls back to a minimal Summary when the model refuses the request or replies with malformed output, and still succeeds", async () => {
+    for (const textModel of [failingTextModel(400), new FakeTextModel("not json at all"), new FakeTextModel(null), new FakeTextModel("[]")]) {
       const checkInId = await started();
       const result = await finish({ patientId: PATIENT_ID, checkInId, draft: DRAFT }, textModel);
       expect(result.minimal).toBe(true);
@@ -308,6 +347,18 @@ describe("finishCheckIn", () => {
     const checkInId = await started(DEMO_ID, otherAuth);
     const { summary } = await finish({ patientId: DEMO_ID, checkInId, draft: DRAFT }, new FakeTextModel(MODEL_JSON), otherAuth);
     expect(store.summaries.get(`${DEMO_ID}/${checkInId}`)).toEqual(summary);
+  });
+
+  it("on a Demo Patient lets only the caller who started a Check-in finish it, so seeded Summaries stay", async () => {
+    const model = new FakeTextModel(MODEL_JSON);
+    const checkInId = await started(DEMO_ID, otherAuth);
+    const stranger: CallerAuth = { uid: "a-third-user", token: {} };
+    await expect(finish({ patientId: DEMO_ID, checkInId, draft: DRAFT }, model, stranger)).rejects.toMatchObject({ code: "permission-denied" });
+    // A seeded Check-in: Start Check-in never created it, so nobody finishes it through the shortcut.
+    store.checkIns.set(`${DEMO_ID}/checkin-2026-11-13`, { id: "checkin-2026-11-13", startedAtMillis: NOW - 86_400_000, endedAtMillis: NOW - 86_000_000, sharedWithClinician: true });
+    await expect(finish({ patientId: DEMO_ID, checkInId: "checkin-2026-11-13", draft: DRAFT }, model, otherAuth)).rejects.toMatchObject({ code: "permission-denied" });
+    expect(model.requests).toHaveLength(0);
+    expect(store.summaries.size).toBe(0);
   });
 
   it("refuses a Check-in that was never started, before calling the model", async () => {

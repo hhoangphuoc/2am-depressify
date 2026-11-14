@@ -677,6 +677,16 @@ describe("The mail collection is not writable or readable by any client", () => 
   });
 });
 
+describe("The patientLimits collection is not writable or readable by any client", () => {
+  it("no Patient (their own included), Clinician or signed-in user reads or resets the caps", async () => {
+    for (const db of [asPatient(env, ALICE), asClinician(env, CLINICIAN), asPatient(env, STRANGER), signedOut(env)]) {
+      await assertFails(getDoc(doc(db, `patientLimits/${ALICE}`)));
+      await assertFails(setDoc(doc(db, `patientLimits/${ALICE}`), { checkInStarts: [], redFlagEmailsAtMillis: [] }));
+      await assertFails(deleteDoc(doc(db, `patientLimits/${ALICE}`)));
+    }
+  });
+});
+
 describe("The clinicians allowlist is not readable or writable by any client", () => {
   it("no Patient, Clinician, signed-in or signed-out user reads, lists or writes it", async () => {
     const path = `clinicians/${CLINICIAN}`;

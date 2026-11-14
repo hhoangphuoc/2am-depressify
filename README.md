@@ -227,7 +227,7 @@ The fictional Intake for the live demo Patient is in [docs/demo/intake-live-pati
 
 ### Check-in (Start and Finish)
 
-Two callables in `europe-north1` serve a Check-in (#14). The caller must be the Patient (`auth.uid == patientId`), or anyone signed in when the Patient is a Demo Patient (`synthetic: true`), as in the rules. Signed out: `unauthenticated`; anyone else, or a missing Patient: `permission-denied`.
+Two callables in `europe-north1` serve a Check-in (#14). The caller must be the Patient (`auth.uid == patientId`), or anyone signed in when the Patient is a Demo Patient (`synthetic: true`), as in the rules. Signed out: `unauthenticated`; anyone else, or a missing Patient: `permission-denied`. On a Demo Patient only the caller who started a Check-in may finish it, so the seeded Summaries cannot be overwritten. One Patient record starts at most 10 Check-ins an hour; past that `startCheckIn` answers `resource-exhausted` without minting a token.
 
 | Callable | Request | Response |
 |---|---|---|
@@ -250,7 +250,7 @@ Two callables in `europe-north1` serve a Check-in (#14). The caller must be the 
 }
 ```
 
-`todayLines` are today's Signals against Baseline as words (at most 12), and `lastSuggestionId` the previous Suggestion the Companion asked about. Malformed items inside the lists are dropped and long text is cut (turns 2,000 characters, at most 400 turns); a wrong overall shape is `invalid-argument`. The function calls `gemini-4-hydrogen` with storage off and structured output (one attempt, 40-second timeout), then writes `summaries/{checkInId}`, the ratings, Voice cues, crisis marker and end time on the Check-in, and `lastCheckInAtMillis` / `lastSeenAtMillis` on the Patient, in one transaction. A silent Check-in, a failed model call or malformed output still succeeds with the minimal Summary (`minimal: true`). A Check-in that Start Check-in never created is `not-found`. A failed write is `unavailable`: retry with the same `checkInId`, which overwrites the one Summary and never makes a second. A retry without usable model output keeps what the model wrote before. The returned `summary` is exactly what the Patient and the Clinician read.
+`todayLines` are today's Signals against Baseline as words (at most 12), and `lastSuggestionId` the previous Suggestion the Companion asked about. Malformed items inside the lists are dropped and long text is cut (turns 2,000 characters, at most 400 turns); a wrong overall shape is `invalid-argument`. The function calls `gemini-4-hydrogen` with storage off and structured output (one attempt, 40-second timeout), then writes `summaries/{checkInId}`, the ratings, Voice cues, crisis marker and end time on the Check-in, and `lastCheckInAtMillis` / `lastSeenAtMillis` on the Patient, in one transaction. A model timeout, rate limit or server error is `unavailable` and saves nothing: retry with the same `checkInId` while the phone still holds the draft. A silent Check-in, a request the model refuses or malformed output still succeeds with the minimal Summary (`minimal: true`). The Summary is shared with the Clinician only when the Check-in was started while sharing and the Patient still shares at the end. A Check-in that Start Check-in never created is `not-found`. A failed write is `unavailable`: retry with the same `checkInId`, which overwrites the one Summary and never makes a second. A retry without usable model output keeps what the model wrote before. The returned `summary` is exactly what the Patient and the Clinician read.
 
 Both need the `GEMINI_API_KEY` secret. In the emulator there is no secret, so `startCheckIn` fails with `unavailable` after its checks and creates nothing, and `finishCheckIn` works only for a silent Check-in (no model call). The emulator suite exercises exactly those paths. With `CHECKIN_REAL_GEMINI=1` and `GEMINI_API_KEY` in the environment, `test/emulator/checkin.test.ts` also runs the handlers against the real API with fictional text, writing only to the Firestore emulator; it never runs by default.
 
@@ -272,7 +272,7 @@ Both call the text model with storage off and need the `GEMINI_API_KEY` secret. 
 
 ### Red flag email
 
-When a red flag is created (`patients/{id}/flags/{flagId}`), the `redFlagAlert` function writes one email for the Patient's Clinician to the top-level `mail` collection. The Firebase Trigger Email extension then sends it. Every red flag is covered, whoever raises it: the phone's crisis tool, Finish Check-in's backstop, the phone's daily job, and the hourly silence check (#28). They only have to create the flag.
+When a red flag is created (`patients/{id}/flags/{flagId}`), the `redFlagAlert` function writes one email for the Patient's Clinician to the top-level `mail` collection. The Firebase Trigger Email extension then sends it. Every red flag is covered, whoever raises it: the phone's crisis tool, Finish Check-in's backstop, the phone's daily job, and the hourly silence check (#28). They only have to create the flag. One Patient record causes at most 5 emails an hour; a flag past that is still recorded and shown on the dashboard.
 
 | Sent when | Not sent when |
 |---|---|

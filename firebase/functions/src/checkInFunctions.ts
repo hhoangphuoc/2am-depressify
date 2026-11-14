@@ -5,6 +5,8 @@
 //                  Mints a single-use ephemeral Live token locked to LIVE_MODEL, the Brief plus the
 //                  fixed safety rules, the tool declarations and both transcriptions, then creates
 //                  `checkIns/{checkInId}` with empty function-only fields, stamped with `sharingStamp`.
+//                  At most MAX_CHECK_IN_STARTS_PER_HOUR per Patient (limits.ts); past that it answers
+//                  `resource-exhausted` without minting.
 //   finishCheckIn  {patientId, checkInId, draft, todayLines?, lastSuggestionId?}
 //                    -> {checkInId, summary, minimal}
 //                  Calls the text model (storage off, structured output) for the Summary, writes
@@ -12,6 +14,9 @@
 //                  end time on the Check-in, and `lastCheckInAtMillis` / `lastSeenAtMillis` on the
 //                  Patient, all in one transaction. A retry overwrites the same Summary,
 //                  but one without model output keeps what the model wrote before.
+//                  A caller who is not the Patient (the demo shortcut) may finish only a Check-in
+//                  they started. A model timeout or server error answers `unavailable` and saves
+//                  nothing, so the phone can retry while it still holds the draft.
 //
 // The Brief, the token and the draft are never written or logged, including on error paths: every
 // failure becomes an HttpsError with fixed wording, and log lines carry ids and an HTTP status only.
@@ -35,6 +40,7 @@ import {
 } from "./checkIn";
 import { GEMINI_API_KEY, type TextModelClient } from "./gemini";
 import { callerOf, requireAuth, safely, statusOf, type IntakeCall } from "./intakeFunctions";
+import { PATIENT_LIMITS, storedStarts, withStart, type CheckInStart } from "./limits";
 import {
   LIVE_ENDPOINT,
   LIVE_MODEL_RESOURCE,
@@ -56,6 +62,13 @@ export interface CheckInStore {
   /** `consents/{subject}.granted`, or null when there is no document (which means included). */
   getConsent(patientId: string, subject: "ratings" | "voice_cues"): Promise<boolean | null>;
   getSuggestion(patientId: string, suggestionId: string): Promise<Partial<Suggestion> | undefined>;
+  /**
+   * Records the start in `patientLimits/{patientId}`, in a transaction. Resolves false, writing
+   * nothing, when the Patient has reached the hourly cap (`withStart`).
+   */
+  reserveStart(patientId: string, start: CheckInStart): Promise<boolean>;
+  /** The recorded start of this Check-in, if Start Check-in created it recently. */
+  getStart(patientId: string, checkInId: string): Promise<CheckInStart | undefined>;
   /** Creates `checkIns/{checkIn.id}`; fails if it exists. */
   createCheckIn(patientId: string, checkIn: CheckIn): Promise<void>;
   /**
@@ -84,6 +97,7 @@ export function adminCheckInStore(db: Firestore): CheckInStore {
   const patientRef = (patientId: string) => db.collection(COLLECTIONS.patients).doc(patientId);
   const checkInRef = (patientId: string, checkInId: string) => patientRef(patientId).collection(COLLECTIONS.checkIns).doc(checkInId);
   const summaryRef = (patientId: string, checkInId: string) => patientRef(patientId).collection(COLLECTIONS.summaries).doc(checkInId);
+  const limitsRef = (patientId: string) => db.collection(PATIENT_LIMITS).doc(patientId);
   return {
     async getPatient(patientId) {
       const snapshot = await patientRef(patientId).get();
@@ -101,6 +115,18 @@ export function adminCheckInStore(db: Firestore): CheckInStore {
     async getSuggestion(patientId, suggestionId) {
       const snapshot = await patientRef(patientId).collection(COLLECTIONS.suggestions).doc(suggestionId).get();
       return snapshot.exists ? (snapshot.data() as Partial<Suggestion>) : undefined;
+    },
+    async reserveStart(patientId, start) {
+      return db.runTransaction(async (tx) => {
+        const starts = withStart((await tx.get(limitsRef(patientId))).get("checkInStarts"), start);
+        if (starts === null) return false;
+        tx.set(limitsRef(patientId), { checkInStarts: starts }, { merge: true });
+        return true;
+      });
+    },
+    async getStart(patientId, checkInId) {
+      const stored = (await limitsRef(patientId).get()).get("checkInStarts");
+      return storedStarts(stored).find((start) => start.checkInId === checkInId);
     },
     async createCheckIn(patientId, checkIn) {
       await checkInRef(patientId, checkIn.id).create(checkIn);
@@ -150,6 +176,21 @@ export async function startCheckInHandler(call: IntakeCall, deps: StartCheckInDe
   assertActsAsPatient(patientId, patient, auth);
 
   const nowMillis = (deps.clock ?? Date.now)();
+  const checkInId = (deps.newId ?? randomUUID)();
+  // Before the token: a refused start costs nothing. A start whose token request then fails still
+  // counts, so retries against a failing Gemini are capped too.
+  let reserved: boolean;
+  try {
+    reserved = await deps.store.reserveStart(patientId, { checkInId, uid: auth.uid, startedAtMillis: nowMillis });
+  } catch {
+    logger.warn("startCheckIn: could not record the start", { patientId });
+    throw new HttpsError("unavailable", "Could not start the Check-in. Try again.");
+  }
+  if (!reserved) {
+    logger.warn("startCheckIn: the hourly cap is reached", { patientId });
+    throw new HttpsError("resource-exhausted", "Too many Check-ins were started in the last hour. Try again later.");
+  }
+
   const systemInstruction = buildSystemInstruction(brief, { firstCheckIn: patient.lastCheckInAtMillis == null, mode });
   let token: string;
   try {
@@ -160,7 +201,6 @@ export async function startCheckInHandler(call: IntakeCall, deps: StartCheckInDe
     throw new HttpsError("unavailable", "Could not start the Check-in. Try again.");
   }
 
-  const checkInId = (deps.newId ?? randomUUID)();
   try {
     // Written here rather than by the phone, so the Check-in exists before the phone connects and
     // its function-only fields start empty under the Admin SDK.
@@ -188,6 +228,12 @@ export async function finishCheckInHandler(call: IntakeCall, deps: FinishCheckIn
   const ids = { patientId, checkInId };
   const patient = await readOrUnavailable("finishCheckIn", ids, () => deps.store.getPatient(patientId));
   assertActsAsPatient(patientId, patient, auth);
+  if (auth.uid !== patientId) {
+    // The demo shortcut lets anyone signed in act as a Demo Patient. Only the caller who started
+    // this Check-in may finish it, so nobody can overwrite the Demo Patient's other Summaries.
+    const startedBy = await readOrUnavailable("finishCheckIn", ids, () => deps.store.getStart(patientId, checkInId));
+    if (startedBy?.uid !== auth.uid) throw new HttpsError("permission-denied", "Only the phone that started this Check-in can finish it.");
+  }
 
   const [checkIn, ratingsConsent, voiceCuesConsent, previous] = await readOrUnavailable("finishCheckIn", ids, () =>
     Promise.all([
@@ -212,12 +258,18 @@ export async function finishCheckInHandler(call: IntakeCall, deps: FinishCheckIn
     } catch (error) {
       // Never log the error itself: its message or body may echo the transcript. Its class name and
       // the time it took tell a timeout from a refusal.
-      logger.warn("finishCheckIn: the text model call failed; saving a minimal Summary", {
+      const status = statusOf(error);
+      // A timeout, a lost connection, rate limiting or a server error may pass: save nothing and let
+      // the phone retry while it still holds the draft. Any other refusal would fail again the same
+      // way, so the Check-in ends with the minimal Summary instead of never ending.
+      const mayPass = status === null || status === 408 || status === 429 || status >= 500;
+      logger.warn("finishCheckIn: the text model call failed; " + (mayPass ? "nothing saved, the phone can retry" : "saving a minimal Summary"), {
         ...ids,
-        status: statusOf(error),
+        status,
         error: error instanceof Error ? error.name : typeof error,
         elapsedMs: Date.now() - startedAt,
       });
+      if (mayPass) throw new HttpsError("unavailable", "Could not make your Summary. Try again.");
     }
   }
 
