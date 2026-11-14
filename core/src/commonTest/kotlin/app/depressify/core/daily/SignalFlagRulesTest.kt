@@ -148,7 +148,9 @@ class SignalFlagRulesTest {
     @Test
     fun reasonsArePlainSentencesWithNoDecimalNumbers() {
         val decimal = Regex("""\d+[.,]\d""")
-        val reasons = FlagReasons.all + listOf(FlagReasons.sleepUnder(150.0), FlagReasons.sleepUnder(90.0))
+        val reasons = with(FlagReasons) {
+            listOf(sleepUnder(DailyThresholds.SLEEP_COLLAPSE_MINUTES), sleepUnder(150.0), sleepUnder(90.0), SLEEP_FAR_BELOW_USUAL, INACTIVE, POOR_SLEEP, LOW_MOOD, DRIFT)
+        }
         for (reason in reasons) {
             assertFalse(decimal.containsMatchIn(reason), reason)
             assertTrue(reason.first().isUpperCase() && reason.endsWith("."), reason)

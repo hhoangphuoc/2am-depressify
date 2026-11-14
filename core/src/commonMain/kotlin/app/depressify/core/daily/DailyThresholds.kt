@@ -31,6 +31,9 @@ object DailyThresholds {
     /** STARTING VALUE. Amber `drift` needs this many days in a row. */
     const val DRIFT_DAYS: Int = 3
 
+    /** STARTING VALUE. A day counts toward `drift` only when at least this many Signals have a comparison. */
+    const val DRIFT_MIN_SIGNALS: Int = 2
+
     /**
      * How many previous daily records the job needs: the Baseline window for the earliest day of the
      * longest run. Fewer still work; the earlier days then simply have no comparison.

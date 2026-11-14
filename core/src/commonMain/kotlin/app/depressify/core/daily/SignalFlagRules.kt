@@ -35,10 +35,6 @@ object FlagReasons {
         return "Slept under $amount last night."
     }
 
-    /** Every fixed reason, for tests. */
-    val all: List<String>
-        get() = listOf(sleepUnder(DailyThresholds.SLEEP_COLLAPSE_MINUTES), SLEEP_FAR_BELOW_USUAL, INACTIVE, POOR_SLEEP, LOW_MOOD, DRIFT)
-
     private fun words(n: Int): String =
         listOf("zero", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten").getOrNull(n) ?: n.toString()
 }

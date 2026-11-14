@@ -32,7 +32,7 @@ object DailyRecordBuilder {
         demoOverride: Boolean = false,
     ): DailyDoc {
         val today = DayValues(date, Signal.entries.associateWith { values[it]?.takeIf(Double::isFinite) })
-        val vsBaseline = SignalBaseline.comparisons(previousDays.filter { it.date != date }, today)
+        val vsBaseline = SignalBaseline.comparisons(previousDays, today)
         return DailyDoc.of(
             date = date,
             values = today.values,

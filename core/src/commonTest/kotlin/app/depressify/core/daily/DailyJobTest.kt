@@ -179,6 +179,15 @@ class DailyJobTest {
     }
 
     @Test
+    fun driftNeedsSeveralSignalsSoSleepAloneIsOnlyPoorSleep() {
+        // Sharing only sleep, the composite is just sleep: three rough nights are poor sleep, not drift too.
+        val sleepOnly = previousDays { ago, v -> v[Signal.STEPS] = null; if (ago <= 2) v[Signal.SLEEP_MINUTES] = 385.0 }
+        val result = DailyJob.run(inputs(readings = mapOf(Signal.SLEEP_MINUTES to 385.0), previous = sleepOnly))
+        assertTrue(result.daily.composite!! <= DailyThresholds.DRIFT_COMPOSITE)
+        assertEquals(listOf(FlagKind.poor_sleep), result.kinds())
+    }
+
+    @Test
     fun aConstantHistoryNeverRaisesDrift() {
         val constant = previousDays { _, v -> v[Signal.SLEEP_MINUTES] = 420.0; v[Signal.STEPS] = 6000.0 }
         val result = DailyJob.run(inputs(readings = mapOf(Signal.SLEEP_MINUTES to 420.0, Signal.STEPS to 6000.0), previous = constant))

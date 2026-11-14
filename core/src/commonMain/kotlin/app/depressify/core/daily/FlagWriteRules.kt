@@ -46,8 +46,6 @@ data class FlagWritePlan(
  */
 object FlagWriteRules {
 
-    private fun rank(level: FlagLevel): Int = level.ordinal // green < amber < red
-
     /**
      * The flag id for a kind raised on a date: `<kind>-<date>`, the seed's format, so a retried or
      * repeated run the same day computes the same id and can never write a second flag. A flag
@@ -68,9 +66,10 @@ object FlagWriteRules {
      * reason is never listed twice. Existing reasons are all kept.
      */
     fun raisedAttention(currentLevel: FlagLevel, currentReasons: List<String>, level: FlagLevel, reason: String): AttentionUpdate {
-        val newLevel = if (rank(level) > rank(currentLevel)) level else currentLevel
+        // FlagLevel is declared green, amber, red, so the enum's order is the level's rank.
+        val newLevel = maxOf(level, currentLevel)
         val kept = currentReasons.filter { it != reason }
-        val reasons = if (rank(level) >= rank(currentLevel)) listOf(reason) + kept else kept + reason
+        val reasons = if (level >= currentLevel) listOf(reason) + kept else kept + reason
         return AttentionUpdate(newLevel, reasons)
     }
 
@@ -108,7 +107,7 @@ object FlagWriteRules {
             }
         }
         // Lowest level first, so the red reasons end up first and each level's newest leads it.
-        val counted = newFlags.filter { it.flag.sharedWithClinician }.sortedBy { rank(it.flag.level) }
+        val counted = newFlags.filter { it.flag.sharedWithClinician }.sortedBy { it.flag.level }
         val attention = if (counted.isEmpty()) {
             null
         } else {

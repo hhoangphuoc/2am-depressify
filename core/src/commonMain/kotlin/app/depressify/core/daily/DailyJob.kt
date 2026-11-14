@@ -99,18 +99,13 @@ object DailyJob {
         val runDays = maxOf(DailyThresholds.POOR_SLEEP_NIGHTS, DailyThresholds.DRIFT_DAYS)
         val today = LocalDate.parse(date)
         val byDate = previous.associateBy { it.date }
+        val todayVs = Signal.entries.associateWith { daily.vsBaseline[it.key] }
         val orientedSleep = mutableListOf<Double?>()
         val composites = mutableListOf<Double?>()
         for (ago in runDays - 1 downTo 0) {
-            if (ago == 0) {
-                orientedSleep += SignalBaseline.oriented(Signal.SLEEP_MINUTES, daily.vsBaseline[Signal.SLEEP_MINUTES.key])
-                composites += daily.composite
-            } else {
-                val day = byDate[today.minus(ago, DateTimeUnit.DAY).toString()]
-                val vs = day?.let { SignalBaseline.comparisons(previous, it) }
-                orientedSleep += SignalBaseline.oriented(Signal.SLEEP_MINUTES, vs?.get(Signal.SLEEP_MINUTES))
-                composites += vs?.let(SignalBaseline::composite)
-            }
+            val vs = if (ago == 0) todayVs else byDate[today.minus(ago, DateTimeUnit.DAY).toString()]?.let { SignalBaseline.comparisons(previous, it) }
+            orientedSleep += SignalBaseline.oriented(Signal.SLEEP_MINUTES, vs?.get(Signal.SLEEP_MINUTES))
+            composites += vs?.let(::driftComposite)
         }
 
         val finished = inputs.checkIns
@@ -140,4 +135,8 @@ object DailyJob {
             skipped = plan.skipped,
         )
     }
+
+    /** The composite, counted for drift only when several Signals make it up; one Signal alone is that Signal's own rule. */
+    private fun driftComposite(vs: Map<Signal, Double?>): Double? =
+        SignalBaseline.composite(vs).takeIf { Signal.entries.count { SignalBaseline.oriented(it, vs[it]) != null } >= DailyThresholds.DRIFT_MIN_SIGNALS }
 }
