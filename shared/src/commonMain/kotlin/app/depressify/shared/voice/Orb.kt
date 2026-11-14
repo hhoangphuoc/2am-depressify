@@ -103,7 +103,14 @@ half4 main(float2 fragCoord) {
  * Reduce Motion keeps a still frame and only crossfades colour.
  */
 @Composable
-fun Orb(state: LiveState, size: Dp, onInterrupt: () -> Unit, modifier: Modifier = Modifier, still: Boolean = false) {
+fun Orb(
+    state: LiveState,
+    size: Dp,
+    onInterrupt: () -> Unit,
+    modifier: Modifier = Modifier,
+    still: Boolean = false,
+    interactive: Boolean = !still,
+) {
     val reduce = Theme.reduceMotion || still
     val dim = if (Theme.colors.night) 0.84f else 1f
     val target = Palettes.getValue(state)
@@ -144,9 +151,9 @@ fun Orb(state: LiveState, size: Dp, onInterrupt: () -> Unit, modifier: Modifier 
     val canInterrupt = state == LiveState.Speaking
     val source = remember { MutableInteractionSource() }
     Box(
-        // A still orb is a picture on a card: it takes no taps and screen readers skip it.
+        // A non-interactive orb is decorative on a card/banner: it takes no taps itself and screen readers skip it.
         modifier.size(size).then(
-            if (still) Modifier.clearAndSetSemantics {}
+            if (!interactive) Modifier.clearAndSetSemantics {}
             else Modifier.clickable(source, indication = null, enabled = canInterrupt, role = Role.Button, onClick = onInterrupt)
                 .semantics { contentDescription = if (canInterrupt) "Interrupt the Companion" else "Voice session, " + state.label },
         ),
