@@ -2,10 +2,12 @@
 // Start and Finish Check-in (which spend Gemini credit), and for the Clinician's callables a verified
 // account with the `role: "clinician"` claim. The emulator suites call the same checks through the
 // Auth emulator's real tokens.
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { HttpsError } from "firebase-functions/v2/https";
 import { describe, expect, it } from "vitest";
 import { finishCheckInHandler, startCheckInHandler } from "../src/checkInFunctions";
-import { assertClinicianOf, isVerifiedAccount, type CallerAuth } from "../src/clinician";
+import { CLINICIAN_ROLE, assertClinicianOf, isVerifiedAccount, type CallerAuth } from "../src/clinician";
 import { generateDigestHandler } from "../src/digestFunctions";
 import { extractIntakeHandler, saveIntakeHandler } from "../src/intakeFunctions";
 import { VERIFY_ACCOUNT_MESSAGE, assertActsAsPatient } from "../src/patientCaller";
@@ -197,3 +199,15 @@ describe("assertClinicianOf: the claim, a verified email, the linked email and s
     expect(store.writes).toHaveLength(0);
   });
 });
+
+// The rules, the dashboard (and through it the seed's allow-clinician) keep their own copy of the
+// claim's value; a mismatch would lock the Clinician out of one of them.
+describe("the Clinician role claim", () => {
+  it("has the same value in the functions, the rules and the dashboard", async () => {
+    const rules = readFileSync(join(__dirname, "..", "..", "firestore.rules"), "utf8");
+    const dashboard = await import("../../hosting/js/lib/auth.js");
+    expect(dashboard.CLINICIAN_ROLE).toBe(CLINICIAN_ROLE);
+    expect(rules).toContain(`request.auth.token.get('role', null) == '${CLINICIAN_ROLE}'`);
+  });
+});
+

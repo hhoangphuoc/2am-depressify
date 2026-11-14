@@ -2,10 +2,9 @@
 // Clinician only from an account with the custom claim `role: "clinician"` and a verified email.
 // The Admin vouches for the Clinician, so the email is marked verified here.
 
-/** @typedef {import("firebase-admin/auth").Auth} Auth */
+import { CLINICIAN_ROLE } from "../../hosting/js/lib/auth.js";
 
-/** The custom claim value the rules and functions check. */
-export const CLINICIAN_ROLE = "clinician";
+/** @typedef {import("firebase-admin/auth").Auth} Auth */
 
 /**
  * Gives the Auth account with this email the claim `role: "clinician"` (keeping any other claims)

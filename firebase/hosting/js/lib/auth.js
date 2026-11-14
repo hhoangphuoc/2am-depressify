@@ -21,6 +21,9 @@ export function signInErrorMessage(error) {
   }
 }
 
+/** The custom claim value that makes an account a Clinician's (ADR 0010), as the rules check it. */
+export const CLINICIAN_ROLE = "clinician";
+
 // Shown after a correct password when the account lacks the Clinician's claim or a verified email
 // (ADR 0010). Both come from the admin's `npm run allow-clinician`, so the message names that step.
 const NOT_CLINICIAN_MESSAGE =
@@ -34,7 +37,7 @@ const NOT_CLINICIAN_MESSAGE =
  * @returns {string | null}
  */
 export function clinicianAccessMessage(claims) {
-  return claims?.role === "clinician" && claims?.email_verified === true ? null : NOT_CLINICIAN_MESSAGE;
+  return claims?.role === CLINICIAN_ROLE && claims?.email_verified === true ? null : NOT_CLINICIAN_MESSAGE;
 }
 
 const ACCESS_CHECK_FAILED_MESSAGE = "Could not check this account. Sign in again.";
