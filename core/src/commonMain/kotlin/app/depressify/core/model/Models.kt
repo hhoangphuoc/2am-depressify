@@ -119,6 +119,14 @@ enum class Assessment { assessed, unassessed, unavailable }
 // Documents
 // ---------------------------------------------------------------------------------------------
 
+/** A point on the map and what to call it, for example "An apartment by Karhupuisto, Kallio". */
+@Serializable
+data class PatientLocation(
+    val label: String,
+    val latitude: Double,
+    val longitude: Double,
+)
+
 /** `patients/{patientId}`. The Patient id is the Patient's auth uid. */
 @Serializable
 data class PatientDoc(
@@ -146,6 +154,11 @@ data class PatientDoc(
     val synthetic: Boolean = false,
     val sharingConsent: SharingConsent = SharingConsent.undecided,
     val sharingChangedAtMillis: Long? = null,
+    /**
+     * Where Suggest today looks for places near the Patient, or null. Only Demo Patients have one,
+     * an example address written by the seed: a live Patient's location stays on their phone.
+     */
+    val location: PatientLocation? = null,
 )
 
 /**

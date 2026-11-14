@@ -243,7 +243,7 @@ export function adminCheckInStore(db: Firestore): CheckInStore {
   };
 }
 
-async function readOrUnavailable<T>(name: string, ids: Record<string, string>, read: () => Promise<T>): Promise<T> {
+export async function readOrUnavailable<T>(name: string, ids: Record<string, string>, read: () => Promise<T>): Promise<T> {
   try {
     return await read();
   } catch {
@@ -314,7 +314,7 @@ export async function finishCheckInHandler(call: IntakeCall, deps: FinishCheckIn
   const patient = await readOrUnavailable("finishCheckIn", ids, () => deps.store.getPatient(patientId));
   assertActsAsPatient(patientId, patient, auth);
   if (auth.uid !== patientId) {
-    // The demo shortcut lets anyone signed in act as a Demo Patient. Only the caller who started
+    // The demo shortcut lets any verified account act as a Demo Patient. Only the caller who started
     // this Check-in may finish it, so nobody can overwrite the Demo Patient's other Summaries.
     const startedBy = await readOrUnavailable("finishCheckIn", ids, () => deps.store.getStart(patientId, checkInId));
     if (startedBy?.uid !== auth.uid) throw new HttpsError("permission-denied", "Only the phone that started this Check-in can finish it.");

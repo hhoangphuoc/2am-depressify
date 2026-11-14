@@ -148,7 +148,7 @@ sequenceDiagram
 | Record Suggestion | Saves what was proposed | Phone | Firestore |
 | Raise crisis | Shows the Crisis notice and sets the flag to red | Phone | See Crisis |
 
-Suggestions appear as cards on the Check-in screen; a place card opens Google Maps. There is no embedded map.
+Suggestions appear as cards on the Check-in screen; a place card opens Google Maps. Outside a Check-in, the Today screen shows Suggestions from the `suggestToday` function with places on an embedded Google map (Android).
 
 **Disclosure.** At a Patient's first Check-in the Companion says it is an AI and not a clinician. The Check-in screen always shows the live transcript and states that place results come from Google Maps, with links, as the Maps terms require.
 

@@ -218,7 +218,7 @@ export const DIGEST_SYSTEM_INSTRUCTION = [
 ].join("\n");
 
 /** One Summary as the model reads it: no ids, a Helsinki date. */
-function summaryForModel(s: Summary) {
+export function summaryForModel(s: Summary) {
   return {
     date: dateInZone(s.createdAtMillis),
     mood: s.mood,
@@ -244,7 +244,7 @@ function present(map: Partial<Record<string, number | null>>): Record<string, nu
 }
 
 /** JSON that cannot close or open the surrounding tags. */
-function safeJson(value: unknown): string {
+export function safeJson(value: unknown): string {
   return JSON.stringify(value, null, 1).replace(/</g, "\\u003c").replace(/>/g, "\\u003e").replace(/&/g, "\\u0026");
 }
 
