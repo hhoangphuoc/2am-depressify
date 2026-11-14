@@ -6,3 +6,9 @@ export const TEXT_MODEL = "gemini-4-hydrogen";
 
 /** The Gemini Live model a Check-in talks to. Start Check-in locks every token to it. */
 export const LIVE_MODEL = "gemini-3.8-live";
+
+/**
+ * The Gemini Decisions API model Finish Check-in asks its three yes/no questions (#20). `v1beta`
+ * only, called with `fetch` (src/decisionsApi.ts); the request shape is the #6 spike's.
+ */
+export const DECISION_MODEL = "gemini-decision-1";

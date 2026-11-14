@@ -6,43 +6,24 @@ Notes for whoever picks this work up next: a person, or a new Claude Code sessio
 
 This repository's work is the **backend only**: Firestore rules, Cloud Functions, the seed, the data contract, and the Gemini and Google API integrations in [research/](../research/) and [system-design.md](system-design.md). Teammates build the frontend: the Compose Multiplatform Patient UI in `shared` and the design prototypes. The two meet in `shared/data` and the data contract in `core/model`.
 
-## Where the work is
+## Where the work is (updated 14 November 2026, afternoon)
 
-### The integration base: PR #49
+**`main` is the base.** It contains:
+- PR #49, which integrates the backend with the teammates' Patient UI;
+- everything ported onto #49, merged by hand into it: #22 `redFlagAlert`, the `europe-west1` scheduler region, #28 `silenceCheck`, the #6 spike results and fixtures, #14 `startCheckIn` / `finishCheckIn` and `LiveProtocol` in `core`, this file, and the setup record. PRs #50 and #52–#57 show as closed for that reason.
+- the teammate's app-side Check-in over Gemini Live (#58).
 
-PR #49 (`codex/backend-integration` → `main`) is **the** integration of the backend with the teammates' Patient UI. Build on it.
+The old stack (#34–#45) and `integrate/ui-main` are superseded.
 
-- It starts from `main` and keeps `main`'s Patient UI.
-- From our stack tip (`chore/real-project-config` at `14d751e`) it copies `firebase/`, `fixtures/` and the `core/model` data contract. The exported `contract.json` is byte-identical.
-- It has **no Koin**. Its own small data layer is in `shared/data` (`AuthGateway`, `PatientStore`, `ConsentStore`, `PatientSession`, GitLive in `shared/data/firebase`), and `PatientViewModel` is wired to it.
-- What the app does with the backend: anonymous sign-in, the Patient record, and the sharing Consent, saved before the screen changes. "Explore the demo" records no choice. When Firebase can't be reached at start, the app stays on local demo data.
-- Still demo data on the Patient screens: Check-ins, Summaries, Signals, Signal Consents, quiet hours and booking.
-- If #49 lands, the old stack PRs #34 to #45 can be closed.
+Open PRs:
 
-### Superseded: `integrate/ui-main`
-
-`integrate/ui-main` merged the whole stack with `main`'s UI and wired our older data layer (with Koin) into `PatientViewModel`. #49 replaces it. Keep it unmerged, as a reference only: for example, it also wired the ratings and Voice cue Consents, which #49 doesn't yet.
-
-### Extras ported onto #49
-
-Each piece is its own branch, created from `origin/codex/backend-integration` with `git cherry-pick -x` from the old branches. Nothing is pushed yet and no PRs are open; add the PR numbers here when they are.
-
-| Branch | From | Content | PR |
+| PR | Branch | Owner | Content |
 |---|---|---|---|
-| `feat/22-red-flag-alert-on-49` | `feat/22-red-flag-alert` (`70a6103`, `7bd59ec`) | `redFlagAlert`: a Firestore trigger that writes one Trigger Email document per red, shared flag. Also the `adminDb()` `[DEFAULT]` fix, the emulator test, the docs, and the gitignored `firebase/extensions/*.env`. | not opened |
-| `fix/digest-scheduler-region-on-49` | `671a5f8` on `chore/real-project-config` | `weeklyDigest` runs in `SCHEDULER_REGION` (`europe-west1`), plus "Live deployment" in the status doc. | not opened |
-| `feat/28-silence-check-on-49` | `feat/28-silence-check` (`aebd98d`, `4942ff6`, `b55782b`) | The hourly `silenceCheck`, the `silence-test` seed command, and the docs. Built on `feat/22-red-flag-alert-on-49`, and it merges `fix/digest-scheduler-region-on-49`, because it needs `SCHEDULER_REGION`. | not opened |
-| `feat/6-spike-results-on-49` | `feat/6-spike-results` (`bda4e3b`) | `docs/spike-results.md` and the redacted fixtures in `fixtures/spike/`. | not opened |
-| `docs/session-handoff-on-49` | `dd7f2b6`, `fde5d18` | This file, rewritten for #49. | not opened |
-
-The lock file needed no port: #49's `firebase/functions/package-lock.json` already matches the npm 10 one (`82e1834`), and `npx -y npm@10 ci --dry-run` accepts it.
-
-### In progress
-
-| Work | Branch (worktree under `.claude/worktrees/`) | State |
-|---|---|---|
-| #14: the Start Check-in and Finish Check-in callables, plus Live protocol parsing in `core` if time allows | `feat/14-typed-checkin` (`issue-14-typed-checkin`), started from `integrate/ui-main` | In progress. Port it onto #49 as its own branch when it's done. Anything that uses Koin or the old `shared` packages must move to #49's `shared/data`. |
-| #6 throwaway harness | `spike/6-throwaway` | Keep unmerged |
+| #60 | `codex/check-in-review-fixes` → `main` | repo owner | Caps in `patientLimits` (10 Check-in starts and 5 red flag emails an hour per Patient); a retryable model failure → `unavailable`; the Summary stamp from the Check-in |
+| #62 | `feat/20-checkin-flags` → #60 | us | #20: the Decisions API in Finish Check-in → flags; `CheckIn.assessment`, `CheckIn.previousTried` |
+| #65 | `feat/21-outcomes` → #62 | us | #21: the Outcome on the previous Suggestion, the Outcome score, `objectiveChange`, ranking (TypeScript and Kotlin `core.learning`); `Suggestion.outcomeCheckInId` |
+| #61 | `codex/find-places` | teammate | #18, the Map tool. **Not ours: the user asked us not to implement #18**, only to make sure the Maps configuration works (it does). |
+| #63 | `codex/patient-context-suggestions` → #61 | teammate | Today suggestions (`suggestToday`), maps and music. It touches `Models.kt`, the seed and `checkInFunctions.ts`, so expect conflicts with #65. |
 
 ## Decisions the user made
 
@@ -97,20 +78,19 @@ Details are in `docs/spike-results.md` (on `feat/6-spike-results-on-49`).
 
 ## Next
 
-1. Push the ported branches and open their PRs against `codex/backend-integration` (or against `main` once #49 lands), after the user agrees. Order: the region fix and #22 first, then #28, which stacks on both. The spike results and this file are independent.
-2. When #14 is done: port it onto #49, then #20 (Decisions into flags), then #21 (ratings, Outcome, `objectiveChange` / `outcomeScore`). Each goes on its own branch, stacked.
-3. #18, the Map tool: needs `mapstools.googleapis.com` enabled (recommended) and the tool catalog from #17.
-4. Deploy the new functions (`redFlagAlert`, `silenceCheck`, then `startCheckIn`, `finishCheckIn`) after the user agrees. Deploy the dashboard too, or set `DASHBOARD_URL`, because the alert email links to `https://<project>.web.app`, which isn't deployed yet.
-5. For the UI team:
-   - In the offline fallback the sharing choice shown is local and can differ from the stored one (the `shortcut:` comment in `PatientViewModel.connect`).
-   - `core` has two sets of types, the screen models and the contract, which don't map one to one yet.
-   - Switch screens from demo data to the backend as each function lands (see `docs/implementation-status.md`).
+1. When #60, #62 and #65 merge: deploy `finishCheckIn` and the rules (after the user agrees). Then run two real Check-ins on a live, sharing Patient and check the dashboard.
+2. Deploy `redFlagAlert` and `silenceCheck` once the Trigger Email extension is installed (needs SMTP). Grant Cloud Run Invoker to any new callable.
+3. Waiting on the user: Patient sign-in by email and password. Invite-only, or open sign-up with email verification? The backend half is `email_verified`, a `role: "clinician"` custom claim, the seed and tests, and an ADR.
+4. Open questions for the team:
+   - #20: how the phone learns to show the Crisis notice when only Decisions finds a crisis (the response reveals no flag).
+   - The dashboard showing "assessment unavailable".
+   - #21: which day's steps count, and whether to add an explicit Outcome answer to the Finish request.
+5. Suggested hardening: App Check on the callables, `maxInstances`, and a billing budget alert.
 
-**npm caution:** in `firebase/functions` always use `npx -y npm@10 install` / `ci`. The local npm 11 rewrites `package-lock.json` into a shape Cloud Build's npm 10 rejects. The README's plain `npm install` is fine in `firebase/seed`.
+**npm caution:** in `firebase/functions` always use `npx -y npm@10 install` / `ci`. The local npm 11 rewrites `package-lock.json` into a shape Cloud Build's npm 10 rejects.
 
 ## Needs the user or a person
 
-- Enable the **Maps Tools API** (`mapstools.googleapis.com`; the key already allows it). Enable the Routes API too only if we fall back to the direct APIs.
 - SMTP details for the **Trigger Email** extension (#22). The install steps are in the README on `feat/22-red-flag-alert-on-49`.
 - Require `email_verified` in `authEmail()` in `firestore.rules` before real Patients use the app.
 - The device parts of #6: Live on the S24+ with the real microphone, Live on an iPhone, Health Connect and HRV with the Watch, usage statistics, and the Calendar consent.

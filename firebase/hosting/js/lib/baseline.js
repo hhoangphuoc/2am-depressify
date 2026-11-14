@@ -2,7 +2,8 @@
 // shared fixture fixtures/baseline/baseline-cases.json, which the Kotlin Baseline tests in core also
 // read. This is the only JavaScript copy of the rule: the dashboard uses it in the browser and the
 // seed re-exports it (firebase/seed/src/baseline.js). Both test suites run the fixture through it.
-// Do not change this rule here alone: change the fixture, core and this file together.
+// The functions keep a TypeScript copy (firebase/functions/src/baseline.ts), tested on the same
+// fixture. Do not change this rule here alone: change the fixture, core and every copy together.
 import { SIGNALS } from "./contract.js";
 
 /** @typedef {"higher_is_better" | "lower_is_better" | "none"} Direction */

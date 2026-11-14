@@ -1,6 +1,7 @@
 package app.depressify.shared.ui
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
@@ -10,6 +11,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.ColorFilter
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.liveRegion
@@ -20,6 +24,10 @@ import androidx.compose.ui.unit.dp
 import app.depressify.shared.state.Route
 import app.depressify.shared.ui.theme.Theme
 import app.depressify.shared.ui.theme.DepressifyType
+import app.depressify.shared.resources.Res
+import app.depressify.shared.resources.wordmark_leaf
+import app.depressify.shared.resources.wordmark_text
+import org.jetbrains.compose.resources.painterResource
 
 /**
  * Page frame: safe-area insets at the top and sides, scrolling content capped at 560 dp so tablets
@@ -57,10 +65,19 @@ fun Page(
 @Composable
 fun BrandHeader(onDemo: () -> Unit) {
     Row(Modifier.fillMaxWidth().padding(start = 24.dp, end = 16.dp, top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-        Txt("Depressify", DepressifyType.wordmark, Theme.colors.ink, Modifier.weight(1f), heading = true)
+        Box(Modifier.weight(1f)) { Wordmark() }
         Box(Modifier.heightIn(min = 44.dp).clickable(role = Role.Button, onClick = onDemo).padding(horizontal = 8.dp), contentAlignment = Alignment.Center) {
             Txt("Demo", DepressifyType.small, Theme.colors.muted)
         }
+    }
+}
+
+/** Logo lettering: the text layer follows the theme ink so it stays readable at night; the leaf over the i keeps its own colour. */
+@Composable
+private fun Wordmark() {
+    Box(Modifier.height(30.dp).semantics { heading(); contentDescription = "Depressify" }) {
+        Image(painterResource(Res.drawable.wordmark_text), contentDescription = null, colorFilter = ColorFilter.tint(Theme.colors.ink))
+        Image(painterResource(Res.drawable.wordmark_leaf), contentDescription = null, modifier = Modifier.matchParentSize())
     }
 }
 
