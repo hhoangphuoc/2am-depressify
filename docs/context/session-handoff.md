@@ -69,27 +69,48 @@ This repository's work is the **backend only**: Firestore rules, Cloud Functions
 
 The callables are public at the network level (`allUsers` → Cloud Run Invoker, added by hand) and refuse anyone not signed in. Apps call them through the Firebase SDK by name and region, not by URL.
 
-## In progress at the time of writing
+## Integration branch and work in progress (updated)
 
-| Work | Branch (worktree under `.claude/worktrees/`) | Notes |
+`integrate/ui-main` is the branch to build on. It contains:
+- the whole PR stack, #34–#45;
+- the teammates' UI from `main`, with our first-pass app screens removed and the data layer wired into their `PatientViewModel` (anonymous sign-in, the Patient record, sharing and the ratings and Voice cue Consents);
+- #22, the backend part of the red flag email (`redFlagAlert`);
+- the backend half of #6: `docs/spike-results.md` and `fixtures/spike/`.
+
+Every suite passed on it after these merges:
+- Gradle: `core` and `shared` (`testAndroidHostTest`) tests, and the Android build;
+- `npm test`: functions 167, seed 78; dashboard (`node --test`) 308;
+- emulator suites: 82 + 14.
+
+Not pushed yet.
+
+| Work | Branch (worktree under `.claude/worktrees/`) | State |
 |---|---|---|
-| Merge the UI from `main` and wire the backend into it | `integrate/ui-main` (`integrate-ui-main`) | The teammates' UI wins; our first-pass app screens are removed; the data layer (sign-in, Patient record, consent) is wired into their `PatientViewModel`; screens the backend doesn't serve yet stay on `DemoData`. |
-| #6 backend spikes | `feat/6-spike-results` (`issue-6-spike-results`), harness on `spike/6-throwaway` | Live token and protocol capture from the Mac, structured output, Decisions API, Maps (direct Places and Weather if Maps Tools is off). Writes `docs/spike-results.md` and `fixtures/spike/`. |
-| #22 red flag alert | `feat/22-red-flag-alert` (`issue-22-red-flag-alert`) | **Done, not pushed.** `redFlagAlert` trigger writes `mail/red-flag-<hash>` for red, shared, sharing, non-synthetic flags. The Trigger Email extension isn't installed yet (needs SMTP). |
-| #28 silence check | `feat/28-silence-check` (`issue-28-silence-check`), on #22 | Hourly `silenceCheck` in `europe-west1` raises a red `silent` flag; the email follows through `redFlagAlert`. |
+| #14 Start Check-in and Finish Check-in callables, plus Live protocol parsing in `core` if time allows | `feat/14-typed-checkin` (`issue-14-typed-checkin`), from `integrate/ui-main` | In progress |
+| #28 silence check (hourly `silenceCheck`, red `silent` flag, email through `redFlagAlert`) | `feat/28-silence-check` (`issue-28-silence-check`), on `feat/22-red-flag-alert` | In progress; merge into `integrate/ui-main` when done |
+| #6 throwaway harness | `spike/6-throwaway` | Keep unmerged |
+
+Spike facts the build relies on (details in `docs/spike-results.md`):
+- **Live token:** `v1beta/auth_tokens` with `bidiGenerateContentSetup` + `fieldMask`, which must include `model`.
+- **Structured output:** `/v1/interactions` with `response_format`.
+- **Decisions:** `/v1beta/decisions`, `gemini-decision-1`, `noul` questions.
+- **Live client:** the raw Ktor WebSocket works from shared Kotlin, so Firebase AI Logic is a fallback only.
 
 ## Next
 
-1. Merge the finished branches (#6, #22, #28) into `integrate/ui-main` once it's done. Run every suite, push, and open PRs.
-2. Start from `integrate/ui-main` (#6 must be done first):
-   - #14: Start Check-in (mints the Live token) and Finish Check-in (Summary, drops the transcript).
-   - #18: the Map tool.
-3. Then #20 (Decisions API into flags), then #21 (ratings, Outcome, `objectiveChange` / `outcomeScore`).
-4. Deploy each finished function to `junction26hel-7400`, after the user agrees.
+1. When #14 is done: merge it into `integrate/ui-main`, then #20 (Decisions into flags), then #21 (ratings, Outcome, `objectiveChange` / `outcomeScore`). Each goes on its own branch, stacked.
+2. #18, the Map tool: needs `mapstools.googleapis.com` enabled (recommended) and the tool catalog from #17.
+3. Push `integrate/ui-main` and the feature branches, open PRs, and deploy the new functions (`redFlagAlert`, `silenceCheck`, `startCheckIn`, `finishCheckIn`) after the user agrees.
+4. For the UI team:
+   - show `startupState` with a retry;
+   - confirm what "Explore the demo" on the Welcome should do;
+   - switch screens from `DemoData` to the backend as each function lands (the table is in `docs/implementation-status.md`).
+
+**npm caution:** in `firebase/functions` always use `npx -y npm@10 install` / `ci`. The local npm 11 rewrites `package-lock.json` into a shape Cloud Build's npm 10 rejects.
 
 ## Needs the user or a person
 
-- Enable the **Maps Tools API** and the **Routes API**, and allow both on the Maps key if it has API restrictions.
+- Enable the **Maps Tools API** (`mapstools.googleapis.com`; the key already allows it). Enable the Routes API too only if we fall back to the direct APIs.
 - SMTP details for the **Trigger Email** extension (#22). The install steps are in the README.
 - The device parts of #6: Health Connect and HRV on the S24+ with the Watch, usage stats, the phone microphone, the iPhone test.
 - Require `email_verified` in the rules before real Patients use the app.
