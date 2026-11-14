@@ -107,10 +107,12 @@ export function maskEmail(email) {
 /**
  * Finds the Patient's account by email, or creates it with a verified email and no password (the
  * Patient signs in with Google, or sets a password with a reset email). Sets no custom claims.
+ * On an existing account it marks the email verified and sets the display name when they differ,
+ * so a rerun with --display-name keeps the account and the Patient record in step.
  * @param {Auth} auth
  * @param {string} email
- * @param {string} displayName used only when creating the account
- * @returns {Promise<{ uid: string, created: boolean, verifiedNow: boolean }>}
+ * @param {string} displayName
+ * @returns {Promise<{ uid: string, created: boolean, verifiedNow: boolean, renamed: boolean }>}
  */
 export async function ensurePatientUser(auth, email, displayName) {
   /** @type {import("firebase-admin/auth").UserRecord | null} */
@@ -122,13 +124,17 @@ export async function ensurePatientUser(auth, email, displayName) {
   }
   if (user === null) {
     const created = await auth.createUser({ email, emailVerified: true, displayName });
-    return { uid: created.uid, created: true, verifiedNow: false };
+    return { uid: created.uid, created: true, verifiedNow: false, renamed: false };
   }
   if (user.customClaims?.role === "clinician") {
     throw new Error("That account has the Clinician role; a Clinician's account is never made a Patient.");
   }
-  if (!user.emailVerified) await auth.updateUser(user.uid, { emailVerified: true });
-  return { uid: user.uid, created: false, verifiedNow: !user.emailVerified };
+  /** @type {{ emailVerified?: boolean, displayName?: string }} */
+  const update = {};
+  if (!user.emailVerified) update.emailVerified = true;
+  if (user.displayName !== displayName) update.displayName = displayName;
+  if (Object.keys(update).length > 0) await auth.updateUser(user.uid, update);
+  return { uid: user.uid, created: false, verifiedNow: !user.emailVerified, renamed: "displayName" in update };
 }
 
 // ---------------------------------------------------------------------------------------------

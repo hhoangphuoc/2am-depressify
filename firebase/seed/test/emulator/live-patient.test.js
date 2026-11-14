@@ -211,6 +211,17 @@ test("--reset deletes and recreates exactly the mock history; what the app wrote
   assert.deepEqual(await snapshotOf(uid), stored);
 });
 
+test("a rerun with --display-name renames the existing account and the Patient record together", async () => {
+  const output = run(["--email", PATIENT_EMAIL, "--today", TODAY, "--reset", "--display-name", "Sam"]);
+  assert.match(output, /set its display name/);
+  const user = await auth.getUserByEmail(PATIENT_EMAIL);
+  assert.equal(user.displayName, "Sam");
+  const record = (await db.doc(`patients/${user.uid}`).get()).data();
+  assert.equal(record?.displayName, "Sam");
+  // The same name again changes nothing on the account.
+  assert.doesNotMatch(run(["--email", PATIENT_EMAIL, "--today", TODAY, "--reset", "--display-name", "Sam"]), /set its display name/);
+});
+
 test("refuses a real project without a real Clinician, a Clinician's account, and a mixed target", async () => {
   const env = { ...process.env, FIRESTORE_EMULATOR_HOST: "", FIREBASE_AUTH_EMULATOR_HOST: "" };
   const failsWith = (/** @type {string[]} */ args, /** @type {NodeJS.ProcessEnv} */ e) => {

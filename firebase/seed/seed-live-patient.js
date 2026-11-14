@@ -74,7 +74,10 @@ async function main() {
 
     const user = await ensurePatientUser(getAuth(app), command.email, command.displayName);
     if (user.created) console.log(`Created the account: uid ${user.uid} (email verified, no password).`);
-    else console.log(`Found the account: uid ${user.uid}${user.verifiedNow ? " (marked its email verified)" : ""}.`);
+    else {
+      const notes = [user.verifiedNow && "marked its email verified", user.renamed && "set its display name"].filter(Boolean);
+      console.log(`Found the account: uid ${user.uid}${notes.length ? ` (${notes.join(", ")})` : ""}.`);
+    }
 
     const result = await seedLivePatient(db, generate(user.uid), { reset: command.reset });
     if (command.reset) console.log(`Deleted mock history: ${countsText(result.deleted)}.`);
