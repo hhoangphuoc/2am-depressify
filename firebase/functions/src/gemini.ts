@@ -6,8 +6,11 @@ import { defineSecret } from "firebase-functions/params";
 /** The Gemini API key, a function secret. It never reaches a client. */
 export const GEMINI_API_KEY = defineSecret("GEMINI_API_KEY");
 
-/** How long a text model call may take before the function gives up. */
-export const TEXT_MODEL_TIMEOUT_MS = 15_000;
+/**
+ * How long a text model call may take before the function gives up. It is one attempt: the SDK's
+ * default of four retries, each with this timeout, would outlast the callables' 60-second limit.
+ */
+export const TEXT_MODEL_TIMEOUT_MS = 40_000;
 
 /**
  * One non-streaming call to the Interactions API (`POST /v1/interactions`). `store` is always
@@ -47,7 +50,10 @@ export function genaiTextClient(apiKey: string): TextModelClient {
   const ai = new GoogleGenAI({ apiKey });
   return {
     async generateText(request) {
-      const interaction = await ai.interactions.create(request, { timeout_ms: TEXT_MODEL_TIMEOUT_MS });
+      const interaction = await ai.interactions.create(request, {
+        timeout_ms: TEXT_MODEL_TIMEOUT_MS,
+        retries: { strategy: "none" },
+      });
       return interaction.output_text ?? null;
     },
   };

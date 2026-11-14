@@ -29,6 +29,7 @@ import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime
 import kotlin.time.Clock
+import kotlin.time.Duration
 import kotlin.time.Duration.Companion.seconds
 
 enum class ThemeMode(val label: String) { Auto("By time of day"), Day("Day"), Night("Night") }
@@ -122,8 +123,8 @@ class PatientViewModel(
     }
 
     /** Null when the backend throws or does not answer in time. */
-    private suspend fun <T : Any> attempt(call: suspend () -> T?): T? = try {
-        withTimeoutOrNull(BACKEND_TIMEOUT) { call() }
+    private suspend fun <T : Any> attempt(timeout: Duration = BACKEND_TIMEOUT, call: suspend () -> T?): T? = try {
+        withTimeoutOrNull(timeout) { call() }
     } catch (e: CancellationException) {
         throw e
     } catch (e: Exception) {
@@ -284,7 +285,7 @@ class PatientViewModel(
         val r = s.ratings
         val ratingsLine = if (s.consents[SignalId.Ratings] != true) null
         else "My ratings on the screen: mood " + (r.mood ?: "skipped") + ", energy " + (r.energy ?: "skipped") + ", sleep quality " + (r.sleepQuality ?: "skipped") + ", each from 1 to 5."
-        val saved = attempt { live.finish(ratingsLine) }
+        val saved = attempt(FINISH_TIMEOUT) { live.finish(ratingsLine) }
         if (saved == null) { state.update { it.copy(finish = FinishState.Failed) }; return }
         val snap = live.snapshot.value
         val rating = { value: Int? -> value?.takeIf { it in 1..5 } }
@@ -337,5 +338,8 @@ class PatientViewModel(
     private companion object {
         /** How long sign-in or a Consent write may take before it counts as failed. */
         val BACKEND_TIMEOUT = 15.seconds
+
+        /** Finish Check-in waits on the text model, which the function gives 40 seconds. */
+        val FINISH_TIMEOUT = 60.seconds
     }
 }

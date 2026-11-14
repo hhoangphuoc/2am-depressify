@@ -203,13 +203,20 @@ export async function finishCheckInHandler(call: IntakeCall, deps: FinishCheckIn
   // and nothing can be invented.
   let model: ModelSummary | null = null;
   if (patientSpoke(draft)) {
+    const startedAt = Date.now();
     try {
       const previousSuggestion = typeof previous?.details === "string" ? previous.details : null;
       model = parseModelSummary(await deps.textModel.generateText(buildSummaryRequest(draft, todayLines, previousSuggestion)));
       if (model === null) logger.warn("finishCheckIn: the text model's reply was not usable; saving a minimal Summary", ids);
     } catch (error) {
-      // Never log the error itself: its message or body may echo the transcript.
-      logger.warn("finishCheckIn: the text model call failed; saving a minimal Summary", { ...ids, status: statusOf(error) });
+      // Never log the error itself: its message or body may echo the transcript. Its class name and
+      // the time it took tell a timeout from a refusal.
+      logger.warn("finishCheckIn: the text model call failed; saving a minimal Summary", {
+        ...ids,
+        status: statusOf(error),
+        error: error instanceof Error ? error.name : typeof error,
+        elapsedMs: Date.now() - startedAt,
+      });
     }
   }
 
