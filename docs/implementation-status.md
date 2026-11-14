@@ -1,6 +1,6 @@
 # Implementation status
 
-Status as of 14 November 2026. Covers issues #7, #8, #9, #10, #11, #12, #13, #23 and #29, plus the review decisions that followed. Terms follow [GLOSSARY.md](../GLOSSARY.md). The spec is issue #5 and the data contract is in [firestore-schema.md](firestore-schema.md).
+Status as of 14 November 2026. Covers issues #7, #8, #9, #10, #11, #12, #13, #23 and #29, the backend part of #22 (the red flag email), plus the review decisions that followed. Terms follow [GLOSSARY.md](../GLOSSARY.md). The spec is issue #5 and the data contract is in [firestore-schema.md](firestore-schema.md).
 
 ## Scope from here on
 
@@ -62,7 +62,7 @@ Not enforced for the demo: `email_verified`. Production must require it (see the
   - The Clinician never sees records saved while sharing was off.
   - Records from earlier sharing periods become visible again when the Patient shares again.
 - **Helpers for functions:** `isSharingActive(patient)` and `sharingStamp(patient)` in `src/sharing.ts`.
-  - The red flag alert (#22) and the silence check (#28) must skip Patients who aren't sharing.
+  - The red flag alert (#22, built) skips Patients who aren't sharing; the silence check (#28) must too.
   - Every function that writes must stamp what it writes.
 - **Flag level on the Patient record:** `flagLevel` and `flagReasons` count only flags stamped `true`, so a flag raised while sharing was off doesn't leak its reason to the Clinician.
 
@@ -75,8 +75,8 @@ Not enforced for the demo: `email_verified`. Production must require it (see the
 | Start Check-in (Live token) | Not built | #14, blocked by #6 (spike results) |
 | Finish Check-in | Not built | #14 and #20. It will be the only writer of Summaries, ratings, Voice cues, the crisis marker and Outcome fields. |
 | Map tool | Not built | #18 |
-| Red flag alert | Not built | #22 |
-| Silence check | Not built | #28 |
+| Red flag alert | **Built:** `redFlagAlert` (#22, backend part) | Firestore trigger on the creation of `patients/{patientId}/flags/{flagId}`, in `europe-north1`, retried on failure. For a flag that is red, uncleared and stamped `sharedWithClinician: true`, of a Patient who is sharing, isn't synthetic and has a `clinicianEmail`, it writes one Trigger Email document to `mail/red-flag-<sha256(patientId/flagId)>` with `create()`, so a retry never sends twice. The subject marks a crisis apart from other reds (`[CRISIS]` / `[RED]`). The body is the display name, the flag's reason, a fixed line per kind (a quiet phone isn't read as self-harm) and a link to the Patient page from `DASHBOARD_URL` (defaults to `https://<project>.web.app`). Pure logic in `src/alerts.ts`. Logs only ids, kind and outcome; a spy test checks this. **Sending needs the Trigger Email extension, which needs a person** (below). |
+| Silence check | Not built | #28. Only needs to create the red `silent` flag (stamped with `sharingStamp`); `redFlagAlert` sends the email. |
 
 There is also a trivial `health` endpoint.
 
@@ -112,7 +112,7 @@ There is also a trivial `health` endpoint.
 | Maps agent tools (weather, text search, routes) | Not started | #18 |
 | Google Calendar API v3 | Not started | #19. Permission is granted on the phone. |
 | Health Connect and HealthKit | Not started | Read on the phone (ADR 0003), so there is no backend part beyond the `daily` contract. |
-| Trigger Email extension (`mail` collection) | Not started | #22. The rules already reserve `mail` for functions. |
+| Firebase Trigger Email extension (`firebase/firestore-send-email`, `mail` collection) | **Needs a person:** not installed | `redFlagAlert` writes the documents the extension sends. Installing it needs SMTP credentials (connection URI, password and a From address), so nobody has done it yet. Steps: [Red flag email](../README.md#red-flag-email) in the README: `firebase ext:install firebase/firestore-send-email --project prod`, collection `mail`, location `europe-north1`, then `firebase deploy --only extensions --project prod`. The rules keep `mail` closed to clients (rules test "The mail collection is not writable or readable by any client"). |
 
 ## Patient app (frontend from main)
 
@@ -149,10 +149,10 @@ The platform entry points start Firebase, then Koin: `DepressifyApplication` on 
 | History, Summary | `DemoData.history` (Summaries, ratings trend) | A listener on `patients/{id}/summaries` (and `checkIns` for ratings), written only by Finish Check-in (#14/#20) |
 | Check-in intro, Check-in (voice and typed), Ratings, Finishing | `ScriptedLiveSession` and a local Summary built in `makeSummary` | Gemini Live with the token from the Start Check-in callable (#14, blocked on #6); Finish Check-in writes the Summary, ratings, Voice cues and Suggestion (#14/#20) |
 | Suggestion, booking sheet | The fixed walk Suggestion and a demo calendar | `patients/{id}/suggestions` (the Patient may write `status` and `booked`); Google Calendar (#19) |
-| Signals, Signal (device Signals) | Consents for Sleep, Steps, heart rate, HRV, Time at home, Movement radius, Calendar, Late-night screen; all readings | `consents/{signalKey}` through `ConsentStore` (map `SignalId` to the contract's `Signal.key`) and `daily` records from Health Connect and HealthKit (#19), with Baseline comparisons |
-| Quiet hours | Local state | `quietHoursStart` and `quietHoursEnd` on the Patient record (the rules allow the Patient to update them); Nudges on the phone (#20) |
+| Signals, Signal (device Signals) | Consents for Sleep, Steps, heart rate, HRV, Time at home, Movement radius, Calendar, Late-night screen; all readings | `consents/{signalKey}` through `ConsentStore` (map `SignalId` to the contract's `Signal.key`) and `daily` records from Health Connect and HealthKit (#24, #25), with Baseline comparisons |
+| Quiet hours | Local state | `quietHoursStart` and `quietHoursEnd` on the Patient record (the rules allow the Patient to update them); Nudges on the phone (#27) |
 | Sharing (first use), Sharing & privacy | The Clinician's name `DemoData.ClinicianName` ("Fictional demo Clinician") and the sample Summary | `StartedPatient.patient.clinicianEmail` until the Invite brings a name. The choice itself is wired. |
-| Crisis, Support | Simulated dialler and Clinician notice | The Crisis notice (#12) raising a `crisis` flag; the red flag email (#22) |
+| Crisis, Support | Simulated dialler and Clinician notice | The Crisis notice (#22, app side) raising a `crisis` flag; the red flag email (`redFlagAlert`, #22) |
 | Demo sheet | Prototype scenarios and theme | Stays a demo control |
 
 ### Two `core` packages
@@ -181,8 +181,8 @@ Results on `integrate/ui-main` (the backend merged with the frontend from `main`
 | Functions | `cd firebase/functions && npm test` | 124 pass |
 | Seed | `cd firebase/seed && npm test` | 78 pass |
 | Dashboard helpers | `cd firebase/hosting && node --test` | 308 pass |
-| Rules, functions and end-to-end on the emulators | `firebase emulators:exec --only auth,firestore,functions --project demo-twoam "npm --prefix functions run test:emulator"` | 78 pass |
-| Seed on the emulator | `... "npm --prefix seed run test:emulator"` | 14 pass |
+| Rules, functions and end-to-end on the emulators | `firebase emulators:exec --only auth,firestore,functions --project demo-twoam "npm --prefix functions run test:emulator"` | 82 pass (on `feat/22-red-flag-alert`, including the `redFlagAlert` trigger) |
+| Seed on the emulator | `... "npm --prefix seed run test:emulator"` | 14 pass (with the Functions emulator, the seeded Demo Patients' red flags are skipped as synthetic) |
 
 ### Live deployment (14 November 2026)
 
@@ -202,8 +202,11 @@ Deploy notes:
 - Cloud Build runs `npm ci` with Node 22's npm 10, so regenerate `firebase/functions/package-lock.json` with npm 10 (`npx npm@10 install`).
 - The first deploy didn't grant public invoker access on the callables. It was added by hand (`allUsers` → Cloud Run Invoker) on `extractintake`, `saveintake`, `generatedigest` and `health` only.
 
+`redFlagAlert` is not deployed yet: deploy it with `firebase deploy --only functions:redFlagAlert --project prod` together with the Trigger Email extension.
+
 **Not verified (needs a person, hardware or credentials):**
 - A full Intake extraction or Digest through the deployed callables, signed in as the Clinician.
+- The red flag email arriving in an inbox: needs the Trigger Email extension installed with SMTP credentials, then a red flag on a live, sharing Patient (#22's S24+ check).
 - The app on the S24+.
 - An iOS build in Xcode (XcodeGen, the Firebase SPM packages and linking the static `Shared` framework).
 - The phone-width layout on a real device.
@@ -229,4 +232,6 @@ Deploy notes:
   - Retry a refused write with a fresh stamp, especially a crisis flag.
   - Create a new Suggestion rather than editing `kind` or `details`.
 - **Still open from the spec:** whether to delete Summaries and Digests when sharing is withdrawn.
+- **Red flag email for Demo Patients:** `redFlagAlert` skips `synthetic: true` Patients, because the seed recreates their red flags on every run. If a demo should email from a Demo Patient, that needs a demo control that raises a fresh flag, plus a decision to lift the skip for it.
+- **Red flag alert, app side (#22):** the Crisis notice, the dialler, the crisis controller, the offline queue and Support in Settings belong to the app team. The phone only has to create the red `crisis` flag (stamped, not duplicated while one is open). The email follows from that.
 - **Blocked on #6** (needs the S24+, the Watch and an iPhone): #14–#22, #24–#28 and #30–#32.

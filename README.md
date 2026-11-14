@@ -104,6 +104,8 @@ firebase emulators:exec --only auth,firestore --project demo-twoam "npm --prefix
 firebase emulators:exec --only auth,firestore --project demo-twoam "npm --prefix seed run test:emulator"
 ```
 
+With the Functions emulator as well (`--only auth,firestore,functions`, after `npm run build` in `firebase/functions`), the suites also call the deployed callables and check that the `redFlagAlert` trigger writes its email. The first such run writes `firebase/functions/.env.local` with an empty `DASHBOARD_URL` (gitignored).
+
 The rules are described, with a who-can-do-what table, in [`docs/firestore-schema.md`](docs/firestore-schema.md#security-rules).
 
 ## Set up a real Firebase project
@@ -143,6 +145,8 @@ The Firestore database and every function are in `europe-north1` (Finland); the 
    ```
 
 The dashboard can then be deployed with `firebase deploy --only hosting --project prod`.
+
+8. **The red flag email (needs a person with SMTP credentials).** `redFlagAlert` deploys with the functions in step 7 and writes emails to the `mail` collection, but nothing is sent until the Firebase **Trigger Email** extension is installed. It needs an SMTP account, which only a person can provide. See [Red flag email](#red-flag-email) for the steps.
 
 ## Run the walking skeleton locally
 
@@ -212,6 +216,64 @@ The Patient page shows the latest weekly Digest: the dates it covers, how many S
 | `generateDigest` | "Generate now" on the dashboard, Clinician only: `{patientId}` → `{digest}` | The current ISO week from Monday to today; pressing it again overwrites that week |
 
 Both call the text model with storage off and need the `GEMINI_API_KEY` secret. A week with no Check-ins is written from fixed copy without calling the model, so it works in the emulator; a week with Check-ins fails there with a retry, and nothing is sent to Gemini. Patients who are not sharing get no Digest. The scheduled job does not run in the emulator (it needs Pub/Sub); the emulator tests run its handler against Firestore with a fake model instead. Week semantics are in [`docs/firestore-schema.md`](docs/firestore-schema.md#digestsisoweek-digest).
+
+### Red flag email
+
+When a red flag is created (`patients/{id}/flags/{flagId}`), the `redFlagAlert` function writes one email for the Patient's Clinician to the top-level `mail` collection. The Firebase Trigger Email extension then sends it. Every red flag is covered, whoever raises it: the phone's crisis tool, Finish Check-in's backstop, the phone's daily job, and the hourly silence check (#28) once it exists. They only have to create the flag.
+
+| Sent when | Not sent when |
+|---|---|
+| The flag is red, uncleared and stamped `sharedWithClinician: true`; the Patient's `sharingConsent` is `granted` now; the Patient is not a Demo Patient; `clinicianEmail` is an address | Amber or green; already cleared; stamped `false`; the Patient declined or withdrew sharing; `synthetic: true` (the seed recreates the Demo Patients' red flags on every run); no Clinician address |
+
+- **Subject:** `[CRISIS] Red flag for <name>: crisis in a Check-in`, or `[RED] Red flag for <name>: quiet phone` (or `sleep collapse`, `inactive`).
+- **Body:** the flag's reason, a fixed line for the kind, the time in Helsinki and a link to the Patient's dashboard page. It never includes a transcript, quote, Summary or Intake.
+- **Sent once per flag:** the mail document id is derived from the Patient and flag ids and written with `create()`, so a retried trigger never sends a second email.
+- **Logs:** ids, the kind and the outcome only.
+- **The link:** uses the `DASHBOARD_URL` parameter, which is not a secret. When it is empty (the default), the link goes to `https://<project-id>.web.app`. To set it, add `DASHBOARD_URL=https://...` to `firebase/functions/.env.<project-id>` (gitignored) before deploying, or answer the deploy prompt.
+
+The logic is in `firebase/functions/src/alerts.ts` (pure, `alertDecision`/`alertFor`) and `src/alertFunctions.ts` (the trigger).
+
+**Installing the Trigger Email extension (needs a person).** Nobody has installed it yet. You need:
+
+- an SMTP account that may send from your address, for example a Gmail app password, SendGrid, Mailgun or your organisation's relay;
+- its connection URI, for example `smtps://<username>@smtp.example.com:465`;
+- its password;
+- the From address, for example `Depressify <alerts@your-domain>`.
+
+None of these go into a commit.
+
+```sh
+cd firebase
+firebase ext:install firebase/firestore-send-email --project prod
+```
+
+Answer the prompts:
+
+| Prompt | Answer |
+|---|---|
+| Cloud Functions location | `europe-north1`, the database's region. If it isn't offered, pick the nearest EU region offered, and check the extension's docs that it still triggers on a database in `europe-north1`. |
+| Firestore instance ID / location | `(default)` / `europe-north1` |
+| Authentication type | Username and password |
+| SMTP connection URI | Your provider's URI, without the password |
+| SMTP password | Your provider's password. The extension stores it in Secret Manager. |
+| Email documents collection | `mail` |
+| Default FROM address | Your From address |
+| Default reply-to, users and templates collections, TTL | Leave empty, or keep the defaults |
+
+`ext:install` records the extension in `firebase.json` and writes `firebase/extensions/firestore-send-email.env`. That file can hold your SMTP username and is gitignored, so keep it out of commits. Then deploy:
+
+```sh
+firebase deploy --only extensions --project prod
+firebase deploy --only functions:redFlagAlert --project prod   # if the functions were deployed before this function existed
+```
+
+On the first deploy of a Firestore trigger, Google Cloud may report that Eventarc permissions are still propagating. If it does, wait a few minutes and deploy again.
+
+**To check it end to end:**
+
+1. On a live, sharing Patient (`synthetic: false`) linked to your Clinician, create a red flag, for example with the app's crisis phrase.
+2. Watch the `mail` document get a `delivery.state` of `SUCCESS` (the extension writes `delivery` back).
+3. Confirm the email arrives.
 
 ## Demo Patients
 

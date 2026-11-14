@@ -97,6 +97,8 @@ local.properties
 firebase/functions/node_modules/
 firebase/functions/lib/
 firebase/functions/.secret.local
+# Extension parameters written by `firebase ext:install` (the Trigger Email one holds SMTP details)
+firebase/extensions/*.env
 .firebase/
 firebase-debug.log*
 firestore-debug.log*
