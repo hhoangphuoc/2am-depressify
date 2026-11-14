@@ -262,3 +262,10 @@ describe("saveIntake", () => {
     expect(error.code).toBe("unavailable");
   });
 });
+
+describe("the real Gemini client", () => {
+  it("refuses to start without an API key, so nothing is sent", async () => {
+    const { genaiTextClient } = await import("../src/gemini");
+    expect(() => genaiTextClient("")).toThrow(/not set/);
+  });
+});

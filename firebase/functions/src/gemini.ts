@@ -27,6 +27,9 @@ export interface TextModelClient {
 
 /** The real client, built per call so the secret is read only at run time. */
 export function genaiTextClient(apiKey: string): TextModelClient {
+  // Without a key the SDK would fall back to environment variables; refuse instead, so the
+  // emulator (which has no secret) never sends a request to Gemini.
+  if (!apiKey) throw new Error("The Gemini API key is not set.");
   const ai = new GoogleGenAI({ apiKey });
   return {
     async generateText(request) {
