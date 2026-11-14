@@ -52,7 +52,6 @@ val NightColors = DepressifyColors(
 
 /** Type scale: size-specific tracking, tight leading on large text, system sans throughout. */
 object DepressifyType {
-    val wordmark = TextStyle(fontSize = 28.sp, lineHeight = 30.sp, fontWeight = FontWeight(750), letterSpacing = (-0.04).em)
     val todayHeadline = TextStyle(fontSize = 44.sp, lineHeight = 46.sp, fontWeight = FontWeight.Bold, letterSpacing = (-0.03).em)
     val display = TextStyle(fontSize = 32.sp, lineHeight = 36.sp, fontWeight = FontWeight(650), letterSpacing = (-0.025).em)
     val title = TextStyle(fontSize = 24.sp, lineHeight = 29.sp, fontWeight = FontWeight.SemiBold, letterSpacing = (-0.02).em)

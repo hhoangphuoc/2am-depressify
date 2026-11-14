@@ -1,0 +1,12 @@
+{
+  "name": "Depressify",
+  "direction": "User-supplied Sunrise logo in the app palette",
+  "created": "2026-11-14",
+  "route": "native-imagegen-edit",
+  "reference": "reference.png",
+  "logo": { "file": "logo.png", "width": 1254, "height": 1254, "alpha": false },
+  "launcher": { "file": "launcher-icon-1024.png", "width": 1024, "height": 1024, "alpha": false },
+  "prompts": ["logo.prompt.txt", "launcher-master.prompt.txt"],
+  "status": "reference-based-assets-for-review",
+  "integrated": false
+}
