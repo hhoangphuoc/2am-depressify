@@ -251,10 +251,19 @@ data class Visit(
     val score: Int? = null,
 )
 
-/** `patients/{id}/digests/{isoWeek}`, for example `2026-W46`. */
+/**
+ * `patients/{id}/digests/{isoWeek}`, for example `2026-W46`. Written by functions only: the weekly
+ * job covers the whole previous ISO week, "Generate now" the current week so far.
+ */
 @Serializable
 data class Digest(
     val isoWeek: String,
+    /** First date covered (the Monday), `yyyy-MM-dd` in Europe/Helsinki. */
+    val weekStart: String,
+    /** Last date covered: the Sunday, or the day "Generate now" ran. */
+    val weekEnd: String,
+    /** How many Summaries the text drew on. 0 means the week had no Check-ins. */
+    val summaryCount: Int,
     val text: String,
     val generatedAtMillis: Long,
 )

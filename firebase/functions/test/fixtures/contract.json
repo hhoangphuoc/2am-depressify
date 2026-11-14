@@ -189,6 +189,9 @@
         ],
         "Digest": [
             "isoWeek",
+            "weekStart",
+            "weekEnd",
+            "summaryCount",
             "text",
             "generatedAtMillis"
         ],

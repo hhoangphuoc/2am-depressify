@@ -167,6 +167,7 @@ class ModelsSerializationTest {
     fun everyIntegerTimestampFieldEndsInAtMillis() {
         val allowedIntegers = setOf(
             "quietHoursStart", "quietHoursEnd", "mood", "energy", "sleepQuality", "felt", "intensity", "score",
+            "summaryCount",
         )
         for (descriptor in documentDescriptors()) {
             for (i in 0 until descriptor.elementsCount) {
@@ -219,6 +220,18 @@ class ModelsSerializationTest {
             suggestion = "A 10-minute walk", previousOutcome = null, quotes = emptyList(),
         )
         assertEquals(summary, FirestoreJson.decode(Summary.serializer(), FirestoreJson.encode(Summary.serializer(), summary)))
+    }
+
+    @Test
+    fun digestStatesTheDatesCoveredAndHowManySummaries() {
+        val digest = Digest(
+            isoWeek = "2026-W46", weekStart = "2026-11-09", weekEnd = "2026-11-15", summaryCount = 5,
+            text = "A steady week.", generatedAtMillis = 1_763_000_000_000L,
+        )
+        val m = FirestoreJson.encode(Digest.serializer(), digest)
+        assertEquals(setOf("isoWeek", "weekStart", "weekEnd", "summaryCount", "text", "generatedAtMillis"), m.keys)
+        assertTrue(DateKeys.isDateKey(digest.weekStart) && DateKeys.isDateKey(digest.weekEnd))
+        assertEquals(digest, FirestoreJson.decode(Digest.serializer(), m))
     }
 
     private fun <T> encodeAll(serializer: KSerializer<T>, values: List<T>): List<String> =

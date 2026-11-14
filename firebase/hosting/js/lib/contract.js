@@ -26,6 +26,20 @@
  * @property {number | null} sharingChangedAtMillis
  */
 
+/**
+ * `patients/{id}/digests/{isoWeek}`, for example `2026-W46`. Written by functions only.
+ * @typedef {object} Digest
+ * @property {string} isoWeek
+ * @property {string} weekStart first date covered (the Monday), yyyy-MM-dd
+ * @property {string} weekEnd last date covered: the Sunday, or the day "Generate now" ran
+ * @property {number} summaryCount Summaries the text drew on; 0 means no Check-ins that week
+ * @property {string} text
+ * @property {number} generatedAtMillis
+ */
+
+/** The Digest's fields, in contract order. firebase/functions/test/contract.test.ts checks them. */
+export const DIGEST_FIELDS = Object.freeze(["isoWeek", "weekStart", "weekEnd", "summaryCount", "text", "generatedAtMillis"]);
+
 export const SIGNALS = Object.freeze([
   { key: "sleepMinutes", direction: "higher_is_better" },
   { key: "steps", direction: "higher_is_better" },

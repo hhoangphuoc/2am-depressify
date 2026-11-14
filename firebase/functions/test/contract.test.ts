@@ -27,7 +27,9 @@ const samples: Record<string, object> = {
   } satisfies types.Suggestion,
   Flag: { level: "red", kind: "silent", reason: "", raisedAtMillis: 1, clearedAtMillis: null } satisfies types.Flag,
   Visit: { date: "2026-11-13", questionnaire: null, score: null } satisfies types.Visit,
-  Digest: { isoWeek: "2026-W46", text: "", generatedAtMillis: 1 } satisfies types.Digest,
+  Digest: {
+    isoWeek: "2026-W46", weekStart: "2026-11-09", weekEnd: "2026-11-15", summaryCount: 0, text: "", generatedAtMillis: 1,
+  } satisfies types.Digest,
   MailMessage: { subject: "", text: "" } satisfies types.MailMessage,
   MailDoc: { to: "c@example.com", message: { subject: "", text: "" } } satisfies types.MailDoc,
 };
@@ -78,5 +80,9 @@ describe("dashboard copy of the data contract", () => {
     expect(dashboard.QUESTIONNAIRE_KINDS).toEqual(types.QUESTIONNAIRE_KINDS);
     expect(dashboard.COLLECTIONS).toEqual(types.COLLECTIONS);
     expect(dashboard.PATIENT_SUBCOLLECTIONS).toEqual(types.PATIENT_SUBCOLLECTIONS);
+  });
+
+  it("has the Digest fields the Kotlin contract has", () => {
+    expect(dashboard.DIGEST_FIELDS).toEqual(contract.documents.Digest);
   });
 });
