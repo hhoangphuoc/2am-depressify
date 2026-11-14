@@ -6,6 +6,7 @@ import app.depressify.core.model.PatientLocation as StoredPatientLocation
 import app.depressify.core.model.Suggestion
 import app.depressify.core.model.SuggestionKind
 import app.depressify.core.model.Summary
+import io.ktor.http.encodeURLParameter
 import kotlinx.serialization.Serializable
 import kotlin.math.PI
 import kotlin.math.asin
@@ -60,6 +61,11 @@ fun TodayPlace.metersFrom(near: StoredPatientLocation): Int {
         cos(rad(near.latitude)) * cos(rad(latitude)) * sin(rad(longitude - near.longitude) / 2).pow(2)
     return (2 * 6_371_000 * asin(sqrt(h))).roundToInt()
 }
+
+/** Google Maps walking directions to this exact place ([TodayPlace.id] is its Places API id). */
+val TodayPlace.walkingDirectionsUrl: String
+    get() = "https://www.google.com/maps/dir/?api=1&destination=" + "$latitude,$longitude".encodeURLParameter() +
+        "&destination_place_id=" + id.encodeURLParameter() + "&travelmode=walking"
 
 @Serializable
 data class MusicPick(val title: String, val artist: String)

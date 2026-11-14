@@ -47,6 +47,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
@@ -72,6 +73,7 @@ import app.depressify.core.isNightHour
 import app.depressify.core.model.PatientLocation
 import app.depressify.shared.data.TodayPlace
 import app.depressify.shared.data.metersFrom
+import app.depressify.shared.data.walkingDirectionsUrl
 import app.depressify.shared.resources.Res
 import app.depressify.shared.resources.nearby_map
 import app.depressify.shared.resources.open_window
@@ -599,7 +601,11 @@ internal fun TodaySuggestionsCard(s: PatientState, onRetry: () -> Unit) {
                 AnimatedContent(places[selectedPlace.coerceIn(places.indices)], transitionSpec = { fadeIn(tween(200)) togetherWith fadeOut(tween(120)) }) { place ->
                     PlaceRow(place, today.location, suggestion.kind, onNext = if (places.size > 1) ({ selectedPlace = (selectedPlace + 1) % places.size }) else null)
                 }
-            } else places.forEach { PlaceRow(it, today.location, suggestion.kind, onNext = null) }
+            } else {
+                places.forEach { PlaceRow(it, today.location, suggestion.kind, onNext = null) }
+                // Without a Google map beside them, the Maps terms ask for the source in words.
+                Txt("Places from Google Maps", DepressifyType.small, c.muted)
+            }
         } else suggestion.placeQuery?.let { query ->
             TextLink("Search “$query” in Google Maps", { uri.openUri(mapsSearchUrl(query)) }, trailing = PhosphorIcons.arrowSquareOut)
         }
@@ -618,9 +624,9 @@ internal fun TodaySuggestionsCard(s: PatientState, onRetry: () -> Unit) {
 }
 
 /**
- * One place: what it is for, its name, how far it is from the Patient's area, and a link that opens
- * it in Google Maps. The link's words also name the source, which the Maps terms ask for beside
- * place content. [onNext] lets a screen reader step through the places the map shows as pins.
+ * One place: what it is for, its name, how far it is from the Patient's area, and a navigation icon
+ * that opens walking directions in Google Maps. [onNext] lets a screen reader step through the places
+ * the map shows as pins.
  */
 @Composable
 private fun PlaceRow(place: TodayPlace, near: PatientLocation?, kind: SuggestionKind, onNext: (() -> Unit)?) {
@@ -634,10 +640,15 @@ private fun PlaceRow(place: TodayPlace, near: PatientLocation?, kind: Suggestion
     ) {
         IconTile(kind.placeIcon)
         Column(Modifier.weight(1f).padding(horizontal = 12.dp)) {
-            Txt(place.name, DepressifyType.meta.copy(fontWeight = FontWeight.SemiBold), c.ink)
+            Txt(place.name, DepressifyType.meta.copy(fontWeight = FontWeight.SemiBold), c.ink, maxLines = 2)
             near?.let { Txt(CompanionTools.distanceLabel(place.metersFrom(it)) + " away", DepressifyType.small, c.muted) }
         }
-        TextLink("Google Maps", { uri.openUri(place.mapsUrl) }, Modifier.semantics { contentDescription = "Open " + place.name + " in Google Maps" }, trailing = PhosphorIcons.arrowSquareOut)
+        Box(
+            Modifier.size(48.dp).clip(CircleShape).background(c.accent.copy(alpha = 0.14f))
+                .clickable(role = Role.Button) { uri.openUri(place.walkingDirectionsUrl) }
+                .semantics { contentDescription = "Walking directions to " + place.name + " in Google Maps" },
+            contentAlignment = Alignment.Center,
+        ) { Icon(PhosphorIcons.navigationArrow, 20.dp, c.accent, modifier = Modifier.rotate(90f)) }
     }
 }
 

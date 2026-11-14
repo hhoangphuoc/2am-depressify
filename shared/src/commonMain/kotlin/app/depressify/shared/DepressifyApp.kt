@@ -23,11 +23,12 @@ import app.depressify.shared.ui.theme.DepressifyType
 
 /**
  * Patient app root, shared by Android and iOS. [backend] is the platform's Firebase access, or null
- * to run on demo data only. [onNightChange] lets each platform match its system bars.
+ * to run on demo data only. [preferences] keeps choices such as the appearance on the phone.
+ * [onNightChange] lets each platform match its system bars.
  */
 @Composable
-fun DepressifyApp(backend: PatientBackend? = null, onNightChange: (Boolean) -> Unit = {}) {
-    val vm = viewModel { PatientViewModel(backend) }
+fun DepressifyApp(backend: PatientBackend? = null, preferences: DevicePreferences? = null, onNightChange: (Boolean) -> Unit = {}) {
+    val vm = viewModel { PatientViewModel(backend, preferences) }
     val s by vm.ui.collectAsStateWithLifecycle()
     val hour = remember { localHour() }
     val night = when (s.themeMode) { ThemeMode.Auto -> isNightHour(hour); ThemeMode.Day -> false; ThemeMode.Night -> true }
@@ -47,6 +48,7 @@ fun DepressifyApp(backend: PatientBackend? = null, onNightChange: (Boolean) -> U
                     entry<Route.Sharing> { SharingScreen(vm, s) }
                     entry<Route.CheckInIntro> { CheckInIntroScreen(vm, s) }
                     entry<Route.CheckIn> { CheckInScreen(vm, s) }
+                    entry<Route.Ratings> { RatingsScreen(vm, s) }
                     entry<Route.Finishing> { FinishingScreen(vm, s) }
                     entry<Route.Summary> { key -> SummaryScreen(vm, s, key.id) }
                     entry<Route.Suggestion> { SuggestionScreen(vm, s) }
@@ -72,10 +74,6 @@ private fun AppSheets(vm: PatientViewModel, s: PatientState) {
         null -> Unit
         Sheet.Demo -> CalmSheet("Explore the design", close) {
             Txt("Prototype controls · synthetic data", DepressifyType.meta, c.muted)
-            Txt("Theme", DepressifyType.titleSmall, c.ink)
-            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                ThemeMode.entries.forEach { m -> ChoicePill(m.label, s.themeMode == m, { vm.setThemeMode(m) }) }
-            }
             Txt("States", DepressifyType.titleSmall, c.ink)
             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Scenario.entries.forEach { sc -> ChoicePill(sc.label, s.scenario == sc, { vm.applyScenario(sc) }) }

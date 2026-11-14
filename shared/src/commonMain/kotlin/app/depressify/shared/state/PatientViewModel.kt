@@ -37,7 +37,13 @@ import kotlin.time.Instant
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.seconds
 
-enum class ThemeMode(val label: String) { Auto("By time of day"), Day("Day"), Night("Night") }
+enum class ThemeMode(val label: String) { Auto("By time of day"), Day("Light"), Night("Dark") }
+
+/** Small choices kept on this phone across launches, such as the appearance. */
+interface DevicePreferences {
+    fun read(key: String): String?
+    fun write(key: String, value: String)
+}
 
 enum class Scenario(val label: String) {
     Everyday("Everyday"), FirstUse("First use"), NoHistory("No history"), Offline("Offline"),
@@ -89,6 +95,8 @@ data class PatientState(
     val nudges: Boolean = true,
     val typed: Boolean = false,
     val typedCheckIn: TypedCheckIn = TypedCheckIn(),
+    val ratingStep: Int = 0,
+    val ratings: Ratings = Ratings(),
     val booking: BookingPlan? = null,
     val finish: FinishState = FinishState.Idle,
     val sheet: Sheet? = null,
@@ -104,9 +112,12 @@ data class PatientState(
 /** Without a [backend], or while it cannot be reached, the app runs on local demo data only. */
 class PatientViewModel(
     private val backend: PatientBackend? = null,
+    private val preferences: DevicePreferences? = null,
     private val nowMillis: () -> Long = { Clock.System.now().toEpochMilliseconds() },
 ) : ViewModel() {
-    private val state = MutableStateFlow(PatientState())
+    private val state = MutableStateFlow(PatientState(
+        themeMode = ThemeMode.entries.find { it.name == preferences?.read(APPEARANCE) } ?: ThemeMode.Auto,
+    ))
     val ui: StateFlow<PatientState> = state.asStateFlow()
 
     /** A real Gemini Live Check-in once a Patient is signed in; the scripted demo otherwise. */
@@ -220,7 +231,7 @@ class PatientViewModel(
 
     fun showSheet(sheet: Sheet?) = state.update { it.copy(sheet = sheet) }
     fun setNotice(text: String?) = state.update { it.copy(notice = text) }
-    fun setThemeMode(mode: ThemeMode) = state.update { it.copy(themeMode = mode) }
+    fun setThemeMode(mode: ThemeMode) { state.update { it.copy(themeMode = mode) }; preferences?.write(APPEARANCE, mode.name) }
 
     fun applyScenario(s: Scenario) {
         live.stop()
@@ -252,7 +263,7 @@ class PatientViewModel(
         val returning = state.value.hasHistory
         state.update {
             it.copy(
-                typed = typed, booking = null, finish = FinishState.Idle,
+                typed = typed, ratings = Ratings(), ratingStep = 0, booking = null, finish = FinishState.Idle,
                 typedCheckIn = TypedCheckIn(lines = listOf(TranscriptLine(Speaker.Companion,
                     if (returning) "It’s good to hear from you. Did you try the walk?" else "You can take your time. How are you feeling today?"))),
             )
@@ -302,14 +313,26 @@ class PatientViewModel(
 
     fun voteSuggestion(id: String, vote: SuggestionVote?) = live.voteSuggestion(id, vote)
 
-    /** The Patient ends the Check-in; the reflection and its Summary follow, with no form in between. */
+    /** The Patient ends the Check-in. With the Ratings Signal on, three skippable ratings come before the Summary. */
     fun finishCheckIn() {
         live.stop()
-        open(Route.Finishing)
-        makeSummary()
+        if (state.value.consents[SignalId.Ratings] == true) { state.update { it.copy(ratingStep = 0) }; open(Route.Ratings) }
+        else { open(Route.Finishing); makeSummary() }
     }
 
     fun leaveCheckIn() { live.stop(); state.update { it.copy(sheet = null) }; replaceAll(Route.Today) }
+
+    fun rate(value: Int?) = state.update {
+        val r = it.ratings
+        it.copy(ratings = when (it.ratingStep) { 0 -> r.copy(mood = value); 1 -> r.copy(energy = value); else -> r.copy(sleepQuality = value) })
+    }
+
+    fun nextRating() {
+        if (state.value.ratingStep < 2) state.update { it.copy(ratingStep = it.ratingStep + 1) }
+        else { open(Route.Finishing); makeSummary() }
+    }
+
+    fun previousRating() = state.update { it.copy(ratingStep = (it.ratingStep - 1).coerceAtLeast(0)) }
 
     fun makeSummary() {
         state.update { it.copy(finish = FinishState.Saving) }
@@ -328,7 +351,7 @@ class PatientViewModel(
                 text = if (chosen == SuggestionKind.Walk) DemoData.SharedSummary
                 else if (chosen != null) "You made space for a Check-in. You chose " + chosen.title.lowercase() + " as your next small step."
                 else "You made space for a Check-in. No Suggestion was chosen this time.",
-                ratings = Ratings(),
+                ratings = if (s.consents[SignalId.Ratings] == true) s.ratings else Ratings(),
                 suggestion = chosen,
                 previousOutcome = if (s.typed) s.typedCheckIn.outcome else snap.outcome,
                 voiceObservation = if (!s.typed && s.consents[SignalId.VoiceObservations] == true) "Long pauses" else null,
@@ -342,7 +365,11 @@ class PatientViewModel(
 
     /** A live Check-in's Summary comes from Finish Check-in. A failure offers the retry, which reuses the Check-in. */
     private suspend fun makeLiveSummary() {
-        val saved = attempt(FINISH_TIMEOUT) { live.finish() }
+        val s = state.value
+        val r = s.ratings
+        val ratingsLine = if (s.consents[SignalId.Ratings] != true) null
+        else "My ratings on the screen: mood " + (r.mood ?: "skipped") + ", energy " + (r.energy ?: "skipped") + ", sleep quality " + (r.sleepQuality ?: "skipped") + ", each from 1 to 5."
+        val saved = attempt(FINISH_TIMEOUT) { live.finish(ratingsLine) }
         if (saved == null) { state.update { it.copy(finish = FinishState.Failed) }; return }
         val snap = live.snapshot.value
         val summary = saved.forHistory().copy(suggestion = snap.offer.takeIf { snap.accepted })
@@ -382,6 +409,8 @@ class PatientViewModel(
     }
 
     private companion object {
+        const val APPEARANCE = "appearance"
+
         /** How long sign-in or a Consent write may take before it counts as failed. */
         val BACKEND_TIMEOUT = 15.seconds
 

@@ -182,6 +182,8 @@ class GeminiLiveSessionTest {
         session(client).apply { start(returning = true) }.let { live ->
             val card = live.snapshot.value.suggestions.single()
             assertEquals("Karhupuisto · 5 min walk" to "https://maps.google.com/?cid=1", card.actionLabel to card.actionUrl)
+            // A live card never names the demo's sample place.
+            assertEquals("A little time outside", card.title)
             live.stop()
         }
     }
@@ -258,7 +260,7 @@ class GeminiLiveSessionTest {
     }
 
     @Test
-    fun finishingHandsOverTheConversationAndTheAgreedSuggestion() = runTest {
+    fun finishingHandsOverTheConversationTheRatingsAndTheAgreedSuggestion() = runTest {
         val client = FakeLiveClient(listOf(
             ServerEvent.OutputText("How was today?"), ServerEvent.TurnComplete, ServerEvent.InputText("Tired."),
             call("record_suggestion", "kind" to JsonPrimitive("music"), "details" to JsonPrimitive("One calm song tonight")),
@@ -268,12 +270,12 @@ class GeminiLiveSessionTest {
         live.respond(Reply.Accept)
         live.stop()
 
-        val summary = live.finish()
+        val summary = live.finish("My ratings on the screen: mood 3.")
 
         assertEquals("check-in-1", summary?.checkInId)
         val (checkInId, draft) = gateway.finished.single()
         assertEquals("check-in-1", checkInId)
-        assertEquals(listOf(false to "How was today?", true to "Tired.", true to "That works for me."), draft.turns.map { it.fromPatient to it.text })
+        assertEquals(listOf(false to "How was today?", true to "Tired.", true to "That works for me.", true to "My ratings on the screen: mood 3."), draft.turns.map { it.fromPatient to it.text })
         assertEquals(SuggestionStatus.accepted, draft.suggestions.single().status)
         assertFalse(draft.crisis)
     }
@@ -310,7 +312,7 @@ class GeminiLiveSessionTest {
         assertEquals(listOf(false, false, true), live.snapshot.value.suggestions.map { it.accepted })
         live.stop()
 
-        live.finish()
+        live.finish(ratingsLine = null)
         val statuses = gateway.finished.single().second.suggestions.map { it.details to it.status }
         assertEquals(
             listOf(
