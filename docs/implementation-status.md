@@ -19,7 +19,7 @@ Kept up to date as PRs are opened and merged. Each PR also updates its own rows 
 | #68 | `feat/27-nudge-rules` → `main` | #27, pure logic: the Nudge decision and quiet-hours rules in `core` | **Merged** |
 | #69 | `feat/26-daily-job-rules` → `main` | #26, pure logic: the daily job as one pure pipeline in `core` | **Merged** |
 | #70 | `feat/live-demo-patient` → `main` | Live demo Patient: `npm run seed-live-patient` gives one real Patient account six weeks of seeded history | **Merged.** **Run on `junction26hel-7400` on 14 November 2026** for the team's test Gmail account: account created (verified, no password), 42 daily, 24 Check-ins and Summaries, 24 Suggestions, 3 flags (level amber), 2 Visits, 12 Consents. Seeded before the Intake label: `--reset` once to add it. |
-| #74 | `feat/dashboard-backend-sync` → `main` | Dashboard design ↔ backend sync: the design adapter, live data helpers, `Digest.sourceCheckInIds`, two indexes | Open; see [design/dashboard-backend-sync.md](design/dashboard-backend-sync.md). TESTCOUNTS74 |
+| #74 | `feat/dashboard-backend-sync` → `main` | Dashboard design ↔ backend sync: the design adapter, live data helpers, `Digest.sourceCheckInIds`, two indexes | Open; see [design/dashboard-backend-sync.md](design/dashboard-backend-sync.md). Tested on top of the latest `main` (with #67), after the review fixes: hosting 395, functions 498, seed 158, `core` 161 (`contract.json` stable), emulators 110 (1 skipped) + 37. |
 
 **Deployed on `junction26hel-7400`:**
 - Rules and indexes.
