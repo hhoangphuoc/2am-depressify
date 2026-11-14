@@ -3,6 +3,7 @@
 import { doc, onSnapshot } from "https://www.gstatic.com/firebasejs/13.3.0/firebase-firestore.js";
 import { COLLECTIONS } from "../lib/contract.js";
 import { sharingMessage, sharingStateFromError, sharingStateFromSnapshot } from "../lib/sharing.js";
+import { mountDigest } from "./digest.js";
 import { mountIntake } from "./intake.js";
 
 const COPY = {
@@ -13,7 +14,7 @@ const COPY = {
 
 /**
  * Shows one Patient in `root` and keeps it live. Returns a function that stops listening.
- * @param {{ root: HTMLElement, db: import("firebase/firestore").Firestore, patientId: string, calls: { extract: Function, save: Function } }} options
+ * @param {{ root: HTMLElement, db: import("firebase/firestore").Firestore, patientId: string, calls: { extract: Function, save: Function, generateDigest: Function } }} options
  * @returns {() => void}
  */
 export function showPatient({ root, db, patientId, calls }) {
@@ -34,10 +35,15 @@ export function showPatient({ root, db, patientId, calls }) {
   const intakeSlot = document.createElement("div");
   intakeSlot.hidden = true;
 
-  root.replaceChildren(back, name, status, intakeSlot);
+  // The weekly Digest (#23). With #11 it moves into the overview-digest and summaries-digest slots.
+  const digestSlot = document.createElement("div");
+  digestSlot.hidden = true;
+
+  root.replaceChildren(back, name, status, digestSlot, intakeSlot);
   name.focus();
 
   const intake = mountIntake(intakeSlot, { patientId, extract: calls.extract, save: calls.save });
+  const digest = mountDigest(digestSlot, { db, patientId, calls });
 
   /** @param {import("../lib/sharing.js").SharingViewState} state */
   const render = (state) => {
@@ -46,11 +52,13 @@ export function showPatient({ root, db, patientId, calls }) {
       name.textContent = COPY.unnamed;
       status.textContent = sharingMessage(state);
       intakeSlot.hidden = true;
+      digestSlot.hidden = true;
       return;
     }
     name.textContent = state.patient.displayName || COPY.unnamed;
     status.textContent = "";
     intakeSlot.hidden = false;
+    digestSlot.hidden = false;
     intake.setSaved(state.patient.intakeHighlights ?? "");
   };
 
@@ -64,6 +72,7 @@ export function showPatient({ root, db, patientId, calls }) {
   return () => {
     stop();
     intake.destroy();
+    digest.destroy();
     root.replaceChildren();
   };
 }
