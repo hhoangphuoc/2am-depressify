@@ -160,14 +160,14 @@ Results on `feat/14-typed-checkin-on-49` (on #50, with #52's spike fixtures merg
 
 | Suite | Command | Result |
 |---|---|---|
-| Kotlin `core` | `./gradlew :core:jvmTest` | 24 pass; the exported contract is unchanged |
+| Kotlin `core` (contract, `CoreRulesTest`, `LiveProtocolTest`, `LiveProtocolFixturesTest`) | `./gradlew :core:jvmTest` | 39 pass; the exported contract is unchanged |
 | Kotlin `shared` (session and view model wiring, with fakes) | `./gradlew :shared:testAndroidHostTest` | 10 pass |
 | Android build | `./gradlew :androidApp:assembleDebug` | APK builds |
 | iOS build | `xcodegen generate`, then `xcodebuild` for the arm64 simulator | Builds and links with the Firebase iOS SDK |
-| Functions | `cd firebase/functions && npm test` | 166 pass |
+| Functions | `cd firebase/functions && npm test` | 249 pass, including the Check-in pure, handler and no-logging spy tests |
 | Seed | `cd firebase/seed && npm test` | 78 pass |
 | Dashboard helpers | `cd firebase/hosting && node --test` | 308 pass |
-| Rules, functions and end-to-end on the emulators | `firebase emulators:exec --only auth,firestore,functions --project demo-twoam "npm --prefix functions run test:emulator"` | 82 pass with Firebase CLI 15.36.0, including the `redFlagAlert` trigger |
+| Rules, functions and end-to-end on the emulators | `firebase emulators:exec --only auth,firestore,functions --project demo-twoam "npm --prefix functions run test:emulator"` | 87 pass, 1 skipped (the opt-in real-Gemini Check-in test) with Firebase CLI 15.36.0, including the `redFlagAlert` trigger |
 | Seed on the emulator | `... "npm --prefix seed run test:emulator"` | 14 pass |
 
 The emulator suite needs Firebase CLI 15 or newer. With CLI 14.22.0 the Functions emulator kills every function built with `firebase-functions` 7, and the six callable tests time out.
