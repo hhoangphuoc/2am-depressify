@@ -10,7 +10,8 @@ import { withEmail, withStart, type CheckInStart } from "../src/limits";
 import type { LiveTokenClient, LiveTokenRequest } from "../src/live";
 import type { DigestStore } from "../src/digestFunctions";
 import type { PatientStore } from "../src/intakeFunctions";
-import type { SilencePlan, StoredFlag } from "../src/silence";
+import type { StoredFlag } from "../src/flags";
+import type { SilencePlan } from "../src/silence";
 import type { SilenceStore } from "../src/silenceFunctions";
 import { newPatientDoc, type CheckIn, type DailyDoc, type Digest, type Flag, type MailDoc, type PatientDoc, type Summary, type Suggestion } from "../src/types";
 
