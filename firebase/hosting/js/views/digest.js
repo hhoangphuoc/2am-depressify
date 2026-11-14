@@ -51,7 +51,7 @@ export function mountDigest(slot, { db, patientId, calls }) {
   let destroyed = false;
 
   const section = el("section", { class: "panel digest", "aria-labelledby": `${id}-heading` });
-  const heading = el("h3", { id: `${id}-heading` }, COPY.heading);
+  const heading = el("h4", { id: `${id}-heading` }, COPY.heading);
   const about = el("p", { class: "muted" }, COPY.about);
   const meta = el("p", { class: "muted hint" });
   const body = el("div", { class: "highlights" });
