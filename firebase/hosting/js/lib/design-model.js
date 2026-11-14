@@ -140,7 +140,11 @@ function clockOf(clock) {
   return { nowMillis, timeZone, today: dateInZone(nowMillis, timeZone) };
 }
 
-/** @param {{ id?: string }[] | null | undefined} docs */
+/**
+ * @template T
+ * @param {T[] | null | undefined} docs
+ * @returns {T[]}
+ */
 const list = (docs) => (Array.isArray(docs) ? docs : []);
 
 // ---------------------------------------------------------------------------------------------
@@ -180,9 +184,21 @@ export function designLevel({ sharing, storedLevel, assessment }) {
 }
 
 /**
+ * @typedef {object} DesignFlag
+ * @property {string} id
+ * @property {"red" | "amber" | "green"} level
+ * @property {string | null} kind
+ * @property {string} reason
+ * @property {string | null} source
+ * @property {string | null} observed "13 Nov, 08:10"
+ * @property {number | null} raisedAtMillis
+ */
+
+/**
  * A flag as the design shows it in the Attention block.
  * @param {{ id: string, level?: string, kind?: string, reason?: string, raisedAtMillis?: number }} flag
  * @param {string} [timeZone]
+ * @returns {DesignFlag}
  */
 export function designFlag(flag, timeZone = DESIGN_TIME_ZONE) {
   return {
@@ -254,18 +270,18 @@ export function designHistory(flags, { synthetic = false, timeZone = DESIGN_TIME
  * The Attention block: the design level, the open flags (highest first, then newest) and the top
  * reason, source and time. Until the flags load, the record's level and reasons stand in.
  * @param {Partial<import("./contract.js").PatientDoc>} patient
- * @param {{ id: string }[] | null | undefined} flags the visible flags, or null while loading
+ * @param {any[] | null | undefined} flags the visible flags (`{ id, ...data }`), or null while loading
  * @param {{ checkIns?: object[] | null, timeZone?: string }} [options]
  */
 export function designAttention(patient, flags, { checkIns = null, timeZone = DESIGN_TIME_ZONE } = {}) {
   const sharing = patient?.sharingConsent === SHARING_GRANTED ? "active" : "withdrawn";
   const shown = shownAttention(patient ?? {}, flags);
   const { assessment, atMillis } = latestAssessment(checkIns);
-  /** @type {ReturnType<typeof designFlag>[]} */
+  /** @type {DesignFlag[]} */
   let activeFlags;
   if (Array.isArray(flags)) {
     const rank = (/** @type {string} */ l) => (l === "red" ? 0 : l === "amber" ? 1 : 2);
-    activeFlags = flags
+    activeFlags = /** @type {any[]} */ (flags)
       .filter(isOpen)
       .map((f) => designFlag(/** @type {any} */ (f), timeZone))
       .sort((a, b) => rank(a.level) - rank(b.level) || (b.raisedAtMillis ?? 0) - (a.raisedAtMillis ?? 0));
@@ -337,7 +353,7 @@ function consentLookup(consents) {
  * charts and Summaries agree). A missing record, a null value or a Signal without Consent is null,
  * never zero.
  * @param {{ date: string, values?: Record<string, unknown> }[]} daily
- * @param {{ range: { start: string, end: string }, summaries?: { date: string, mood: number | null }[], consents?: object[] | null }} options
+ * @param {{ range: { start: string, end: string }, summaries?: { date: string | null, mood: number | null }[], consents?: object[] | null }} options
  *   `summaries` in the design's shape (`designSummaries`)
  */
 export function designDaily(daily, { range, summaries = [], consents = null }) {
@@ -348,7 +364,7 @@ export function designDaily(daily, { range, summaries = [], consents = null }) {
   /** @type {Map<string, number | null>} */
   const moodByDate = new Map();
   // Newest first: the first Summary of a date is that day's latest.
-  for (const s of summaries) if (!moodByDate.has(s.date)) moodByDate.set(s.date, Number.isInteger(s.mood) ? s.mood : null);
+  for (const s of summaries) if (s.date !== null && !moodByDate.has(s.date)) moodByDate.set(s.date, Number.isInteger(s.mood) ? s.mood : null);
 
   const rows = [];
   for (let date = range.start; date <= range.end; date = addDays(date, 1)) {
@@ -415,9 +431,10 @@ export function designSignals(daily, { today, consents = null, healthSource }) {
 /**
  * The Suggestion whose Outcome a Summary reports: the one whose `outcomeCheckInId` is this
  * Check-in (PR #65), else the newest Suggestion made before the Check-in started.
- * @param {{ id?: string, outcomeCheckInId?: unknown, suggestedAtMillis?: number }[]} suggestions
+ * @param {any[]} suggestions
  * @param {string} checkInId
  * @param {number | null} startedAtMillis
+ * @returns {any}
  */
 function previousSuggestionOf(suggestions, checkInId, startedAtMillis) {
   const linked = suggestions.find((s) => s?.outcomeCheckInId === checkInId);
@@ -463,7 +480,7 @@ export function designSummaries(summaries, { checkIns = [], suggestions = [], ti
       energy: Number.isInteger(s.energy) ? s.energy : null,
       sleep: Number.isInteger(s.sleepQuality) ? s.sleepQuality : null,
       sleepLine: sentence(s.sleepLine),
-      themes: Array.isArray(s.themes) ? s.themes.filter((t) => typeof t === "string" && t.trim()) : [],
+      themes: Array.isArray(s.themes) ? s.themes.filter((/** @type {unknown} */ t) => typeof t === "string" && t.trim()) : [],
       voice: voiceCues.length ? voiceCues.join("; ") : null,
       voiceCues,
       suggestion,
@@ -471,7 +488,7 @@ export function designSummaries(summaries, { checkIns = [], suggestions = [], ti
       previousKind: previous?.kind ?? null,
       tried: typeof previous?.tried === "boolean" ? previous.tried : null,
       feeling: Number.isInteger(previous?.felt) ? previous.felt : null,
-      quotes: Array.isArray(s.quotes) ? s.quotes.filter((q) => typeof q === "string" && q.trim()).slice(0, 3) : [],
+      quotes: Array.isArray(s.quotes) ? s.quotes.filter((/** @type {unknown} */ q) => typeof q === "string" && q.trim()).slice(0, 3) : [],
     };
   });
 }
@@ -484,6 +501,7 @@ const QUESTIONNAIRE_TYPES = Object.freeze({ phq2: "PHQ-2", phq9: "PHQ-9" });
  */
 export function designVisits(visits) {
   return sortVisits(list(/** @type {any} */ (visits))).map((/** @type {any} */ v) => {
+    /** @type {string} */
     const type = QUESTIONNAIRE_TYPES[/** @type {"phq2" | "phq9"} */ (v.questionnaire)] ?? "none";
     return { id: v.id, date: v.date, type, score: type === "none" || !Number.isInteger(v.score) ? null : v.score };
   });
