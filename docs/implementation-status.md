@@ -144,9 +144,26 @@ Results on `chore/real-project-config` (on top of `fix/review-decisions`), all f
 | Rules, functions and end-to-end on the emulators | `firebase emulators:exec --only auth,firestore,functions --project demo-twoam "npm --prefix functions run test:emulator"` | 78 pass |
 | Seed on the emulator | `... "npm --prefix seed run test:emulator"` | 14 pass |
 
+### Live deployment (14 November 2026)
+
+The real project `junction26hel-7400` ("Hack Junction 2026-7400", Blaze plan) is set up:
+
+| Part | State |
+|---|---|
+| Firestore `(default)` in `europe-north1` | Security rules and indexes deployed. A signed-out read of a Patient or of `clinicians` gets HTTP 403. |
+| Clinician allowlist | One allowed Clinician (the address is kept out of this repository). |
+| Demo Patients | Seeded: 401 synthetic documents, linked to the allowed Clinician. |
+| Functions in `europe-north1` | `extractIntake`, `saveIntake`, `generateDigest`, `health`. Callers can reach them; the callables refuse anyone not signed in ("Sign in to continue."). |
+| `weeklyDigest` in `europe-west1` | Cloud Scheduler has no `europe-north1` location (`SCHEDULER_REGION` in `region.ts`). Not publicly invokable. |
+| `GEMINI_API_KEY` secret | Set. One call with the stored key to `gemini-4-hydrogen` (storage off) answered in about 3 s. |
+| Container cleanup policies | Set in both regions. |
+
+Deploy notes:
+- Cloud Build runs `npm ci` with Node 22's npm 10, so regenerate `firebase/functions/package-lock.json` with npm 10 (`npx npm@10 install`).
+- The first deploy didn't grant public invoker access on the callables. It was added by hand (`allUsers` → Cloud Run Invoker) on `extractintake`, `saveintake`, `generatedigest` and `health` only.
+
 **Not verified (needs a person, hardware or credentials):**
-- Deploying to a real Firebase project.
-- A real Gemini call.
+- A full Intake extraction or Digest through the deployed callables, signed in as the Clinician.
 - The app on the S24+.
 - An iOS build in Xcode.
 - The phone-width layout on a real device.
