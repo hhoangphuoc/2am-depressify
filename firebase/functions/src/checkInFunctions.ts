@@ -13,8 +13,9 @@
 //                  the same time, the Decisions API (#20) with the three yes/no questions. Writes
 //                  `summaries/{checkInId}`, the ratings, Voice cues (from the draft), crisis marker,
 //                  assessment, `previousTried` and end time on the Check-in, any new flags
-//                  (`flags/<kind>-<checkInId>`), and `lastCheckInAtMillis` / `lastSeenAtMillis` and
-//                  the raised flag level on the Patient, all in one transaction. A retry overwrites
+//                  (`flags/<kind>-<checkInId>`), `lastCheckInAtMillis` / `lastSeenAtMillis` and
+//                  the raised flag level on the Patient, and the Outcome on the previous accepted
+//                  Suggestion (#21, `src/outcomes.ts`: once per Suggestion), all in one transaction. A retry overwrites
 //                  the same Summary, but one without model output keeps what the model wrote before.
 //                  A caller who is not the Patient (the demo shortcut) may finish only a Check-in
 //                  they started. A text model timeout or server error answers `unavailable` and
@@ -27,7 +28,7 @@
 // failure becomes an HttpsError with fixed wording, and log lines carry ids and an HTTP status only.
 // test/checkin-logging.test.ts checks this through the callables' HTTP layer.
 import { randomUUID } from "node:crypto";
-import type { Firestore, Transaction } from "firebase-admin/firestore";
+import { FieldPath, type Firestore, type QueryDocumentSnapshot, type Transaction } from "firebase-admin/firestore";
 import * as logger from "firebase-functions/logger";
 import { HttpsError, onCall } from "firebase-functions/v2/https";
 import {
@@ -71,16 +72,19 @@ import {
   type LiveTokenClient,
   type StartCheckInResponse,
 } from "./live";
+import { outcomeDailyNeeded, outcomeTarget, resolveOutcome, type OutcomePlan, type StoredSuggestion } from "./outcomes";
 import { assertActsAsPatient } from "./patientCaller";
-import { COLLECTIONS, type CheckIn, type Flag, type PatientDoc, type Summary, type Suggestion } from "./types";
+import { COLLECTIONS, type CheckIn, type DailyDoc, type Flag, type PatientDoc, type Summary, type Suggestion } from "./types";
 
 /** What the Check-in functions read and write. */
 export interface CheckInStore {
   getPatient(patientId: string): Promise<Partial<PatientDoc> | undefined>;
   getCheckIn(patientId: string, checkInId: string): Promise<Partial<CheckIn> | undefined>;
   /** `consents/{subject}.granted`, or null when there is no document (which means included). */
-  getConsent(patientId: string, subject: "ratings" | "voice_cues"): Promise<boolean | null>;
+  getConsent(patientId: string, subject: "ratings" | "voice_cues" | "steps"): Promise<boolean | null>;
   getSuggestion(patientId: string, suggestionId: string): Promise<Partial<Suggestion> | undefined>;
+  /** The Patient's accepted Suggestions (one equality filter), to find the Outcome's target. */
+  getAcceptedSuggestions(patientId: string): Promise<StoredSuggestion[]>;
   /**
    * Records the start in `patientLimits/{patientId}`, in a transaction. Resolves false, writing
    * nothing, when the Patient has reached the hourly cap (`withStart`).
@@ -92,10 +96,12 @@ export interface CheckInStore {
   createCheckIn(patientId: string, checkIn: CheckIn): Promise<void>;
   /**
    * In one transaction: reads the Patient, the Check-in, any earlier Summary and the Patient's flags
-   * of the Decisions kinds, applies `finishWrites`, and writes the Summary, the Check-in's fields,
-   * the new flags and the Patient's times and level. Returns the Summary written.
+   * of the Decisions kinds and, with an Outcome `plan`, the accepted Suggestions (for
+   * `outcomeTarget`) and the daily records `outcomeDailyNeeded` names; applies `finishWrites`, and
+   * writes the Summary, the Check-in's fields, the new flags, the Patient's times and level, and the
+   * Outcome fields on the target Suggestion. Returns the Summary written.
    */
-  writeFinish(patientId: string, checkInId: string, content: FinishContent, judgment: Judgment, nowMillis: number): Promise<Summary>;
+  writeFinish(patientId: string, checkInId: string, content: FinishContent, judgment: Judgment, nowMillis: number, plan: OutcomePlan | null): Promise<Summary>;
   /**
    * In one transaction: reads the Patient, the Check-in and the Patient's flags of the Decisions
    * kinds, applies `decisionFlagWrites`, and creates the new flags and raises the Patient's level.
@@ -126,6 +132,17 @@ export function adminCheckInStore(db: Firestore): CheckInStore {
   const summaryRef = (patientId: string, checkInId: string) => patientRef(patientId).collection(COLLECTIONS.summaries).doc(checkInId);
   const limitsRef = (patientId: string) => db.collection(PATIENT_LIMITS).doc(patientId);
   const flagsRef = (patientId: string) => patientRef(patientId).collection(COLLECTIONS.flags);
+  const suggestionsRef = (patientId: string) => patientRef(patientId).collection(COLLECTIONS.suggestions);
+  const acceptedQuery = (patientId: string) => suggestionsRef(patientId).where("status", "==", "accepted");
+  const storedSuggestions = (docs: QueryDocumentSnapshot[]): StoredSuggestion[] =>
+    docs.map((doc) => ({ id: doc.id, suggestion: doc.data() as Partial<Suggestion> }));
+  /** Daily records keyed by date, from `start` to `end` inclusive (a range on the document id: no index). */
+  const dailyIn = async (tx: Transaction, patientId: string, { start, end }: { start: string; end: string }): Promise<Partial<DailyDoc>[]> =>
+    (
+      await tx.get(
+        patientRef(patientId).collection(COLLECTIONS.daily).where(FieldPath.documentId(), ">=", start).where(FieldPath.documentId(), "<=", end),
+      )
+    ).docs.map((doc) => ({ ...(doc.data() as Partial<DailyDoc>), date: doc.id }));
   /** The Patient's flags of the kinds the Decisions routing raises, open or cleared (one `in` filter, no composite index). */
   const decisionFlags = async (tx: Transaction, patientId: string): Promise<StoredFlag[]> =>
     (await tx.get(flagsRef(patientId).where("kind", "in", [...DECISION_FLAG_KINDS]))).docs.map((doc) => ({ id: doc.id, flag: doc.data() as Partial<Flag> }));
@@ -144,8 +161,11 @@ export function adminCheckInStore(db: Firestore): CheckInStore {
       return typeof granted === "boolean" ? granted : null;
     },
     async getSuggestion(patientId, suggestionId) {
-      const snapshot = await patientRef(patientId).collection(COLLECTIONS.suggestions).doc(suggestionId).get();
+      const snapshot = await suggestionsRef(patientId).doc(suggestionId).get();
       return snapshot.exists ? (snapshot.data() as Partial<Suggestion>) : undefined;
+    },
+    async getAcceptedSuggestions(patientId) {
+      return storedSuggestions((await acceptedQuery(patientId).get()).docs);
     },
     async reserveStart(patientId, start) {
       return db.runTransaction(async (tx) => {
@@ -162,32 +182,41 @@ export function adminCheckInStore(db: Firestore): CheckInStore {
     async createCheckIn(patientId, checkIn) {
       await checkInRef(patientId, checkIn.id).create(checkIn);
     },
-    async writeFinish(patientId, checkInId, content, judgment, nowMillis) {
+    async writeFinish(patientId, checkInId, content, judgment, nowMillis, plan) {
       return db.runTransaction(async (tx) => {
-        const [patient, checkIn, summary, flags] = await Promise.all([
+        const [patient, checkIn, summary, flags, accepted] = await Promise.all([
           tx.get(patientRef(patientId)),
           tx.get(checkInRef(patientId, checkInId)),
           tx.get(summaryRef(patientId, checkInId)),
           decisionFlags(tx, patientId),
+          plan ? tx.get(acceptedQuery(patientId)).then((q) => storedSuggestions(q.docs)) : Promise.resolve([]),
         ]);
         if (!patient.exists || !checkIn.exists) throw new Error("The Patient or the Check-in is missing.");
+        const checkInData = checkIn.data() as Partial<CheckIn>;
+        const target = plan ? outcomeTarget(accepted, { id: checkInId, startedAtMillis: checkInData.startedAtMillis }, plan.excludeIds) : undefined;
+        const range = outcomeDailyNeeded(target, plan);
+        const daily = range ? await dailyIn(tx, patientId, range) : [];
         const writes = finishWrites(
           {
             patient: patient.data() as Partial<PatientDoc>,
-            checkIn: checkIn.data() as Partial<CheckIn>,
+            checkIn: checkInData,
             summary: summary.exists ? (summary.data() as Partial<Summary>) : undefined,
             flags,
+            outcome: { target, daily },
           },
           checkInId,
           content,
           nowMillis,
           judgment,
+          plan,
         );
         tx.set(summaryRef(patientId, checkInId), writes.summary);
         tx.update(checkInRef(patientId, checkInId), writes.checkIn);
         tx.update(patientRef(patientId), writes.patient);
         // create(): a flag id that exists fails the transaction rather than overwrite a flag.
         for (const { id, flag } of writes.flags) tx.create(flagsRef(patientId).doc(id), flag);
+        // Only the Outcome fields: the Suggestion's stamp, status and the rest are left as they are.
+        if (writes.suggestion) tx.update(suggestionsRef(patientId).doc(writes.suggestion.id), writes.suggestion.fields);
         return writes.summary;
       });
     },
@@ -291,16 +320,29 @@ export async function finishCheckInHandler(call: IntakeCall, deps: FinishCheckIn
     if (startedBy?.uid !== auth.uid) throw new HttpsError("permission-denied", "Only the phone that started this Check-in can finish it.");
   }
 
-  const [checkIn, ratingsConsent, voiceCuesConsent, previous] = await readOrUnavailable("finishCheckIn", ids, () =>
+  const [checkIn, ratingsConsent, voiceCuesConsent, stepsConsent, named, accepted] = await readOrUnavailable("finishCheckIn", ids, () =>
     Promise.all([
       deps.store.getCheckIn(patientId, checkInId),
       deps.store.getConsent(patientId, "ratings"),
       deps.store.getConsent(patientId, "voice_cues"),
+      deps.store.getConsent(patientId, "steps"),
       lastSuggestionId ? deps.store.getSuggestion(patientId, lastSuggestionId) : Promise.resolve(undefined),
+      deps.store.getAcceptedSuggestions(patientId),
     ]),
   );
   if (!checkIn) throw new HttpsError("not-found", "This Check-in was not started.");
   const consents: FinishConsents = { ratings: ratingsConsent !== false, voiceCues: voiceCuesConsent !== false };
+
+  // The Outcome's target (#21) is found here, not taken from the phone: the most recent accepted
+  // Suggestion made before this Check-in with no Outcome yet (`outcomeTarget`). When the phone names
+  // the Suggestion the Companion asked about, the Outcome is written only if it is that target: an
+  // answer about another Suggestion (a declined one, or one already answered) never lands on it.
+  const draftIds = draft.suggestions.map((s) => s.id).filter((id): id is string => id !== null);
+  const target = outcomeTarget(accepted, { id: checkInId, startedAtMillis: checkIn.startedAtMillis }, draftIds);
+  const outcomeAllowed = target !== undefined && (lastSuggestionId === null || lastSuggestionId === target.id);
+  if (target !== undefined && !outcomeAllowed) logger.warn("finishCheckIn: the last Suggestion is not the open Outcome; no Outcome is written", ids);
+  // What both models are told was asked about: the Suggestion the phone names, else the target.
+  const previous = lastSuggestionId ? named : target?.suggestion;
 
   // A silent Check-in gets the minimal Summary without a model call, and no review: there is
   // nothing to summarise or judge, and nothing can be invented. Its crisis marker still counts.
@@ -331,19 +373,17 @@ export async function finishCheckInHandler(call: IntakeCall, deps: FinishCheckIn
   const model = summarised.model;
 
   const content = summaryContent(model, draft, consents);
+  // The text model's answer first, the Decisions "tried" only when it is unsure (`resolveOutcome`).
+  const answer = outcomeAllowed ? resolveOutcome(model, judgment.tried) : null;
+  const plan: OutcomePlan | null =
+    answer !== null ? { suggestionId: target!.id, answer, stepsAllowed: stepsConsent !== false, excludeIds: draftIds } : null;
   let summary: Summary;
   try {
-    summary = await deps.store.writeFinish(patientId, checkInId, content, judgment, nowMillis);
+    summary = await deps.store.writeFinish(patientId, checkInId, content, judgment, nowMillis, plan);
   } catch {
     logger.warn("finishCheckIn: could not save the Summary", ids);
     throw new HttpsError("unavailable", "Could not save your Summary. Try again.");
   }
-
-  // TODO(#21): write the Outcome on `suggestions/{lastSuggestionId}` from `judgment.tried` (the
-  // Decisions answer: "yes", "no" or "unknown", also saved as `previousTried` on the Check-in) and
-  // `model.previousTried` / `model.previousFelt`, then `objectiveChange` and `outcomeScore` from
-  // the day's steps against Baseline. `lastSuggestionId` is validated and the Suggestion read
-  // above; nothing writes it yet.
 
   // Only the Summary: never the judgment, a flag or a level (the Patient never sees one).
   return { checkInId, summary, minimal: model === null };

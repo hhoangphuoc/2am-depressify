@@ -8,6 +8,7 @@ import { DecisionsError, type DecisionsClient, type DecisionsRequest } from "../
 import type { CheckInStore } from "../src/checkInFunctions";
 import { withEmail, withStart, type CheckInStart } from "../src/limits";
 import type { LiveTokenClient, LiveTokenRequest } from "../src/live";
+import { outcomeDailyNeeded, outcomeTarget, type OutcomePlan, type StoredSuggestion } from "../src/outcomes";
 import type { DigestStore } from "../src/digestFunctions";
 import type { PatientStore } from "../src/intakeFunctions";
 import type { SilencePlan, StoredFlag } from "../src/silence";
@@ -217,6 +218,8 @@ export class FakeCheckInStore implements CheckInStore {
   readonly summaries = new Map<string, Summary>();
   readonly consents = new Map<string, boolean>();
   readonly suggestions = new Map<string, Partial<Suggestion>>();
+  /** Daily records, keyed `<patientId>/<date>`. */
+  readonly daily = new Map<string, Partial<DailyDoc>>();
   /** Flags, keyed `<patientId>/<flagId>`. */
   readonly flags = new Map<string, Flag>();
   /** Each Patient's recorded starts, as `patientLimits` keeps them. */
@@ -248,7 +251,7 @@ export class FakeCheckInStore implements CheckInStore {
     return doc ? structuredClone(doc) : undefined;
   }
 
-  async getConsent(patientId: string, subject: "ratings" | "voice_cues") {
+  async getConsent(patientId: string, subject: "ratings" | "voice_cues" | "steps") {
     if (this.failReads) throw new Error("read failed");
     return this.consents.get(this.key(patientId, subject)) ?? null;
   }
@@ -257,6 +260,18 @@ export class FakeCheckInStore implements CheckInStore {
     if (this.failReads) throw new Error("read failed");
     const doc = this.suggestions.get(this.key(patientId, suggestionId));
     return doc ? structuredClone(doc) : undefined;
+  }
+
+  /** One Patient's accepted Suggestions, as the store's equality query reads them. */
+  acceptedSuggestions(patientId: string): StoredSuggestion[] {
+    return [...this.suggestions.entries()]
+      .filter(([key, s]) => key.startsWith(`${patientId}/`) && s.status === "accepted")
+      .map(([key, s]) => ({ id: key.slice(patientId.length + 1), suggestion: structuredClone(s) }));
+  }
+
+  async getAcceptedSuggestions(patientId: string) {
+    if (this.failReads) throw new Error("read failed");
+    return this.acceptedSuggestions(patientId);
   }
 
   async reserveStart(patientId: string, start: CheckInStart) {
@@ -297,13 +312,28 @@ export class FakeCheckInStore implements CheckInStore {
     }
   }
 
-  async writeFinish(patientId: string, checkInId: string, content: FinishContent, judgment: Judgment, nowMillis: number) {
+  async writeFinish(patientId: string, checkInId: string, content: FinishContent, judgment: Judgment, nowMillis: number, plan: OutcomePlan | null) {
     if (this.failWrites) throw new Error("write failed");
     const key = this.key(patientId, checkInId);
     const patient = this.patients.get(patientId);
     const checkIn = this.checkIns.get(key);
     if (!patient || !checkIn) throw new Error("missing");
-    const writes = finishWrites({ patient, checkIn, summary: this.summaries.get(key), flags: this.decisionFlags(patientId) }, checkInId, content, nowMillis, judgment);
+    const target = plan ? outcomeTarget(this.acceptedSuggestions(patientId), { id: checkInId, startedAtMillis: checkIn.startedAtMillis }, plan.excludeIds) : undefined;
+    const range = outcomeDailyNeeded(target, plan);
+    const daily = range
+      ? [...this.daily.entries()]
+          .filter(([k]) => k.startsWith(`${patientId}/`))
+          .map(([k, d]) => ({ ...structuredClone(d), date: k.slice(patientId.length + 1) }))
+          .filter((d) => d.date >= range.start && d.date <= range.end)
+      : [];
+    const writes = finishWrites(
+      { patient, checkIn, summary: this.summaries.get(key), flags: this.decisionFlags(patientId), outcome: { target, daily } },
+      checkInId,
+      content,
+      nowMillis,
+      judgment,
+      plan,
+    );
     this.summaries.set(key, structuredClone(writes.summary));
     this.checkIns.set(key, { ...checkIn, ...structuredClone(writes.checkIn) });
     this.patients.set(patientId, { ...patient, ...structuredClone(writes.patient) });
@@ -313,6 +343,11 @@ export class FakeCheckInStore implements CheckInStore {
       { path: `patients/${patientId}`, data: structuredClone(writes.patient) },
     );
     this.createFlags(patientId, writes.flags);
+    if (writes.suggestion) {
+      const suggestionKey = this.key(patientId, writes.suggestion.id);
+      this.suggestions.set(suggestionKey, { ...this.suggestions.get(suggestionKey), ...structuredClone(writes.suggestion.fields) });
+      this.writes.push({ path: `patients/${patientId}/suggestions/${writes.suggestion.id}`, data: structuredClone(writes.suggestion.fields) });
+    }
     return structuredClone(writes.summary);
   }
 
