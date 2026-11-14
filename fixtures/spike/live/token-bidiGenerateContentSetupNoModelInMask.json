@@ -1,0 +1,59 @@
+{
+  "request": {
+    "method": "POST",
+    "url": "https://generativelanguage.googleapis.com/v1beta/auth_tokens",
+    "headers": {
+      "x-goog-api-key": "REDACTED",
+      "content-type": "application/json"
+    },
+    "body": {
+      "uses": 1,
+      "expireTime": "2026-11-14T11:58:28.747Z",
+      "newSessionExpireTime": "2026-11-14T11:29:28.747Z",
+      "bidiGenerateContentSetup": {
+        "model": "models/gemini-3.8-live",
+        "generationConfig": {
+          "responseModalities": [
+            "AUDIO"
+          ]
+        },
+        "systemInstruction": {
+          "parts": [
+            {
+              "text": "You are a calm, friendly wellbeing companion in a short test conversation. Keep every answer to one or two short sentences. When the user asks for the time, call the get_time tool and then say the time you were given."
+            }
+          ]
+        },
+        "tools": [
+          {
+            "functionDeclarations": [
+              {
+                "name": "get_time",
+                "description": "Returns the current local time in Helsinki as HH:MM.",
+                "behavior": "BLOCKING",
+                "parameters": {
+                  "type": "OBJECT",
+                  "properties": {}
+                }
+              }
+            ]
+          }
+        ],
+        "inputAudioTranscription": {},
+        "outputAudioTranscription": {}
+      },
+      "fieldMask": "generationConfig.responseModalities,systemInstruction,tools,inputAudioTranscription,outputAudioTranscription"
+    }
+  },
+  "response": {
+    "status": 400,
+    "latencyMs": 204,
+    "body": {
+      "error": {
+        "code": 400,
+        "message": "BidiGenerateContentSetup contains fields that are not specified in field_mask",
+        "status": "INVALID_ARGUMENT"
+      }
+    }
+  }
+}

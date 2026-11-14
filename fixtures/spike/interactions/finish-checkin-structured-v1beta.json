@@ -1,0 +1,163 @@
+{
+  "request": {
+    "method": "POST",
+    "url": "https://generativelanguage.googleapis.com/v1beta/interactions",
+    "headers": {
+      "x-goog-api-key": "REDACTED",
+      "content-type": "application/json"
+    },
+    "body": {
+      "model": "gemini-4-hydrogen",
+      "store": false,
+      "system_instruction": "You summarise a short wellbeing Check-in between a Patient and an AI companion. Write neutrally, without diagnosis or advice. Use only what the transcript says; never invent ratings.",
+      "input": "Check-in transcript:\nCompanion: Hi Alex, it's good to hear from you. Last time we talked about a short walk by the harbour. Did you get a chance to try it?\nPatient: Yeah, I went on Saturday. Only twenty minutes, but it was nice to see the water. I felt a bit lighter after.\nCompanion: That sounds lovely. How did you sleep last night?\nPatient: Not great. I woke up around four and couldn't get back to sleep. I'm pretty tired today.\nCompanion: I'm sorry, that's hard. How's your energy otherwise?\nPatient: Low. Work has been a lot this week, lots of deadlines.\nCompanion: Would a ten-minute stretch break this afternoon feel doable?\nPatient: Maybe. Yes, I can try that around three.\nCompanion: Before we finish, how would you rate your mood, energy and sleep from one to five?\nPatient: Mood maybe a three. Energy a two. Sleep a two as well.",
+      "response_format": {
+        "type": "text",
+        "mime_type": "application/json",
+        "schema": {
+          "type": "object",
+          "properties": {
+            "mood": {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "minimum": 1,
+              "maximum": 5,
+              "description": "Mood rating 1-5 the Patient said aloud, or null if not given."
+            },
+            "energy": {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "minimum": 1,
+              "maximum": 5,
+              "description": "Energy rating 1-5, or null."
+            },
+            "sleepQuality": {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "minimum": 1,
+              "maximum": 5,
+              "description": "Sleep quality rating 1-5, or null."
+            },
+            "sleepLine": {
+              "type": "string",
+              "description": "One short sentence about sleep, in the Patient's terms."
+            },
+            "themes": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "maxItems": 4,
+              "description": "Up to four short themes, two to four words each."
+            },
+            "suggestion": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "description": "The one Suggestion the Patient agreed to, or null."
+            },
+            "previousOutcome": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "description": "What the Patient said about the previous Suggestion, or null."
+            },
+            "previousTried": {
+              "type": [
+                "boolean",
+                "null"
+              ],
+              "description": "Whether the previous Suggestion was tried; null if not discussed."
+            },
+            "previousFelt": {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "minimum": 1,
+              "maximum": 5,
+              "description": "How trying it felt, 1-5, or null."
+            },
+            "quotes": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "maxItems": 3,
+              "description": "Up to three short verbatim Patient quotes."
+            }
+          },
+          "required": [
+            "mood",
+            "energy",
+            "sleepQuality",
+            "sleepLine",
+            "themes",
+            "suggestion",
+            "previousOutcome",
+            "previousTried",
+            "previousFelt",
+            "quotes"
+          ],
+          "additionalProperties": false
+        }
+      }
+    }
+  },
+  "response": {
+    "status": 200,
+    "latencyMs": 7761,
+    "body": {
+      "status": "completed",
+      "usage": {
+        "total_tokens": 2431,
+        "total_input_tokens": 942,
+        "input_tokens_by_modality": [
+          {
+            "modality": "text",
+            "tokens": 942
+          }
+        ],
+        "total_cached_tokens": 0,
+        "total_output_tokens": 150,
+        "output_tokens_by_modality": [
+          {
+            "modality": "text",
+            "tokens": 150
+          }
+        ],
+        "total_tool_use_tokens": 0,
+        "total_thought_tokens": 1339,
+        "initial_input_tokens": 942
+      },
+      "created": "2026-11-14T11:25:55Z",
+      "updated": "2026-11-14T11:25:55Z",
+      "service_tier": "standard",
+      "steps": [
+        {
+          "signature": "EsYnCsMnAWkUfRNXhhtnbwpj...<6756 chars truncated>",
+          "type": "thought"
+        },
+        {
+          "content": [
+            {
+              "text": "{\"mood\":3,\"energy\":2,\"sleepQuality\":2,\"sleepLine\":\"Not great, woke up around four and couldn't get back to sleep.\",\"themes\":[\"Harbour walk\",\"Waking up early\",\"Low energy\",\"Work deadlines\"],\"suggestion\":\"A ten-minute stretch break around three this afternoon\",\"previousOutcome\":\"Went on Saturday for twenty minutes, found it nice to see the water, and felt a bit lighter after.\",\"previousTried\":true,\"previousFelt\":null,\"quotes\":[\"I felt a bit lighter after.\",\"I woke up around four and couldn't get back to sleep.\",\"Work has been a lot this week, lots of deadlines.\"]}",
+              "type": "text"
+            }
+          ],
+          "type": "model_output"
+        }
+      ],
+      "object": "interaction",
+      "model": "gemini-4-hydrogen"
+    }
+  }
+}
