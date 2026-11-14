@@ -1,0 +1,53 @@
+package com.twoam.companion.session
+
+import com.twoam.companion.config.DemoConfig
+import com.twoam.companion.core.model.FlagLevel
+import com.twoam.companion.core.model.HealthSource
+import com.twoam.companion.core.model.SharingConsent
+import com.twoam.companion.fakes.FakeAuthGateway
+import com.twoam.companion.fakes.FakePatientStore
+import kotlinx.coroutines.test.runTest
+import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertFalse
+import kotlin.test.assertNull
+
+class PatientSessionTest {
+    private val auth = FakeAuthGateway(newUid = "patient-1")
+    private val store = FakePatientStore()
+    private val session = PatientSession(auth, store, DemoConfig.CLINICIAN_EMAIL, DemoConfig.LIVE_PATIENT_DISPLAY_NAME)
+
+    @Test
+    fun firstOpenSignsInAnonymouslyAndCreatesThePatientLinkedToTheDemoClinician() = runTest {
+        val patientId = session.start()
+
+        assertEquals("patient-1", patientId)
+        assertEquals(1, auth.signInCalls)
+        val record = store.records.getValue("patient-1")
+        assertEquals(DemoConfig.CLINICIAN_EMAIL, record.clinicianEmail)
+        assertEquals(DemoConfig.LIVE_PATIENT_DISPLAY_NAME, record.displayName)
+        assertEquals(FlagLevel.green, record.flagLevel)
+        assertEquals(HealthSource.device, record.healthSource)
+        assertEquals(SharingConsent.undecided, record.sharingConsent)
+        assertFalse(record.synthetic)
+        assertNull(record.lastSeenAtMillis)
+    }
+
+    @Test
+    fun laterOpensReuseTheSignedInPatientAndDoNotRecreateTheRecord() = runTest {
+        session.start()
+        session.start()
+
+        assertEquals(1, auth.signInCalls)
+        assertEquals(1, store.creates)
+    }
+
+    @Test
+    fun aSignedInPatientWithoutARecordGetsOneCreated() = runTest {
+        auth.signedInUid = "returning"
+
+        assertEquals("returning", session.start())
+        assertEquals(0, auth.signInCalls)
+        assertEquals(DemoConfig.CLINICIAN_EMAIL, store.records.getValue("returning").clinicianEmail)
+    }
+}
