@@ -68,6 +68,19 @@ cd firebase
 firebase emulators:exec --only auth,firestore --project demo-twoam "npm --prefix functions run test:emulator"
 ```
 
+The rules are described, with a who-can-do-what table, in [`docs/firestore-schema.md`](docs/firestore-schema.md#security-rules).
+
+## Deploy the security rules
+
+Deploying needs a real Firebase project and a signed-in CLI (`firebase login`). Run the rules tests first, then:
+
+```sh
+cd firebase
+firebase deploy --only firestore:rules --project <your-project-id>
+```
+
+Before a production deploy, require `email_verified` in `authEmail()` in `firestore.rules` (see the comment there) and change the demo Clinician in `linkableClinicians()` together with `DemoConfig.CLINICIAN_EMAIL` (a functions test keeps the two in step).
+
 ## Run the walking skeleton locally
 
 ```sh

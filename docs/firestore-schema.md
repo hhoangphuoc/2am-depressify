@@ -48,7 +48,7 @@ mail/{autoId}                        MailDoc         written by functions only; 
 |---|---|---|---|
 | `displayName` | string | `"Live patient"` (app) | The Clinician may rename. |
 | `clinicianEmail` | string | the demo Clinician (`DemoConfig.CLINICIAN_EMAIL`) | Links the Patient to the Clinician; the dashboard queries on it. |
-| `intakeHighlights` | string | `""` | Extracted from the Intake, at most 120 words. |
+| `intakeHighlights` | string | `""` | Extracted from the Intake, at most 120 words. Written by the Intake function; no client writes it. |
 | `tmsEndDate` | date string or null | `null` | Set by the Clinician. Week 1 starts the day after. |
 | `flagLevel` | FlagLevel | `green` | The highest uncleared flag. Never shown to the Patient. |
 | `flagReasons` | string[] | `[]` | Plain sentences, never a number. |
@@ -163,12 +163,26 @@ The shape the Trigger Email extension reads. Written by functions only.
 |---|---|---|
 | Dashboard Patient list | `patients` where `clinicianEmail == <signed-in email>` | single field (automatic) |
 
-## Security rules (walking skeleton)
+## Security rules
 
-[`firebase/firestore.rules`](../firebase/firestore.rules) is minimal for now:
+[`firebase/firestore.rules`](../firebase/firestore.rules) encodes who may see a Patient's progress: the Patient themselves, their Clinician, and, as a demo shortcut, any signed-in user for a Patient marked `synthetic`. The tests are in [`firebase/functions/test/rules/`](../firebase/functions/test/rules/firestore-rules.test.ts). Functions and the seed use the Admin SDK, which bypasses the rules.
 
-- A Patient (auth uid equal to `patientId`) reads and writes their own record and the collections under it.
-- The Clinician reads Patients whose `clinicianEmail` equals their sign-in email.
-- Signed-out users read nothing. Everything else is denied.
+- **Patient**: the anonymous auth uid equal to `patientId`.
+- **Clinician**: a signed-in user whose token email equals the record's `clinicianEmail`. The demo does not require `email_verified` because emulator accounts are unverified; production must.
+- **Demo shortcut**: on a record with `synthetic == true`, any signed-in user has the Patient's access, with the Patient's limits.
 
-The full rules in the spec (Clinician writes, read-only Visits and Digests for the Patient, sharing Consent, Demo Patients, the mail collection) come with issue #8.
+| | Patient (or anyone on a Demo Patient) | Clinician of the Patient | Anyone else signed in | Signed out |
+|---|---|---|---|---|
+| Patient record: read | yes | yes | no | no |
+| Patient record: create | own id only, `clinicianEmail` the demo Clinician, `synthetic` false, `tmsEndDate` null, `intakeHighlights` empty | no | no | no |
+| Patient record: update | `quietHoursStart`, `quietHoursEnd`, `lastSeenAtMillis`, `lastCheckInAtMillis`, `healthSource`, `sharingConsent`, `sharingChangedAtMillis`; `flagLevel` and `flagReasons` only to raise (level never lower, reasons kept) | `displayName`, `tmsEndDate`, and a reset of `flagLevel` and `flagReasons` | no | no |
+| Patient record: delete | no | no | no | no |
+| `daily`, `consents`, `checkIns`, `summaries`, `suggestions` | read, write | read | no | no |
+| `flags` | read; create uncleared flags; no change or delete | read; set `clearedAtMillis` only | no | no |
+| `visits` | read | read, create, update, delete | no | no |
+| `digests` | read | read | no | no |
+| `mail` | no | no | no | no |
+
+Anything not listed, including a collection outside this schema, is denied. Field owners: `displayName`, `tmsEndDate` and clearing flags belong to the Clinician; `intakeHighlights` and Summaries are written by functions; `synthetic` and `clinicianEmail` never change after creation from a client.
+
+`flagLevel`, `flagReasons` and `flags` are readable by the Patient's own app, because the phone raises flags and needs the open ones to avoid duplicates. The app never shows them (ADR 0005, ADR 0009). Issue #29 adds the sharing Consent gate to Clinician access, in `clinicianCanRead` in the rules.
