@@ -31,7 +31,7 @@
 // Slots (filled ✔ here; ◻ left empty for the ticket named):
 //   Overview
 //     ✔ overview-attention       level word and reasons, first          views/overview.js
-//     ◻ overview-flags           flag detail and Clear after follow-up  #10
+//     ✔ overview-flags           flag detail and Clear after follow-up  views/flags.js (#10)
 //     ✔ overview-timeline        Phase timeline, mood and Questionnaire views/overview.js
 //     ✔ overview-latest-summary  the latest Summary                     views/summaries.js
 //     ✔ overview-what-helps      what seems to help                     views/what-helps.js
@@ -53,6 +53,7 @@ import { dateInZone } from "../lib/dates.js";
 import { sharingMessage, sharingStateFromError, sharingStateFromSnapshot } from "../lib/sharing.js";
 import { phases } from "../lib/timeline.js";
 import { sortVisits } from "../lib/visit.js";
+import { mountFlagDetail } from "./flags.js";
 import { mountIntake } from "./intake.js";
 import { mountAttention, mountTimeline } from "./overview.js";
 import { mountSignals } from "./signals.js";
@@ -92,8 +93,15 @@ function mountIntakeBlock(container, { patientId, calls }) {
  * Which module fills which slot. One line per block.
  * @type {{ slot: string, mount: (container: HTMLElement, ctx: object) => { update: (view: object) => void, destroy: () => void } }[]}
  */
+/** Flag detail (#10) listens to the Patient and flags itself; it needs no view updates. */
+function mountFlagsBlock(container, { db, patientId }) {
+  const stop = mountFlagDetail(container, { db, patientId });
+  return { update() {}, destroy: stop };
+}
+
 const SLOT_MOUNTS = [
   { slot: "overview-attention", mount: mountAttention },
+  { slot: "overview-flags", mount: mountFlagsBlock },
   { slot: "overview-timeline", mount: mountTimeline },
   { slot: "overview-latest-summary", mount: mountLatestSummary },
   { slot: "overview-what-helps", mount: mountWhatHelps },

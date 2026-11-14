@@ -11,10 +11,15 @@
     <header class="bar">
       <h1>Patients</h1>
       <div id="account" hidden>
+        <button id="sound-toggle" type="button" class="link" role="switch" aria-checked="false">Sound for red flags<span aria-hidden="true">: off</span></button>
         <span id="account-email"></span>
         <button id="sign-out" type="button" class="link">Sign out</button>
       </div>
     </header>
+
+    <p id="sound-note" class="sound-note" role="status" hidden></p>
+    <!-- New red flags are announced here on any view. -->
+    <p id="attention-announcer" class="visually-hidden" aria-live="assertive"></p>
 
     <main>
       <p id="starting" class="muted">Loading…</p>
@@ -31,7 +36,24 @@
 
       <section id="patients" hidden aria-labelledby="patients-heading">
         <h2 id="patients-heading" class="visually-hidden">Patient list</h2>
+        <section id="attention-banner" class="banner" aria-labelledby="banner-heading" hidden></section>
+        <div id="list-controls" class="list-controls" role="search" hidden>
+          <div class="field">
+            <label for="patient-search">Search by name</label>
+            <input id="patient-search" type="search" autocomplete="off" spellcheck="false" />
+          </div>
+          <div class="field">
+            <label for="level-filter">Attention</label>
+            <select id="level-filter">
+              <option value="all">All levels</option>
+              <option value="red">Red</option>
+              <option value="amber">Amber</option>
+              <option value="green">Green</option>
+            </select>
+          </div>
+        </div>
         <p id="patients-status" class="muted" aria-live="polite"></p>
+        <button id="clear-filters" type="button" class="secondary" hidden>Clear search and filter</button>
         <table id="patients-table" hidden>
           <thead>
             <tr>
