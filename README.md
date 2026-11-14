@@ -102,7 +102,7 @@ The rules are described, with a who-can-do-what table, in [`docs/firestore-schem
 
 ## Set up a real Firebase project
 
-The Firestore database and every function are in `europe-north1` (Finland); the functions' region is `REGION` in `firebase/functions/src/region.ts`, and the dashboard's copy is checked against it. Real IDs, keys and the Clinician's email go only into gitignored files (`secrets.properties`, `GoogleService-Info.plist`, `Secrets.plist`) or into Firestore, never into a commit. Deploying functions needs the Blaze plan.
+The Firestore database and every function are in `europe-north1` (Finland), except the scheduled `weeklyDigest`, which runs in `europe-west1` because Cloud Scheduler has no `europe-north1` location. The functions' regions are `REGION` and `SCHEDULER_REGION` in `firebase/functions/src/region.ts`, and the dashboard's copy of `REGION` is checked against it. Real IDs, keys and the Clinician's email go only into gitignored files (`secrets.properties`, `GoogleService-Info.plist`, `Secrets.plist`) or into Firestore, never into a commit. Deploying functions needs the Blaze plan.
 
 1. **Sign in and add the project under an alias.** `.firebaserc` keeps `demo-twoam` as the default so that local runs and tests never reach a real project, so name the real one explicitly every time:
    ```sh

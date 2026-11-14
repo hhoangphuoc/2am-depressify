@@ -122,7 +122,7 @@ There is also a trivial `health` endpoint.
 | No name or id sent to Gemini | Gemini research, data handling | Holds for the Digest. An Intake report is sent as the Clinician pasted it, so paste only reports without identifiers. |
 | Paid tier and AI Studio logging off | Gemini research, data handling | A setup step, now in the README. Not something the code can enforce. |
 | Live tokens and Decisions need `v1beta` | Gemini research, API versions | Noted in `src/gemini.ts`; the SDK defaults to `v1`. |
-| EU region | System design, ADR 0008 | `europe-north1` for the functions and the dashboard. |
+| EU region | System design, ADR 0008 | `europe-north1` for the functions and the dashboard; `weeklyDigest` runs in `europe-west1`, because Cloud Scheduler has no `europe-north1` location. |
 | GitLive `firebase-kotlin-sdk` 2.8.0 in shared code | ADR 0008 | Holds. |
 | Anonymous Patient sign-in, linked to the one Clinician on first open | System design, roles | Holds, now behind `main`'s screens. |
 
@@ -155,18 +155,35 @@ Results on this branch, all from local runs on 14 November 2026:
 | Kotlin `shared` (session and view model wiring, with fakes) | `./gradlew :shared:testAndroidHostTest` | 10 pass |
 | Android build | `./gradlew :androidApp:assembleDebug` | APK builds |
 | iOS build | `xcodegen generate`, then `xcodebuild` for the arm64 simulator | Builds and links with the Firebase iOS SDK |
-| Functions | `cd firebase/functions && npm test` | 123 pass |
+| Functions | `cd firebase/functions && npm test` | 124 pass |
 | Seed | `cd firebase/seed && npm test` | 78 pass |
 | Dashboard helpers | `cd firebase/hosting && node --test` | 308 pass |
-| Rules, functions and end-to-end on the emulators | `firebase emulators:exec --only auth,firestore,functions --project demo-twoam "npm --prefix functions run test:emulator"` | Pass with Firebase CLI 15.36.0 |
+| Rules, functions and end-to-end on the emulators | `firebase emulators:exec --only auth,firestore,functions --project demo-twoam "npm --prefix functions run test:emulator"` | 78 pass with Firebase CLI 15.36.0 |
 | Seed on the emulator | `... "npm --prefix seed run test:emulator"` | 14 pass |
 
 The emulator suite needs Firebase CLI 15 or newer. With CLI 14.22.0 the Functions emulator kills every function built with `firebase-functions` 7, and the six callable tests time out.
 
+### Live deployment (14 November 2026)
+
+The real project `junction26hel-7400` ("Hack Junction 2026-7400", Blaze plan) is set up. It was deployed from the backend stack (`chore/real-project-config`), whose `firebase/` matches this branch's:
+
+| Part | State |
+|---|---|
+| Firestore `(default)` in `europe-north1` | Security rules and indexes deployed. A signed-out read of a Patient or of `clinicians` gets HTTP 403. |
+| Clinician allowlist | One allowed Clinician (the address is kept out of this repository). |
+| Demo Patients | Seeded: 401 synthetic documents, linked to the allowed Clinician. |
+| Functions in `europe-north1` | `extractIntake`, `saveIntake`, `generateDigest`, `health`. Callers can reach them; the callables refuse anyone not signed in ("Sign in to continue."). |
+| `weeklyDigest` in `europe-west1` | Cloud Scheduler has no `europe-north1` location (`SCHEDULER_REGION` in `region.ts`). Not publicly invokable. |
+| `GEMINI_API_KEY` secret | Set. One call with the stored key to `gemini-4-hydrogen` (storage off) answered in about 3 s. |
+| Container cleanup policies | Set in both regions. |
+
+Deploy notes:
+- Cloud Build runs `npm ci` with Node 22's npm 10, so regenerate `firebase/functions/package-lock.json` with npm 10 (`npx npm@10 install`). The lock on this branch passes `npx npm@10 ci`.
+- The first deploy didn't grant public invoker access on the callables. It was added by hand (`allUsers` → Cloud Run Invoker) on `extractintake`, `saveintake`, `generatedigest` and `health` only.
+
 **Not verified (needs a person, hardware or credentials):**
 - The Patient app against the emulators or a real project on a phone or simulator. The wiring is tested with fakes only.
-- Deploying to a real Firebase project, including whether Cloud Scheduler accepts `europe-north1` for `weeklyDigest`.
-- A real Gemini call.
+- A full Intake extraction or Digest through the deployed callables, signed in as the Clinician. Only the one direct call to `gemini-4-hydrogen` above has been made.
 - The app on the S24+ and on an iPhone.
 
 ## Decisions made in review
@@ -175,7 +192,7 @@ The emulator suite needs Firebase CLI 15 or newer. With CLI 14.22.0 the Function
 2. **Re-consent shares future records only.** Only the off period is hidden, using the sharing stamp.
 3. **Ratings and Voice cues** are included until the Patient leaves them out.
 4. **Clearing a flag.** The dashboard computes the new level when a flag is cleared; the rules don't check it.
-5. **Region: `europe-north1` (Finland).** The real Firestore database is there, and every function runs there too. It is set once for the functions (`REGION` in `firebase/functions/src/region.ts`) and once for the dashboard (`FUNCTIONS_REGION` in `firebase/hosting/js/functions.js`); `firebase/functions/test/region.test.ts` keeps the two in step. The database location itself is chosen when the database is created, not in this repository.
+5. **Region: `europe-north1` (Finland).** The real Firestore database is there, and every function runs there too, except the scheduled `weeklyDigest`: Cloud Scheduler has no `europe-north1` location, so it runs in `europe-west1` (`SCHEDULER_REGION`). It is set once for the functions (`REGION` in `firebase/functions/src/region.ts`) and once for the dashboard (`FUNCTIONS_REGION` in `firebase/hosting/js/functions.js`); `firebase/functions/test/region.test.ts` keeps the two in step. The database location itself is chosen when the database is created, not in this repository.
 6. **Values the spec didn't fix:**
    - The Baseline spread floor: `max(sample SD, 0.05 × |median|, 0.001)`.
    - A 28-day window for "what seems to help".
