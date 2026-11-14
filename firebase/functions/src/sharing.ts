@@ -13,6 +13,6 @@ import type { PatientDoc } from "./types";
  *
  * Undecided, declined and a missing or unknown value all mean "not sharing".
  */
-export function isSharingActive(patient: Pick<PatientDoc, "sharingConsent"> | null | undefined): boolean {
+export function isSharingActive(patient: Partial<Pick<PatientDoc, "sharingConsent">> | null | undefined): boolean {
   return patient?.sharingConsent === "granted";
 }

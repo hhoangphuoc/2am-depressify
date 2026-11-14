@@ -91,6 +91,7 @@ local.properties
 # --- Firebase tooling ---
 firebase/functions/node_modules/
 firebase/functions/lib/
+firebase/functions/.secret.local
 .firebase/
 firebase-debug.log*
 firestore-debug.log*
