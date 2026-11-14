@@ -10,7 +10,8 @@ A wellbeing companion for the time between Visits: a Kotlin Multiplatform Patien
 | `shared/` | Kotlin Multiplatform client code: Compose Multiplatform UI (Small Step theme), view models, Firebase through the GitLive SDK, Koin. |
 | `androidApp/` | Android application entry point. |
 | `iosApp/` | Xcode project and Swift glue. |
-| `firebase/` | `firebase.json`, Firestore rules, `functions/` (TypeScript, vitest) and `hosting/` (the dashboard). |
+| `firebase/` | `firebase.json`, Firestore rules, `functions/` (TypeScript, vitest), `hosting/` (the dashboard) and `seed/` (the Demo Patients). |
+| `fixtures/` | Fixtures shared by Kotlin and Node tests, such as the Baseline cases. |
 | `gradle/libs.versions.toml` | The only place library versions are pinned. |
 
 ## Setup
@@ -54,6 +55,7 @@ iOS: open `iosApp/iosApp.xcodeproj` in Xcode and run. The build phase calls `./g
 | 1. `core` JVM tests (data contract; later Baseline, rules, learning) | `./gradlew :core:jvmTest` |
 | 2. Cloud Functions (vitest, plus a type check) | `cd firebase/functions && npm install && npm test` |
 | 3. Dashboard helpers (Node test runner) | `cd firebase/hosting && node --test` |
+| 3. Seed generator and Baseline fixture (Node test runner, plus a type check) | `cd firebase/seed && npm install && npm test` |
 | 4. `shared` common tests (view models, session, with fakes) | `./gradlew :shared:jvmTest` |
 | 5. Compose UI tests (`*UiTest`, common UI test API on the JVM) | `./gradlew :shared:jvmTest` |
 
@@ -66,6 +68,7 @@ Security rules and the end-to-end flow run against the emulators:
 ```sh
 cd firebase
 firebase emulators:exec --only auth,firestore --project demo-twoam "npm --prefix functions run test:emulator"
+firebase emulators:exec --only auth,firestore --project demo-twoam "npm --prefix seed run test:emulator"
 ```
 
 The rules are described, with a who-can-do-what table, in [`docs/firestore-schema.md`](docs/firestore-schema.md#security-rules).
@@ -100,3 +103,16 @@ This starts Auth (9099), Firestore (8080), Functions (5001), Hosting (5002) and 
 3. Run the Android debug build (after `adb reverse`, above). The app signs in anonymously, creates the Patient record and lands on Today. "Live patient" appears on the dashboard without a reload.
 
 Use only the `demo-twoam` project with the emulators. Do not run `firebase deploy` against it.
+
+## Demo Patients
+
+One command deletes every Demo Patient (Patients marked `synthetic`) and creates the three again, with six weeks of invented history ending today (Europe/Helsinki). With the emulators running:
+
+```sh
+cd firebase/seed && npm install
+npm run seed                                  # emulator at $FIRESTORE_EMULATOR_HOST or 127.0.0.1:8080
+npm run seed -- --today 2026-11-14            # a fixed day, for a rehearsal
+npm run seed -- --project <your-project-id>   # a real project (Application Default Credentials)
+```
+
+The same inputs (`--today`, `--seed`) give the same data. The Clinician sees `demo-declining` (red), `demo-sparse` (amber) and `demo-steady` (green), in that order. Live Patients are never touched. Needs Node 22 or newer.
