@@ -95,3 +95,22 @@ export function whatHelps(suggestions, { start, end, timeZone }) {
   rows.sort((a, b) => b.mean - a.mean || b.n - a.n || a.kind.localeCompare(b.kind));
   return { rows, waiting };
 }
+
+const FEELING_WORDS = /** @type {const} */ ([
+  ["better", "felt better"],
+  ["same", "about the same"],
+  ["notMuch", "did not help much"],
+  ["notTried", "not tried"],
+  ["notSaid", "tried, feeling not given"],
+]);
+
+/**
+ * The reported feelings as counted words, such as "3 felt better, 1 not tried". Groups with none
+ * are left out.
+ * @param {Record<FeelingGroup, number>} feelings
+ */
+export function feelingText(feelings) {
+  return FEELING_WORDS.filter(([key]) => feelings[key] > 0)
+    .map(([key, words]) => `${feelings[key]} ${words}`)
+    .join(", ");
+}

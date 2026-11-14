@@ -8,9 +8,11 @@ import {
   shortQuotes,
   sortSummaries,
   summaryView,
+  summaryWhen,
   voiceCueText,
 } from "../js/lib/summaries.js";
 import { generateDemoPatients } from "../../seed/src/generate.js";
+import { zonedMillis } from "../../seed/src/dates.js";
 
 const s = (id, createdAtMillis, extra = {}) => ({ id, checkInId: id, createdAtMillis, ...extra });
 
@@ -86,6 +88,14 @@ describe("ratingText and voiceCueText", () => {
       "Flat tone, noticed at 3 of 5: Short answers with long pauses",
     );
     assert.equal(voiceCueText({ label: "hesitation", intensity: null, heard: "" }), "Hesitation");
+  });
+});
+
+describe("summaryWhen", () => {
+  test("gives the day and time in the time zone", () => {
+    const millis = zonedMillis("2026-11-13", 19, 42, "Europe/Helsinki");
+    assert.equal(summaryWhen(millis, { today: "2026-11-14", timeZone: "Europe/Helsinki" }), "13 Nov, 19:42");
+    assert.equal(summaryWhen(null, { today: "2026-11-14", timeZone: "Europe/Helsinki" }), "Date unknown");
   });
 });
 

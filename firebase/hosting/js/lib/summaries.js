@@ -6,6 +6,8 @@
 // short quotes. Only those fields are picked out, so a transcript or audio can never be shown, even
 // if a document carried one.
 
+import { dateInZone, shortDate } from "./dates.js";
+
 export const MAX_QUOTES = 3;
 export const MAX_QUOTE_CHARS = 200;
 
@@ -135,4 +137,15 @@ export function summaryView(summary) {
     voiceCues: Array.isArray(summary?.voiceCues) ? summary.voiceCues.map(voiceCueText) : [],
     quotes: shortQuotes(summary?.quotes),
   };
+}
+
+/**
+ * When a Summary was made, such as "13 Nov, 19:42", in the given time zone.
+ * @param {number | null} millis
+ * @param {{ today: string, timeZone?: string }} options
+ */
+export function summaryWhen(millis, { today, timeZone }) {
+  if (!isTime(millis)) return "Date unknown";
+  const time = new Intl.DateTimeFormat("en-GB", { timeZone, hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).format(millis);
+  return `${shortDate(dateInZone(millis, timeZone), today)}, ${time}`;
 }

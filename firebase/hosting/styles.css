@@ -181,6 +181,72 @@ input[aria-invalid="true"] { border-color: var(--danger-text); border-width: 2px
 .visit-list { margin: 0; padding: 0; list-style: none; display: grid; gap: 0; }
 .visit-list li { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: var(--min-target); border-bottom: 1px solid var(--hairline); }
 
+/* Signals, Summaries and what seems to help (views/signals.js, views/summaries.js, views/what-helps.js). */
+:root {
+  --value: #173f45;
+  --baseline: #4d6a6e;
+  --band: #e3ece8;
+}
+select {
+  min-height: var(--min-target); padding: 0 12px; font: inherit; color: var(--ink); max-width: 100%;
+  border: 1px solid var(--ink-muted); border-radius: 8px; background: var(--surface);
+}
+select:focus-visible, .summary-index:focus-visible { outline: 3px solid var(--ink); outline-offset: 2px; }
+.signal-controls { display: grid; gap: 4px; max-width: 440px; }
+.signal-grid { display: grid; gap: 16px; grid-template-columns: repeat(auto-fill, minmax(min(100%, 360px), 1fr)); min-width: 0; }
+.signal-card {
+  display: grid; gap: 6px; align-content: start; min-width: 0; padding: 16px;
+  border: 1px solid var(--hairline); border-radius: 8px; background: var(--surface);
+}
+.signal-card h5 { margin: 0; font-size: 1rem; }
+.signal-unit, .signal-meta { font-size: 0.875rem; color: var(--ink-muted); }
+.stale-notice { border-left-color: var(--danger-text); color: var(--danger-text); }
+.signal-chart { display: block; font-size: 11px; }
+.signal-chart .plot { fill: none; stroke: var(--hairline); }
+.signal-chart .grid-value { stroke: var(--grid); }
+.signal-chart .axis-label { fill: var(--ink-muted); }
+.signal-chart .baseline-band { fill: var(--band); }
+.signal-chart .baseline-line { fill: none; stroke: var(--baseline); stroke-width: 1.5; stroke-dasharray: 5 3; }
+.signal-chart .value-line { fill: none; stroke: var(--value); stroke-width: 2; }
+.signal-chart .value-point { fill: var(--value); }
+.signal-chart .gap-mark { stroke: var(--ink-muted); stroke-width: 1.5; }
+
+.summaries-layout { display: grid; gap: 16px; min-width: 0; }
+@media (min-width: 760px) {
+  .summaries-layout { grid-template-columns: minmax(200px, 260px) minmax(0, 1fr); align-items: start; }
+}
+.summary-index { max-height: 520px; overflow-y: auto; border: 1px solid var(--hairline); border-radius: 8px; }
+.summary-buttons { list-style: none; margin: 0; padding: 0; }
+.summary-button {
+  width: 100%; display: flex; flex-wrap: wrap; justify-content: space-between; gap: 0 8px; align-items: center;
+  text-align: left; padding: 8px 12px; background: var(--surface); color: var(--ink);
+  border: 0; border-bottom: 1px solid var(--hairline);
+}
+.summary-button[aria-pressed="true"] { background: var(--phase-odd); font-weight: 600; box-shadow: inset 4px 0 0 var(--ink); }
+.summary-button-mood { color: var(--ink-muted); font-size: 0.875rem; white-space: nowrap; }
+.summary-detail { display: grid; gap: 12px; min-width: 0; }
+.summary-detail h5 { margin: 0; font-size: 1rem; }
+.summary-ratings { display: flex; flex-wrap: wrap; gap: 8px 24px; margin: 0; }
+.summary-ratings dt { font-size: 0.875rem; color: var(--ink-muted); }
+.summary-ratings dd { margin: 0; font-weight: 600; }
+.summary-label { font-size: 0.875rem; font-weight: 600; color: var(--ink-muted); margin: 0 0 2px; }
+.panel .summary-label { margin: 0 0 2px; }
+.summary-list { margin: 0; padding-left: 1.25rem; display: grid; gap: 2px; }
+.summary-list.themes { list-style: none; padding: 0; display: flex; flex-wrap: wrap; gap: 6px; }
+.summary-list.themes li { padding: 2px 10px; border-radius: 999px; background: var(--phase-odd); }
+.summary-quotes { display: grid; gap: 6px; }
+.summary-quotes blockquote { margin: 0; padding: 2px 12px; border-left: 3px solid var(--hairline); font-style: italic; }
+.all-summaries { justify-self: start; }
+@media (max-width: 759px) {
+  .summary-index { max-height: 240px; }
+}
+@media (max-width: 600px) {
+  .signal-table caption { display: block; padding: 8px 16px; }
+  .signal-table td[data-label]::before, .what-helps-table td[data-label]::before {
+    content: attr(data-label) ": "; font-weight: 600; color: var(--ink-muted);
+  }
+}
+
 /* At phone width the timeline table's rows become cards; each cell names its column. */
 @media (max-width: 600px) {
   .panel { padding: 16px; }

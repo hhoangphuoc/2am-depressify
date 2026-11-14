@@ -33,14 +33,14 @@
 //     ✔ overview-attention       level word and reasons, first          views/overview.js
 //     ◻ overview-flags           flag detail and Clear after follow-up  #10
 //     ✔ overview-timeline        Phase timeline, mood and Questionnaire views/overview.js
-//     ◻ overview-latest-summary  the latest Summary                     #12
-//     ◻ overview-what-helps      what seems to help                     #12 or later
+//     ✔ overview-latest-summary  the latest Summary                     views/summaries.js
+//     ✔ overview-what-helps      what seems to help                     views/what-helps.js
 //     ◻ overview-digest          the latest Digest, "Generate now"      #23
 //   Summaries
 //     ◻ summaries-digest         this week's Digest                     #23
-//     ◻ summaries-body           Summary cards (views/summaries.js)     #12
+//     ✔ summaries-body           Summaries, newest first, one in full   views/summaries.js
 //   Signals
-//     ◻ signals-body             Signal trends for a Phase (views/signals.js)  #12
+//     ✔ signals-body             Signal trends for a Phase              views/signals.js
 //   Intake and Visits
 //     ✔ intake                   the Intake highlights                  views/intake.js
 //     ✔ visits                   TMS end date, Record a Visit, Visits   views/visits.js
@@ -55,7 +55,10 @@ import { phases } from "../lib/timeline.js";
 import { sortVisits } from "../lib/visit.js";
 import { mountIntake } from "./intake.js";
 import { mountAttention, mountTimeline } from "./overview.js";
+import { mountSignals } from "./signals.js";
+import { mountLatestSummary, mountSummaries } from "./summaries.js";
 import { mountVisits } from "./visits.js";
+import { mountWhatHelps } from "./what-helps.js";
 
 const COPY = {
   back: "← All Patients",
@@ -92,6 +95,10 @@ function mountIntakeBlock(container, { patientId, calls }) {
 const SLOT_MOUNTS = [
   { slot: "overview-attention", mount: mountAttention },
   { slot: "overview-timeline", mount: mountTimeline },
+  { slot: "overview-latest-summary", mount: mountLatestSummary },
+  { slot: "overview-what-helps", mount: mountWhatHelps },
+  { slot: "summaries-body", mount: mountSummaries },
+  { slot: "signals-body", mount: mountSignals },
   { slot: "intake", mount: mountIntakeBlock },
   { slot: "visits", mount: mountVisits },
 ];

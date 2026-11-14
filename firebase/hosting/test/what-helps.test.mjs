@@ -1,6 +1,6 @@
 import { test, describe } from "node:test";
 import assert from "node:assert/strict";
-import { WHAT_HELPS_WINDOW_DAYS, feelingGroup, kindLabel, whatHelps, whatHelpsWindow } from "../js/lib/what-helps.js";
+import { WHAT_HELPS_WINDOW_DAYS, feelingGroup, feelingText, kindLabel, whatHelps, whatHelpsWindow } from "../js/lib/what-helps.js";
 import { SUGGESTION_KINDS } from "../js/lib/contract.js";
 import { generateDemoPatients } from "../../seed/src/generate.js";
 import { zonedMillis } from "../../seed/src/dates.js";
@@ -104,6 +104,11 @@ describe("feelingGroup and kindLabel", () => {
     assert.equal(feelingGroup({ tried: true, felt: 2 }), "notMuch");
     assert.equal(feelingGroup({ tried: false, felt: null }), "notTried");
     assert.equal(feelingGroup({ tried: true, felt: null }), "notSaid");
+  });
+
+  test("feelingText counts the Patient's answers in words and leaves out empty groups", () => {
+    assert.equal(feelingText({ better: 3, same: 0, notMuch: 1, notTried: 1, notSaid: 0 }), "3 felt better, 1 did not help much, 1 not tried");
+    assert.doesNotMatch(feelingText({ better: 1, same: 1, notMuch: 1, notTried: 1, notSaid: 1 }), /%/);
   });
 
   test("every kind has a label", () => {
