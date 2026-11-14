@@ -1,4 +1,4 @@
-// Clinician dashboard, walking skeleton: email and password sign-in and a live Patient list.
+// Clinician dashboard: email and password sign-in and a live Patient list sorted by Attention flag.
 import {
   onAuthStateChanged,
   signInWithEmailAndPassword,
@@ -9,19 +9,15 @@ import { initFirebase } from "./firebase.js";
 import { intakeCalls } from "./functions.js";
 import { signInErrorMessage } from "./lib/auth.js";
 import { COLLECTIONS } from "./lib/contract.js";
-import { toPatientRows } from "./lib/patients.js";
-import { parseRoute, patientHref } from "./lib/route.js";
+import { parseRoute } from "./lib/route.js";
 import { showPatient } from "./views/patient.js";
+import { createPatientList } from "./list.js";
 
 const $ = (id) => document.getElementById(id);
 
-const LEVEL_WORDS = { green: "Green", amber: "Amber", red: "Red" };
 const COPY = {
   loading: "Loading Patients…",
-  empty: "No Patients yet. A Patient appears here when they first open the app.",
-  failed: "Could not load the Patient list. Reload the page to try again.",
   startFailed: "The dashboard could not start. Reload the page to try again.",
-  noReasons: "—",
 };
 
 let stopPatients = null;
@@ -31,39 +27,20 @@ function show(id, visible) {
   $(id).hidden = !visible;
 }
 
-function renderPatients(rows) {
-  const body = $("patients-body");
-  body.replaceChildren(
-    ...rows.map((row) => {
-      const tr = document.createElement("tr");
-      const name = document.createElement("td");
-      const link = document.createElement("a");
-      link.href = patientHref(row.id);
-      link.textContent = row.displayName;
-      name.append(link);
-      const level = document.createElement("td");
-      level.textContent = LEVEL_WORDS[row.flagLevel] ?? LEVEL_WORDS.green;
-      const reasons = document.createElement("td");
-      reasons.textContent = row.flagReasons.length ? row.flagReasons.join(" ") : COPY.noReasons;
-      tr.append(name, level, reasons);
-      return tr;
-    }),
-  );
-  show("patients-table", rows.length > 0);
-  $("patients-status").textContent = rows.length ? "" : COPY.empty;
-}
-
 function watchPatients(db, email) {
   $("patients-status").textContent = COPY.loading;
+  show("patients-table", false);
+  const list = createPatientList(db, { body: $("patients-body"), table: $("patients-table"), status: $("patients-status") });
   const patients = query(collection(db, COLLECTIONS.patients), where("clinicianEmail", "==", email));
-  return onSnapshot(
+  const stop = onSnapshot(
     patients,
-    (snapshot) => renderPatients(toPatientRows(snapshot.docs.map((d) => ({ id: d.id, data: d.data() })))),
-    () => {
-      show("patients-table", false);
-      $("patients-status").textContent = COPY.failed;
-    },
+    (snapshot) => list.update(snapshot.docs.map((d) => ({ id: d.id, data: d.data() }))),
+    () => list.fail(),
   );
+  return () => {
+    stop();
+    list.stop();
+  };
 }
 
 function wireSignIn(auth) {

@@ -71,6 +71,19 @@ mail/{autoId}                        MailDoc         written by functions only; 
 | `composite` | number or null | Mean of the oriented comparisons that exist; `null` if none. |
 | `demoOverride` | boolean | `true` when a demo control wrote this record. Overrides only ever touch these. |
 
+#### Baseline
+
+A Signal's Baseline is the Patient's own median over the 14 calendar dates strictly before the record's date, counting only dates with a value (ADR 0003). With fewer than 5 such dates, or no value today, the comparison is `null`. Otherwise:
+
+```
+spread     = max(sample standard deviation (n - 1), 0.05 x |median|, 0.001)
+vsBaseline = (today - median) / spread
+```
+
+The floor keeps a constant history from dividing by zero. `vsBaseline` keeps the sign as measured; the oriented comparison negates it for `lower_is_better` Signals, so negative always means worse, and is `null` for Signals with direction `none`. `composite` is the mean of the oriented comparisons that are not `null`.
+
+The rule is pinned by a shared fixture, [`fixtures/baseline/baseline-cases.json`](../fixtures/baseline/baseline-cases.json): inputs and expected comparisons, oriented values and composites, including fewer than 5 valid days, null days, a constant series and both directions. The seed tests (`firebase/seed`) check it now and core's Kotlin Baseline tests read the same file. Change the rule only by changing the fixture, core and the seed together.
+
 ### `consents/{subject}`: Consent
 
 | Field | Type | Notes |
@@ -162,6 +175,12 @@ The shape the Trigger Email extension reads. Written by functions only.
 | Who | Query | Index |
 |---|---|---|
 | Dashboard Patient list | `patients` where `clinicianEmail == <signed-in email>` | single field (automatic) |
+| Dashboard newest-flag order | `patients/{id}/flags` for each listed Patient | none |
+| Seed reset | `patients` where `synthetic == true` (Admin SDK) | single field (automatic) |
+
+## Demo Patients
+
+`firebase/seed` writes three Demo Patients with the Admin SDK: `demo-steady` (green), `demo-declining` (amber flags, then red in the last two days) and `demo-sparse` (seven Check-ins at most, days of missing Signals, amber for low mood). Each has `synthetic: true`, `healthSource: "synthetic"`, `sharingConsent: "granted"`, the demo Clinician, an Intake that begins "Synthetic demo data", 42 daily records ending today, a TMS end date 42 days ago, one Visit 21 days ago with a PHQ-9 score, every Consent granted, and Check-ins with Summaries and Suggestions (most with an Outcome score). Every value is invented. Flags sit on the first morning the spec's starting thresholds hold. Document ids are stable: daily records by date, `checkin-<date>` (also the Summary id), `suggestion-<date>`, `<kind>-<date>` for flags and `visit-<date>`.
 
 ## Security rules
 
