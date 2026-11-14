@@ -62,7 +62,7 @@ class CompanionTools(
             "get_recent_summaries" -> recentSummaries(args.int("count")?.coerceIn(1, 5) ?: 3)
             "get_last_suggestion" -> lastSuggestion()
             "record_suggestion" -> recordSuggestion(args.string("kind"), args.string("details"))
-            "suggest_music" -> search(args.string("query")) { q -> ToolCard.Music(q, "https://music.youtube.com/search?q=" + q.encode()) }
+            "suggest_music" -> search(args.string("query")) { q -> ToolCard.Music(q, musicSearchUrl(q)) }
             "find_places" -> findPlaces(args.string("query"))
             "get_weather" -> weather()
             "wrap_up" -> ok().also { effects.wrapUp() }
@@ -232,13 +232,6 @@ class CompanionTools(
     private fun JsonObject.string(key: String): String? = (this[key] as? JsonPrimitive)?.takeIf { it.isString }?.content
     private fun JsonObject.int(key: String): Int? = (this[key] as? JsonPrimitive)?.intOrNull
 
-    /** Percent-encodes everything but ASCII letters, digits and -_.~, for a search link. */
-    private fun String.encode(): String = encodeToByteArray().joinToString("") { b ->
-        val c = b.toInt().toChar()
-        if (b >= 0 && (c in 'a'..'z' || c in 'A'..'Z' || c in '0'..'9' || c in "-_.~")) c.toString()
-        else "%" + (b.toInt() and 0xFF).toString(16).uppercase().padStart(2, '0')
-    }
-
     companion object {
         /** "350 m" or "1.2 km". */
         fun distanceLabel(meters: Int): String =
@@ -269,4 +262,17 @@ class CompanionTools(
             Signal.LATE_NIGHT_SCREEN_MINUTES to "Late-night screen time",
         )
     }
+}
+
+/** A link that opens a search for [query] in the Patient's own music app or browser. */
+fun musicSearchUrl(query: String): String = "https://music.youtube.com/search?q=" + query.encode()
+
+/** A link that opens a search for [query] in Google Maps. */
+fun mapsSearchUrl(query: String): String = "https://www.google.com/maps/search/?api=1&query=" + query.encode()
+
+/** Percent-encodes everything but ASCII letters, digits and -_.~, for a search link. */
+private fun String.encode(): String = encodeToByteArray().joinToString("") { b ->
+    val c = b.toInt().toChar()
+    if (b >= 0 && (c in 'a'..'z' || c in 'A'..'Z' || c in '0'..'9' || c in "-_.~")) c.toString()
+    else "%" + (b.toInt() and 0xFF).toString(16).uppercase().padStart(2, '0')
 }

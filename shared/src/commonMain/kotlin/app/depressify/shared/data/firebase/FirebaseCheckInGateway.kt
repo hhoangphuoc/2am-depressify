@@ -12,6 +12,7 @@ import app.depressify.shared.data.LiveStart
 import app.depressify.shared.data.NearbyPlace
 import app.depressify.shared.data.PatientLocation
 import app.depressify.shared.data.Weather
+import app.depressify.shared.data.TodaySuggestions
 import dev.gitlive.firebase.firestore.Direction
 import dev.gitlive.firebase.firestore.FirebaseFirestore
 import dev.gitlive.firebase.functions.FirebaseFunctions
@@ -51,6 +52,9 @@ class FirebaseCheckInGateway(private val db: FirebaseFirestore, private val func
 
     @Serializable
     private data class WeatherResponse(val weather: Weather)
+
+    @Serializable
+    private data class SuggestRequest(val patientId: String)
 
     private fun patient(patientId: String) = db.collection(Collections.PATIENTS).document(patientId)
 
@@ -105,4 +109,7 @@ class FirebaseCheckInGateway(private val db: FirebaseFirestore, private val func
     override suspend fun raiseFlag(patientId: String, flagId: String, flag: Flag) {
         patient(patientId).collection(Collections.FLAGS).document(flagId).set(Flag.serializer(), flag) { encodeDefaults = true }
     }
+
+    override suspend fun suggestToday(patientId: String): TodaySuggestions =
+        functions.httpsCallable("suggestToday").invoke(SuggestRequest.serializer(), SuggestRequest(patientId)).data(TodaySuggestions.serializer())
 }

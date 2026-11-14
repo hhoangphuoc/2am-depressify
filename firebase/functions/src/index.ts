@@ -12,6 +12,7 @@ import { fetchLiveTokenClient } from "./live";
 import { MAPS_API_KEY, createMapToolFunctions, fetchMapsClient } from "./mapTool";
 import { REGION } from "./region";
 import { adminSilenceStore, createSilenceFunctions } from "./silenceFunctions";
+import { adminSuggestStore, createSuggestFunctions, fetchPlacesClient } from "./suggestFunctions";
 
 // All functions run in the Firestore database's region (src/region.ts).
 setGlobalOptions({ region: REGION });
@@ -81,4 +82,14 @@ export const { startCheckIn, finishCheckIn } = createCheckInFunctions({
 export const { mapTool } = createMapToolFunctions({
   store: () => adminCheckInStore(adminDb()),
   maps: () => fetchMapsClient(MAPS_API_KEY.value()),
+});
+
+/**
+ * Suggest today (the Patient, or anyone signed in on a Demo Patient): up to three Suggestions from
+ * the Patient's Context, with real places near them for the ones that mean going somewhere.
+ */
+export const { suggestToday } = createSuggestFunctions({
+  store: () => adminSuggestStore(adminDb()),
+  textModel: () => genaiTextClient(GEMINI_API_KEY.value()),
+  places: () => fetchPlacesClient(MAPS_API_KEY.value()),
 });

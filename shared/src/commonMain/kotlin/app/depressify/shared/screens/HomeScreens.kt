@@ -35,6 +35,9 @@ import androidx.compose.ui.unit.Dp
 import app.depressify.shared.ui.theme.DayColors
 import app.depressify.shared.voice.LiveState
 import app.depressify.shared.voice.Orb
+import app.depressify.core.model.SuggestionKind
+import app.depressify.shared.voice.live.mapsSearchUrl
+import app.depressify.shared.voice.live.musicSearchUrl
 
 @Composable
 fun TodayScreen(vm: PatientViewModel, s: PatientState, hour: Int) {
@@ -48,9 +51,10 @@ fun TodayScreen(vm: PatientViewModel, s: PatientState, hour: Int) {
             Txt(if (night) "I’m here if you want company." else "A few minutes, at your pace.", DepressifyType.bodyLarge, c.muted)
         }
         CheckInCard(night, onTalk = { vm.beginCheckIn(typed = false) }, onType = { vm.beginCheckIn(typed = true) })
+        if (s.todayLoad != TodayLoad.Demo) TodaySuggestionsCard(s, onRetry = vm::loadTodaySuggestions)
         if (s.hasHistory) {
             WeekBar(DemoData.week(s.history))
-            PlacesCard(night) { vm.open(Route.Suggestion) }
+            if (s.todayLoad == TodayLoad.Demo) PlacesCard(night) { vm.open(Route.Suggestion) }
         } else {
             Txt("You can start wherever you are.", DepressifyType.meta, c.muted, Modifier.fillMaxWidth().padding(top = 16.dp), align = TextAlign.Center)
         }
@@ -79,6 +83,97 @@ private fun CheckInCard(night: Boolean, onTalk: () -> Unit, onType: () -> Unit) 
 
 private val Place.icon: ImageVector
     get() = when (kind) { "Park" -> PhosphorIcons.tree; "Yoga" -> PhosphorIcons.personSimpleTaiChi; else -> PhosphorIcons.flowerLotus }
+
+private val SuggestionKind.label: String
+    get() = when (this) {
+        SuggestionKind.walk -> "Walk"
+        SuggestionKind.nature -> "Nature"
+        SuggestionKind.music -> "Music"
+        SuggestionKind.social_call -> "Call"
+        SuggestionKind.breathing -> "Breathing"
+        SuggestionKind.class_activity -> "Class"
+        SuggestionKind.daylight -> "Daylight"
+    }
+
+private val SuggestionKind.icon: ImageVector
+    get() = when (this) {
+        SuggestionKind.walk -> PhosphorIcons.personSimpleWalk
+        SuggestionKind.nature -> PhosphorIcons.tree
+        SuggestionKind.music -> PhosphorIcons.musicNotes
+        SuggestionKind.social_call -> PhosphorIcons.phone
+        SuggestionKind.breathing -> PhosphorIcons.flowerLotus
+        SuggestionKind.class_activity -> PhosphorIcons.personSimpleTaiChi
+        SuggestionKind.daylight -> PhosphorIcons.sunHorizon
+    }
+
+/**
+ * Today's Suggestions for the signed-in Patient, made by Suggest today from their own Context:
+ * what to do and why, real places near them on a Google map, and music to play.
+ */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun TodaySuggestionsCard(s: PatientState, onRetry: () -> Unit) {
+    val c = Theme.colors
+    val uri = LocalUriHandler.current
+    HealthCard {
+        Row(Modifier.fillMaxWidth()) {
+            Txt("For you today", DepressifyType.small, c.muted, Modifier.weight(1f))
+            Txt("AI Companion", DepressifyType.small, c.muted)
+        }
+        val today = s.today
+        if (today == null) {
+            if (s.todayLoad == TodayLoad.Loading) Txt("Looking at your recent days for something small…", DepressifyType.meta, c.muted)
+            else {
+                Txt("Your Suggestions could not be loaded.", DepressifyType.meta, c.body)
+                TextLink("Try again", onRetry)
+            }
+            return@HealthCard
+        }
+        var current by rememberSaveable(today) { mutableIntStateOf(0) }
+        var selectedPlace by rememberSaveable(today, current) { mutableIntStateOf(0) }
+        val suggestion = today.suggestions[current.coerceIn(today.suggestions.indices)]
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            today.suggestions.forEachIndexed { i, x -> ChoicePill(x.kind.label, i == current, { current = i }, icon = x.kind.icon) }
+        }
+        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Txt(suggestion.details, DepressifyType.bodyStrong.copy(fontWeight = FontWeight.SemiBold), c.ink)
+            if (suggestion.reason.isNotBlank()) Txt(suggestion.reason, DepressifyType.meta, c.muted)
+        }
+        if (suggestion.places.isNotEmpty()) {
+            PlacesMap(today.location, suggestion.places, selectedPlace, { selectedPlace = it }, Modifier.fillMaxWidth().aspectRatio(1.6f).clip(RoundedCornerShape(14.dp)))
+            Column {
+                suggestion.places.forEachIndexed { i, place ->
+                    Row(
+                        Modifier.fillMaxWidth().heightIn(min = 48.dp).clickable(role = Role.Button) { selectedPlace = i }.semantics { selected = i == selectedPlace },
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Icon(PhosphorIcons.mapPin, 18.dp, if (i == selectedPlace) c.accent else c.muted)
+                        Column(Modifier.weight(1f).padding(horizontal = 10.dp)) {
+                            Txt(place.name, DepressifyType.meta.copy(fontWeight = FontWeight.SemiBold), c.ink)
+                            if (place.address.isNotBlank()) Txt(place.address, DepressifyType.small, c.muted)
+                        }
+                        TextLink("Maps", { uri.openUri(place.mapsUrl) }, Modifier.semantics { contentDescription = "Open " + place.name + " in Google Maps" }, trailing = PhosphorIcons.arrowSquareOut)
+                    }
+                }
+            }
+            // The Maps terms ask for the source beside place content shown off the map.
+            Txt("Places from Google Maps" + (today.location?.let { ", near " + it.label.replaceFirstChar(Char::lowercase) } ?: ""), DepressifyType.small, c.muted)
+        } else suggestion.placeQuery?.let { query ->
+            TextLink("Search “$query” in Google Maps", { uri.openUri(mapsSearchUrl(query)) }, trailing = PhosphorIcons.arrowSquareOut)
+        }
+        suggestion.music.forEach { pick ->
+            Row(Modifier.fillMaxWidth().heightIn(min = 48.dp), verticalAlignment = Alignment.CenterVertically) {
+                Icon(PhosphorIcons.musicNotes, 18.dp, c.accent)
+                Column(Modifier.weight(1f).padding(horizontal = 10.dp)) {
+                    Txt(pick.title, DepressifyType.meta.copy(fontWeight = FontWeight.SemiBold), c.ink)
+                    Txt(pick.artist, DepressifyType.small, c.muted)
+                }
+                TextLink("Listen", { uri.openUri(musicSearchUrl(pick.title + " " + pick.artist)) }, Modifier.semantics { contentDescription = "Find " + pick.title + " by " + pick.artist + " in your music app" }, trailing = PhosphorIcons.arrowSquareOut)
+            }
+        }
+        Txt("Made by AI from your own Check-ins and Signals. Wellbeing ideas, not treatment advice.", DepressifyType.small, c.muted)
+    }
+}
 
 /** Nearby places for a next small step, with a link out to Google Maps and a row that opens the current Suggestion. */
 @OptIn(ExperimentalLayoutApi::class)

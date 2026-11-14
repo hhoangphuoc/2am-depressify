@@ -45,6 +45,7 @@ class ContractExportTest {
             })
             put("documents", buildJsonObject {
                 put("PatientDoc", fields(PatientDoc.serializer()))
+                put("PatientLocation", fields(PatientLocation.serializer()))
                 put("DailyDoc", fields(DailyDoc.serializer()))
                 put("Consent", fields(Consent.serializer()))
                 put("VoiceCue", fields(VoiceCue.serializer()))

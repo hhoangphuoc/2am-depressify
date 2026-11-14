@@ -12,6 +12,7 @@ import app.depressify.core.Summary
 import app.depressify.core.SuggestionKind
 import app.depressify.core.model.SharingConsent
 import app.depressify.shared.data.PatientBackend
+import app.depressify.shared.data.TodaySuggestions
 import app.depressify.shared.voice.GeminiLiveSession
 import app.depressify.shared.voice.LiveSession
 import app.depressify.shared.voice.Reply
@@ -44,6 +45,9 @@ enum class Sheet { Demo, Booking, DeleteSignal, StopSharing, Dialler, Leave, Map
 
 enum class FinishState { Idle, Saving, Failed }
 
+/** Where today's Suggestions stand: [Demo] until a Patient is signed in, then the Suggest today call. */
+enum class TodayLoad { Demo, Loading, Ready, Failed }
+
 data class TypedCheckIn(
     val lines: List<TranscriptLine> = emptyList(),
     val offer: SuggestionKind? = null,
@@ -69,6 +73,8 @@ data class PatientState(
     val sheet: Sheet? = null,
     val selectedSignal: SignalId = SignalId.Sleep,
     val notice: String? = null,
+    val todayLoad: TodayLoad = TodayLoad.Demo,
+    val today: TodaySuggestions? = null,
 ) {
     val offline get() = scenario == Scenario.Offline
     val hasHistory get() = history.isNotEmpty()
@@ -120,6 +126,18 @@ class PatientViewModel(
         state.update { it.copy(sharing = choice == SharingConsent.granted) }
         // First open: ask for the sharing choice, unless the Patient has already moved on from a tab root.
         if (choice == SharingConsent.undecided && backStack.size == 1) replaceAll(Route.Welcome)
+        loadTodaySuggestions()
+    }
+
+    /** Asks Suggest today for the signed-in Patient's Suggestions; Today shows them, or a way to try again. */
+    fun loadTodaySuggestions() {
+        val id = patientId ?: return
+        val checkIns = backend?.checkIns ?: return
+        state.update { it.copy(todayLoad = TodayLoad.Loading) }
+        viewModelScope.launch {
+            val found = attempt(FINISH_TIMEOUT) { checkIns.suggestToday(id) }?.takeIf { it.suggestions.isNotEmpty() }
+            state.update { it.copy(today = found, todayLoad = if (found != null) TodayLoad.Ready else TodayLoad.Failed) }
+        }
     }
 
     /** Null when the backend throws or does not answer in time. */
@@ -161,7 +179,7 @@ class PatientViewModel(
     fun applyScenario(s: Scenario) {
         live.stop()
         // A signed-in Patient keeps their stored sharing choice; demo data starts from sharing on.
-        state.update { PatientState(scenario = s, themeMode = it.themeMode, sharing = patientId == null || it.sharing, history = if (s == Scenario.NoHistory) emptyList() else DemoData.history) }
+        state.update { PatientState(scenario = s, themeMode = it.themeMode, sharing = patientId == null || it.sharing, history = if (s == Scenario.NoHistory) emptyList() else DemoData.history, todayLoad = it.todayLoad, today = it.today) }
         when (s) {
             Scenario.FirstUse -> replaceAll(Route.Welcome)
             Scenario.MicDeclined -> replaceAll(Route.Today, Route.CheckInIntro)
@@ -339,7 +357,7 @@ class PatientViewModel(
         /** How long sign-in or a Consent write may take before it counts as failed. */
         val BACKEND_TIMEOUT = 15.seconds
 
-        /** Finish Check-in waits on the text model, which the function gives 40 seconds. */
+        /** Finish Check-in and Suggest today wait on the text model, which the functions give 40 seconds. */
         val FINISH_TIMEOUT = 60.seconds
     }
 }

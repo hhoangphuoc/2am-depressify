@@ -2,10 +2,14 @@ package app.depressify.shared.state
 
 import app.depressify.core.model.ConsentPurpose
 import app.depressify.core.model.SharingConsent
+import app.depressify.core.model.SuggestionKind
 import app.depressify.shared.data.FakeAuthGateway
+import app.depressify.shared.data.FakeCheckInGateway
 import app.depressify.shared.data.FakePatientStore
 import app.depressify.shared.data.PatientBackend
 import app.depressify.shared.data.PatientSession
+import app.depressify.shared.data.TodaySuggestion
+import app.depressify.shared.data.TodaySuggestions
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
@@ -121,5 +125,27 @@ class PatientViewModelBackendTest {
         vm.setSharing(false)
         assertFalse(vm.ui.value.sharing)
         assertTrue(store.records.isEmpty())
+    }
+
+    @Test
+    fun aSignedInPatientGetsTodaysSuggestionsAndCanRetryAfterAFailure() {
+        val checkIns = FakeCheckInGateway()
+        val vm = PatientViewModel(PatientBackend(PatientSession(auth, store, "clinician@example.com"), store, store.consents, checkIns))
+
+        // Suggest today failed: Today offers the retry and keeps the demo places out.
+        assertEquals(TodayLoad.Failed, vm.ui.value.todayLoad)
+        assertNull(vm.ui.value.today)
+
+        checkIns.today = TodaySuggestions(suggestions = listOf(TodaySuggestion(SuggestionKind.walk, "Ten minutes by the water.")))
+        vm.loadTodaySuggestions()
+
+        assertEquals(TodayLoad.Ready, vm.ui.value.todayLoad)
+        assertEquals(checkIns.today, vm.ui.value.today)
+    }
+
+    @Test
+    fun withoutASignedInPatientTodayStaysOnDemoPlaces() {
+        assertEquals(TodayLoad.Demo, PatientViewModel().ui.value.todayLoad)
+        assertEquals(TodayLoad.Demo, PatientViewModel(backend).ui.value.todayLoad)
     }
 }

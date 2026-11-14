@@ -84,6 +84,9 @@ class FakeCheckInGateway : CheckInGateway {
     var brief: String? = null
     val finished: MutableList<Pair<String, CheckInDraft>> = mutableListOf()
 
+    /** What Suggest today answers; null makes the call fail. */
+    var today: TodaySuggestions? = null
+
     override suspend fun startCheckIn(patientId: String, brief: String, typed: Boolean): LiveStart {
         if (failStart) throw IllegalStateException("UNAVAILABLE")
         this.brief = brief
@@ -111,4 +114,6 @@ class FakeCheckInGateway : CheckInGateway {
         if (failWrites) throw IllegalStateException("UNAVAILABLE")
         flags += flag
     }
+
+    override suspend fun suggestToday(patientId: String): TodaySuggestions = today ?: throw IllegalStateException("UNAVAILABLE")
 }

@@ -2,7 +2,9 @@ package app.depressify.shared.data
 
 import app.depressify.core.model.DailyDoc
 import app.depressify.core.model.Flag
+import app.depressify.core.model.PatientLocation as StoredPatientLocation
 import app.depressify.core.model.Suggestion
+import app.depressify.core.model.SuggestionKind
 import app.depressify.core.model.Summary
 import kotlinx.serialization.Serializable
 
@@ -40,6 +42,31 @@ data class Weather(
     val sourceUrl: String,
 )
 
+/** A place from Google Maps near the Patient. [mapsUrl] opens it in Google Maps. */
+@Serializable
+data class TodayPlace(val id: String, val name: String, val address: String = "", val latitude: Double, val longitude: Double, val mapsUrl: String)
+
+@Serializable
+data class MusicPick(val title: String, val artist: String)
+
+/**
+ * One Suggestion from Suggest today: what to do, which part of the Patient's own Context it comes
+ * from, and for somewhere to go the [places] found for [placeQuery], or for music what to play.
+ */
+@Serializable
+data class TodaySuggestion(
+    val kind: SuggestionKind,
+    val details: String,
+    val reason: String = "",
+    val placeQuery: String? = null,
+    val music: List<MusicPick> = emptyList(),
+    val places: List<TodayPlace> = emptyList(),
+)
+
+/** Today's Suggestions and where their places were looked for (null when the Patient has no location). */
+@Serializable
+data class TodaySuggestions(val location: StoredPatientLocation? = null, val suggestions: List<TodaySuggestion> = emptyList())
+
 /** What a Check-in needs from the backend: the Live token, and the Patient's records the Companion's tools read and write. */
 interface CheckInGateway {
     /**
@@ -71,4 +98,10 @@ interface CheckInGateway {
     suspend fun saveSuggestion(patientId: String, suggestion: Suggestion)
 
     suspend fun raiseFlag(patientId: String, flagId: String, flag: Flag)
+
+    /**
+     * Asks Suggest today for Suggestions made from the Patient's Context, with real places near
+     * them. The Gemini and Places keys never reach the phone, and nothing is stored.
+     */
+    suspend fun suggestToday(patientId: String): TodaySuggestions
 }

@@ -121,7 +121,13 @@
             "healthSource",
             "synthetic",
             "sharingConsent",
-            "sharingChangedAtMillis"
+            "sharingChangedAtMillis",
+            "location"
+        ],
+        "PatientLocation": [
+            "label",
+            "latitude",
+            "longitude"
         ],
         "DailyDoc": [
             "date",
@@ -225,7 +231,8 @@
             "healthSource": "device",
             "synthetic": false,
             "sharingConsent": "undecided",
-            "sharingChangedAtMillis": null
+            "sharingChangedAtMillis": null,
+            "location": null
         }
     }
 }

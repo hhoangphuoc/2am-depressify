@@ -149,7 +149,8 @@ Where each key or credential lives, following [ADR 0002](docs/adr/0002-phone-con
 | Credential | Where it goes | Used by | State |
 |---|---|---|---|
 | `GEMINI_API_KEY` | Function secret: `firebase functions:secrets:set GEMINI_API_KEY --project prod`. Locally: `firebase/functions/.secret.local` (copy `.secret.local.example`). | Interactions API (`gemini-4-hydrogen`, `store: false`) for Intake and the Digest, and Start Check-in, which mints the single-use Gemini Live token (`gemini-3.8-live`) the phone connects with. Later, Decisions. | Wired; no real call made from this repository yet |
-| `MAPS_API_KEY` | Function secret, same two places. `mapstools.googleapis.com` is enabled on the project and the key allows it. | Maps agent tools (`lookupWeather`, `searchText`, `computeRoutes`) from the `mapTool` callable. | Wired; real calls recorded as fixtures, the callable is not deployed yet |
+| `MAPS_API_KEY` | Function secret, same two places. `mapstools.googleapis.com` is enabled on the project and the key allows it. | Places API (New) for `suggestToday`, and Maps agent tools (`lookupWeather`, `searchText`, `computeRoutes`) from the `mapTool` callable. | Wired; real calls recorded as fixtures, `suggestToday` is deployed; `mapTool` is not deployed yet |
+| Maps SDK for Android key | `maps.apiKey` in `secrets.properties`. A separate key, restricted to the Maps SDK for Android and to the app (package and SHA-1). It ships in the app, as every Maps SDK key does, so it must not be the server key. | The map of places on Today. | Optional; without it Today lists the places with no map |
 | Google Calendar | No key. The Patient grants access on the phone. | Free time and booking, on the phone. | Not built (#19) |
 | Firebase app config | `secrets.properties` (Android), `GoogleService-Info.plist` (iOS). These identify the project and are not secrets, but stay out of the repository. | The Patient app. | Wired |
 
@@ -254,6 +255,20 @@ Two callables in `europe-north1` serve a Check-in (#14). The caller must be the 
 `todayLines` are today's Signals against Baseline as words (at most 12), and `lastSuggestionId` the previous Suggestion the Companion asked about. Malformed items inside the lists are dropped and long text is cut (turns 2,000 characters, at most 400 turns); a wrong overall shape is `invalid-argument`. The function calls `gemini-4-hydrogen` with storage off and structured output (one attempt, 40-second timeout), then writes `summaries/{checkInId}`, the ratings, Voice cues, crisis marker and end time on the Check-in, and `lastCheckInAtMillis` / `lastSeenAtMillis` on the Patient, in one transaction. A silent Check-in, a failed model call or malformed output still succeeds with the minimal Summary (`minimal: true`). A Check-in that Start Check-in never created is `not-found`. A failed write is `unavailable`: retry with the same `checkInId`, which overwrites the one Summary and never makes a second. A retry without usable model output keeps what the model wrote before. The returned `summary` is exactly what the Patient and the Clinician read.
 
 Both need the `GEMINI_API_KEY` secret. In the emulator there is no secret, so `startCheckIn` fails with `unavailable` after its checks and creates nothing, and `finishCheckIn` works only for a silent Check-in (no model call). The emulator suite exercises exactly those paths. With `CHECKIN_REAL_GEMINI=1` and `GEMINI_API_KEY` in the environment, `test/emulator/checkin.test.ts` also runs the handlers against the real API with fictional text, writing only to the Firestore emulator; it never runs by default.
+
+### Suggest today
+
+One callable in `europe-north1` makes Suggestions for the Today screen, outside a Check-in. The caller rule is the same as for a Check-in: the Patient, or anyone signed in on a Demo Patient.
+
+| Callable | Request | Response |
+|---|---|---|
+| `suggestToday` | `{patientId}` | `{location, suggestions: [{kind, details, reason, placeQuery, music: [{title, artist}], places: [{id, name, address, latitude, longitude, mapsUrl}]}]}` |
+
+The function reads the Patient's Context (Intake highlights, the last 5 Summaries, the last 7 days of Signals against Baseline in words, the last 10 Suggestions with their Outcomes) and calls `gemini-4-hydrogen` once, with storage off and structured output. The model proposes up to three Suggestions of different kinds. For one that means going somewhere it writes a Google Maps search (`placeQuery`); for music it names two or three albums or tracks. The function then runs one Places API (New) text search per `placeQuery`, biased to 2.5 km around the Patient's `location`, and returns up to three places each. Place results go to the phone only, never to the model, and nothing is stored. A Patient without a `location` (every live Patient today) gets the Suggestions without places, and a failed place search leaves that Suggestion without places. Names, ids, the Clinician and coordinates never go to the model, and the Context is never logged.
+
+It needs the `GEMINI_API_KEY` and `MAPS_API_KEY` secrets, with `places.googleapis.com` enabled. A call takes about 15 seconds (over 30 on a cold start). Every call asks the model and Places again; Text Search is billed per call, so cache the day's answer before this serves more than a demo. Logic in `src/suggest.ts`, wiring in `src/suggestFunctions.ts`, tests in `test/suggest.test.ts`.
+
+On the phone, Today shows the Suggestions in a "For you today" card once a Patient is signed in: a chip per Suggestion, its reason, the places with links to Google Maps, and the music with links that open a search in the Patient's music app. On Android the places are also pins on a Google map (Maps SDK for Android through Maps Compose) when `maps.apiKey` is set in `secrets.properties`; that key is a separate one, restricted to the Maps SDK for Android and to the app's package and signing certificate. iOS shows the list without a map.
 
 ### Attention work queue
 
@@ -372,5 +387,9 @@ npm run seed -- --clinician <clinician-email> # link them to another Clinician (
 npm run seed -- --project <your-project-id> --clinician <clinician-email>
                                               # a real project (Application Default Credentials)
 ```
+
+Each Demo Patient has their own invented life in Helsinki, so the Companion has something specific to suggest from: `demo-steady` (Aino, Lauttasaari, choir and the shore path, mood improving since treatment), `demo-declining` (Mikko, Kallio, guitar and walks by the sea, sleep and mood falling over the last ten days) and `demo-sparse` (Sara, Vallila, a tram driver on shifts who wants short ideas and daylight). The Intake highlights name their places, people and music; the Summaries' themes and quotes and the Suggestions' details follow from them (`story` in `firebase/seed/src/profiles.js`).
+
+Each Demo Patient also has a `location`: an example apartment address in their neighbourhood (a public landmark's coordinates), which `suggestToday` searches around.
 
 The Demo Patients are linked to the Clinician from `--clinician` or `CLINICIAN_EMAIL`, and the seed adds that Clinician to the `clinicians` allowlist. Only the emulator falls back to `clinician@example.com`; a real project must be given the email, and the placeholder is refused there. The same inputs (`--today`, `--seed`, the Clinician) give the same data. The Clinician sees `demo-declining` (red), `demo-sparse` (amber) and `demo-steady` (green), in that order. `demo-steady` stopped sharing for three days about four weeks ago, so its Signals and Summaries show a gap there: what was saved while not sharing stays hidden from the Clinician. Live Patients are never touched. Needs Node 22 or newer.

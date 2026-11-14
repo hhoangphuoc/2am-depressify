@@ -14,6 +14,7 @@ import { SIGNAL_KEYS, compareWithBaseline, composite } from "../../src/baseline.
 import { addDays, zonedMillis } from "../../src/dates.js";
 import { THRESHOLDS } from "../../src/flags.js";
 import { DEMO_CLINICIAN_EMAIL, generateDemoPatients, makePatient, outcomeScore } from "../../src/generate.js";
+import { PROFILES } from "../../src/profiles.js";
 
 /** @typedef {import("../../src/generate.js").DemoPatient} DemoPatient */
 
@@ -95,6 +96,14 @@ describe("every Demo Patient", () => {
     for (const p of all) {
       assert.ok(p.patient.intakeHighlights.startsWith("Synthetic demo data"), p.id);
       assert.ok(p.patient.intakeHighlights.split(/\s+/).length <= 120, `${p.id}: Intake over 120 words`);
+    }
+  });
+
+  test("has an example location in Helsinki for place searches", () => {
+    for (const p of all) {
+      const { label, latitude, longitude } = p.patient.location ?? { label: "", latitude: 0, longitude: 0 };
+      assert.match(label, /Helsinki/, p.id);
+      assert.ok(latitude > 60.1 && latitude < 60.3 && longitude > 24.8 && longitude < 25.1, p.id + ": not in Helsinki");
     }
   });
 
@@ -335,6 +344,48 @@ describe("profiles", () => {
 
   test("the list shows all three levels, so the sort is visible", () => {
     assert.deepEqual(all.map((p) => p.patient.flagLevel).sort(), ["amber", "green", "red"]);
+  });
+});
+
+describe("each Demo Patient's own story", () => {
+  test("every profile has Suggestions for each of its kinds, and themes and quotes in the Summary's limits", () => {
+    for (const profile of Object.values(PROFILES)) {
+      for (const kind of profile.suggestionKinds) {
+        assert.ok((profile.story.suggestions[kind]?.length ?? 0) >= 1, profile.id + ": no Suggestion for " + kind);
+      }
+      for (const tone of /** @type {const} */ (["well", "low"])) {
+        // A Summary has up to four different themes, so each tone needs at least four.
+        assert.ok(profile.story.themes[tone].length >= 4, profile.id + ": too few " + tone + " themes");
+        for (const theme of profile.story.themes[tone]) assert.ok(theme.split(" ").length >= 2 && theme.split(" ").length <= 4, theme);
+        for (const quote of profile.story.quotes[tone]) assert.ok(quote.length <= 200, quote);
+      }
+    }
+  });
+
+  test("Summaries and Suggestions speak only of that Patient's life", () => {
+    for (const p of all) {
+      const story = PROFILES[/** @type {keyof typeof PROFILES} */ (p.profile)].story;
+      const themes = [...story.themes.well, ...story.themes.low];
+      const quotes = [...story.quotes.well, ...story.quotes.low];
+      const details = Object.values(story.suggestions).flat();
+      for (const { data } of p.summaries) {
+        assert.ok(data.themes.length >= 2 && data.themes.length <= 4 && new Set(data.themes).size === data.themes.length);
+        for (const theme of data.themes) assert.ok(themes.includes(theme), p.id + ": " + theme);
+        for (const quote of data.quotes) assert.ok(quotes.includes(quote), p.id + ": " + quote);
+        if (data.suggestion !== null) assert.ok(details.includes(data.suggestion), p.id + ": " + data.suggestion);
+      }
+      for (const { data } of p.suggestions) assert.ok(story.suggestions[data.kind]?.includes(data.details), p.id + ": " + data.details);
+    }
+  });
+
+  test("steady rates mood higher in the last two weeks than in the first two", () => {
+    const mean = (/** @type {(number | null)[]} */ xs) => {
+      const given = xs.filter((x) => x !== null);
+      return given.reduce((a, b) => a + b, 0) / given.length;
+    };
+    const moodsBetween = (/** @type {string} */ from, /** @type {string} */ to) =>
+      steady.checkIns.filter((c) => c.id.slice(-10) >= from && c.id.slice(-10) <= to).map((c) => c.data.mood);
+    assert.ok(mean(moodsBetween(addDays(TODAY, -13), TODAY)) > mean(moodsBetween(addDays(TODAY, -41), addDays(TODAY, -28))));
   });
 });
 
