@@ -72,7 +72,6 @@ data class LiveEvent(
     val outcome: Outcome? = null,
     val offer: SuggestionKind? = null,
     val stackedOffers: List<SuggestionKind> = emptyList(),
-    val wrap: Boolean = false,
     val waitForPatient: Boolean = false,
 ) {
     val duration: Long get() = millis ?: if (text == null) 1200 else text.split(' ').size * (if (speaker == Speaker.You) 300L else 250L) + 900
@@ -86,7 +85,6 @@ data class LiveSnapshot(
     val outcome: Outcome? = null,
     val offer: SuggestionKind? = null,
     val accepted: Boolean = false,
-    val wrapped: Boolean = false,
     /** The Companion's own wording of the Suggestion, when it comes from a live Check-in. */
     val offerDetails: String? = null,
     /** What tool calls have put on screen, oldest first. */
@@ -128,11 +126,10 @@ interface LiveSession {
     fun sendText(text: String) {}
 
     /**
-     * Hands a live Check-in to Finish Check-in and returns the Summary it wrote; [ratingsLine] is
-     * what the Patient rated on screen, in words. Null when the Check-in was the script. Throws when
-     * the finish fails; calling again retries the same Check-in.
+     * Hands a live Check-in to Finish Check-in and returns the Summary it wrote. Null when the
+     * Check-in was the script. Throws when the finish fails; calling again retries the same Check-in.
      */
-    suspend fun finish(ratingsLine: String?): app.depressify.core.model.Summary? = null
+    suspend fun finish(): app.depressify.core.model.Summary? = null
 }
 
 object LiveScript {
@@ -180,7 +177,7 @@ object LiveScript {
     fun reply(reply: Reply, smallerCount: Int = 0): List<LiveEvent> = when (reply) {
         Reply.Accept -> listOf(
             LiveEvent(LiveState.Speaking, 2, Speaker.Companion, "Good. We’ll keep it gentle and unhurried."),
-            LiveEvent(LiveState.Speaking, 3, Speaker.Companion, "Before we finish, three quick ratings. You can skip any of them.", wrap = true),
+            LiveEvent(LiveState.Speaking, 3, Speaker.Companion, "I’m here if there’s anything else on your mind. Tap Finish whenever you’re ready."),
         )
         Reply.Smaller -> if (smallerCount == 0) listOf(
             LiveEvent(
@@ -201,7 +198,7 @@ object LiveScript {
             ),
             LiveEvent(LiveState.Listening, 2, waitForPatient = true),
         )
-        Reply.Decline -> listOf(LiveEvent(LiveState.Speaking, 3, Speaker.Companion, "That’s okay. Rest counts too. Shall we wrap up?", wrap = true))
+        Reply.Decline -> listOf(LiveEvent(LiveState.Speaking, 3, Speaker.Companion, "That’s okay. Rest counts too. Tap Finish whenever you’re ready."))
     }
 }
 
@@ -321,7 +318,6 @@ class ScriptedLiveSession(private val scope: CoroutineScope) : LiveSession {
                 offer = e.offer ?: s.offer,
                 accepted = if (prepended.isNotEmpty()) false else s.accepted,
                 suggestions = if (prepended.isNotEmpty()) prepended.map { it.copy(accepted = false) } + s.suggestions.map { it.copy(accepted = false) } else s.suggestions,
-                wrapped = s.wrapped || e.wrap,
             )
         }
     }

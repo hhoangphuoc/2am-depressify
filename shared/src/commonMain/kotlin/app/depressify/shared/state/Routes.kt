@@ -11,7 +11,6 @@ sealed interface Route {
     data object Sharing : Route
     data object CheckInIntro : Route
     data object CheckIn : Route
-    data object Ratings : Route
     data object Finishing : Route
     data class Summary(val id: String) : Route
     data object Suggestion : Route

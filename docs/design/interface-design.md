@@ -128,7 +128,7 @@ Places rules. The map shows synthetic demo places on an illustrated map, labelle
 
 ### Check-in journey
 
-Returning Patient → contextual greeting → previous Outcome → listen → one Suggestion → explicit commitment → optional calendar confirmation → three ratings → close → shared Summary. The Patient can type, decline an activity, skip a rating, mute, or finish at any time. The primary action moves with the current task; there are never three competing filled buttons.
+Returning Patient → contextual greeting → previous Outcome → listen → one Suggestion → explicit commitment → optional calendar confirmation → the conversation stays open until the Patient taps Finish → reflection → shared Summary. The Companion never closes the Check-in and asks for no on-screen ratings; a rating appears in the Summary only when the Patient said it. The Patient can type, decline an activity, mute, or finish at any time. The primary action moves with the current task; there are never three competing filled buttons.
 
 Three minutes is an expectation, not a countdown or achievement target. At approximately seven minutes, a quiet message says `About a minute left. Let’s choose one small step.` Finish before the eight-minute cap. No session resumption is offered. A dropped connection may retry as a new connection; already held content can finish into a Summary. The UI must not imply the old session resumes.
 
@@ -147,7 +147,7 @@ The voice Check-in has one focal object, an orb, with a one-word state under it 
 | Interrupted | `serverContent.interrupted` | Tapping the speaking orb stops playback at once and returns to listening |
 | Microphone off | `audioStreamEnd` | Grey orb; `Paused. Tap the microphone to go on, or type.` |
 | Connection lost or paused | Socket closed, or app backgrounded | Notice with `Try again` or `Resume`, and `Finish with what we have` |
-| Wrap up | Client timer | One line, then `Continue to ratings` |
+| Finish | The Patient taps Finish | The reflection screen, which makes the Summary straight away |
 | Crisis | Raise-crisis tool | Crisis notice before any network call |
 
 The orb is a WebGL cloud field adapted from the orb-ui `cloud` theme (MIT): warped noise forms a two-tone sky with a light band along a moving horizon. Each state has a four-colour gradient drawn from the Depressify palette, and states crossfade over about half a second. The audio level rises over about 210 ms and falls over about 380 ms; drift speed and size follow the level, running at 75% of orb-ui's tempo to stay calm. Under Reduce Motion, or when WebGL is unavailable, the orb paints a still frame or a flat CSS sphere and only its colour changes. When the Suggestion card arrives, the orb shrinks to 112 px so the card and its main action stay above the controls. What the Companion records is shown plainly under the caption, for example `Noted: walk tried · felt 4 of 5`.
@@ -243,7 +243,7 @@ The reviewer can switch prototype scenarios without polluting normal app copy: f
 
 ### Coverage checklist
 
-- Patient: first use → sharing choice → Today → voice or typed Check-in → Outcome → Suggestion → optional booking → ratings → Summary → History.
+- Patient: first use → sharing choice → Today → voice or typed Check-in → Outcome → Suggestion → optional booking → Finish → reflection → Summary → History.
 - Patient: per-Signal Consent → enable/deny/no data → Stop and delete → failed deletion/retry; quiet hours; sharing withdrawal; Help.
 - Patient: interrupted/disconnected/short Check-in, unsaved Summary, offline Crisis, user-controlled simulated dialler, notification entry.
 - Clinician: sign-in → attention-sorted Patients → Patient Overview → Phase evidence → Summary/Digest → Signals → Intake/Visit → clear attention after follow-up.

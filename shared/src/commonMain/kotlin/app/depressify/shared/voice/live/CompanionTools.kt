@@ -38,7 +38,6 @@ sealed interface ToolCard {
 interface ToolEffects {
     fun show(card: ToolCard)
     fun offer(suggestion: Suggestion)
-    fun wrapUp()
     fun crisis()
 }
 
@@ -69,7 +68,6 @@ class CompanionTools(
             "suggest_music" -> makeMusic(args.string("mood") ?: args.string("query"))
             "find_places" -> findPlaces(args.string("query"))
             "get_weather" -> weather()
-            "wrap_up" -> ok().also { effects.wrapUp() }
             "raise_crisis" -> raiseCrisis()
             else -> error("unknown_tool")
         }

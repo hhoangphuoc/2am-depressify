@@ -47,7 +47,6 @@ fun DepressifyApp(backend: PatientBackend? = null, onNightChange: (Boolean) -> U
                     entry<Route.Sharing> { SharingScreen(vm, s) }
                     entry<Route.CheckInIntro> { CheckInIntroScreen(vm, s) }
                     entry<Route.CheckIn> { CheckInScreen(vm, s) }
-                    entry<Route.Ratings> { RatingsScreen(vm, s) }
                     entry<Route.Finishing> { FinishingScreen(vm, s) }
                     entry<Route.Summary> { key -> SummaryScreen(vm, s, key.id) }
                     entry<Route.Suggestion> { SuggestionScreen(vm, s) }

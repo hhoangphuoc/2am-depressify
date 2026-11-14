@@ -148,7 +148,7 @@ class GeminiLiveSession(
 
     private fun show(live: LiveState, tool: String? = null) = state.update { it.copy(event = LiveEvent(live, step(it), tool = tool)) }
 
-    private fun step(s: LiveSnapshot) = when { s.wrapped -> 3; s.offer != null -> 2; else -> s.event.step }
+    private fun step(s: LiveSnapshot) = if (s.offer != null) 2 else s.event.step
 
     private fun lost() = state.update { it.copy(connected = false) }
 
@@ -222,17 +222,15 @@ class GeminiLiveSession(
             }
         }
 
-        override fun wrapUp() = state.update { it.copy(wrapped = true) }
         override fun crisis() { crisis = true; onCrisis() }
     }
 
-    override suspend fun finish(ratingsLine: String?): Summary? {
+    override suspend fun finish(): Summary? {
         val id = patient
         val checkIn = checkInId
         if (scripted || id == null || checkIn == null) return null
         val snap = state.value
-        val turns = snap.transcript.map { DraftTurn(fromPatient = it.speaker == Speaker.You, text = it.text) } +
-            listOfNotNull(ratingsLine?.let { DraftTurn(fromPatient = true, text = it) })
+        val turns = snap.transcript.map { DraftTurn(fromPatient = it.speaker == Speaker.You, text = it.text) }
         val chosenId = acceptedSuggestionId
         val hasExactChosen = chosenId != null && offered.any { it.id == chosenId }
         val suggestions = offered.mapIndexed { i, s ->
