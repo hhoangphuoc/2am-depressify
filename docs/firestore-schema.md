@@ -53,10 +53,10 @@ clinicians/{email}                   (allowlist)     the Clinicians a new Patien
 | `intakeHighlights` | string | `""` | Extracted from the Intake, at most 120 words, reviewed by the Clinician. Written only by the `saveIntake` function (Clinician only); no client writes it. The report itself is never stored. |
 | `tmsEndDate` | date string or null | `null` | Set by the Clinician. Week 1 starts the day after. |
 | `flagLevel` | FlagLevel | `green` | The highest uncleared flag stamped `sharedWithClinician: true`. A flag raised while the Patient was not sharing never counts. Never shown to the Patient. |
-| `flagReasons` | string[] | `[]` | The reasons of those flags, highest level first, then newest. Plain sentences, never a number. |
+| `flagReasons` | string[] | `[]` | The reasons of those flags, highest level first, then newest. Plain sentences: never a score or a decimal number (a plain duration such as "under 3 hours" is fine). |
 | `quietHoursStart` | int 0..23 | `21` | No Nudges inside quiet hours; the window may cross midnight. |
 | `quietHoursEnd` | int 0..23 | `9` | |
-| `lastSeenAtMillis` | int or null | `null` | Last sign of life from the phone. The hourly silence check (`silenceCheck`, #28) reads it: older than 24 hours on a sharing, non-synthetic Patient raises red `silent`. `null` (never seen) is not silent. Finish Check-in moves it to the time of the finish (never back). |
+| `lastSeenAtMillis` | int or null | `null` | Last sign of life from the phone. The hourly silence check (`silenceCheck`, #28) reads it: older than 24 hours on a sharing, non-synthetic Patient raises red `silent`. `null` (never seen) is not silent. Finish Check-in moves it to the time of the finish, and the phone's daily job (#26) to the time of each run (never back). |
 | `lastCheckInAtMillis` | int or null | `null` | The end of the latest finished Check-in. Finish Check-in moves it forward (never back). `null` means no Check-in has finished yet: Start Check-in then adds the first-Check-in AI disclosure to the token's instruction. |
 | `healthSource` | HealthSource | `device` | Exactly one source per Patient. |
 | `synthetic` | boolean | `false` | `true` for Demo Patients. |
@@ -64,6 +64,8 @@ clinicians/{email}                   (allowlist)     the Clinicians a new Patien
 | `sharingChangedAtMillis` | int or null | `null` | When `sharingConsent` last changed. Written with every change. |
 
 ### `daily/{date}`: DailyDoc
+
+Written by the phone's daily job (#26): the decision is `DailyJob.run` in `core` (`app.depressify.core.daily`), and the app writes its result. Every run rewrites today's record whole, keeping the stamp it was created with. A record a demo control wrote (`demoOverride: true`) keeps its values on later device runs.
 
 | Field | Type | Notes |
 |---|---|---|
@@ -85,7 +87,7 @@ vsBaseline = (today - median) / spread
 
 The floor keeps a constant history from dividing by zero. `vsBaseline` keeps the sign as measured; the oriented comparison negates it for `lower_is_better` Signals, so negative always means worse, and is `null` for Signals with direction `none`. `composite` is the mean of the oriented comparisons that are not `null`.
 
-The rule is pinned by a shared fixture, [`fixtures/baseline/baseline-cases.json`](../fixtures/baseline/baseline-cases.json): inputs and expected comparisons, oriented values and composites, including fewer than 5 valid days, null days, a constant series and both directions. The JavaScript rule lives once, in the dashboard's `firebase/hosting/js/lib/baseline.js`; the seed re-exports it (`firebase/seed/src/baseline.js`). The seed tests and the dashboard tests (`firebase/hosting/test/baseline.test.mjs`) run the fixture through it, and core's Kotlin Baseline tests read the same file. Change the rule only by changing the fixture, core and that file together.
+The rule is pinned by a shared fixture, [`fixtures/baseline/baseline-cases.json`](../fixtures/baseline/baseline-cases.json): inputs and expected comparisons, oriented values and composites, including fewer than 5 valid days, null days, a constant series and both directions. The JavaScript rule lives once, in the dashboard's `firebase/hosting/js/lib/baseline.js`; the seed re-exports it (`firebase/seed/src/baseline.js`). The seed tests and the dashboard tests (`firebase/hosting/test/baseline.test.mjs`) run the fixture through it. The Kotlin rule is `SignalBaseline` in `core` (`app.depressify.core.daily`), and `BaselineFixtureTest` runs every case of the same file on the JVM. (The screens' older `app.depressify.core.Baseline` has no spread floor; moving the screens to `SignalBaseline` is #16.) Change the rule only by changing the fixture, core and that file together.
 
 ### `consents/{subject}`: Consent
 
@@ -159,6 +161,8 @@ The app records a Suggestion and changes only `status` and `booked`. The Outcome
 | `sharedWithClinician` | boolean | The sharing stamp. A flag stamped `false` is never shown to the Clinician, never counts toward the Patient's `flagLevel`, and does not stop a shared flag of the same kind being raised later (the "not raised again" rule compares flags with the same stamp). |
 
 **The silence check's flags.** `silenceCheck` (#28, hourly) writes red `silent` flags with the id `silent-<lastSeenAtMillis>`: one id per silence, so a retried or overlapping run never writes a second flag for the same silence, and a silence whose flag the Clinician has cleared is not flagged again until the phone has been seen and gone quiet once more. It writes only for a Patient who is sharing (`isSharingActive`), is not synthetic, and whose `lastSeenAtMillis` is more than 24 hours old (exactly 24 hours, `null` and a time in the future are not silent), and only when no uncleared `silent` flag with the same stamp is open. In the same transaction it raises the Patient's `flagLevel` to `red` and puts the reason first in `flagReasons`, keeping the other reasons; nothing else on the record changes. The flag is stamped with `sharingStamp(patient)`, which is `true` there. The reason is always "The phone has been quiet: it has not connected for over 24 hours." It says nothing about mood or self-harm.
+
+**The daily job's flags.** The phone's daily job (#26, `FlagWriteRules` in `core`) raises `sleep_collapse`, `inactive`, `poor_sleep`, `low_mood` and `drift` with the id `<kind>-<date>` (the seed's format), or `<kind>-<date>-unshared` when stamped `false`, so a repeated run the same day computes the same id and a kind is raised at most once a day per stamp. It creates them uncleared and stamped with `sharingStamp()`, skips a kind with an uncleared flag of the same stamp, and skips a `low_mood` whose three Check-ins an earlier flag of that kind already covered. Only flags stamped `true` change the record: the level only rises and every existing reason is kept, as in `raisedAttention`. It never writes Suggestions: `objectiveChange` and `outcomeScore` are Finish Check-in's (#21).
 
 **Creating a red flag emails the Clinician.** Any writer can create the flag: the phone's crisis tool, Finish Check-in's Decisions backstop (#20), the phone's daily job, or the hourly silence check (#28, `silent`). The `redFlagAlert` function reacts to every created flag and writes the email to [`mail`](#mailmailid-maildoc). A writer must never send mail itself, and must not create a red flag a second time to "resend" it. The "not raised again" rule already prevents that, and the email is tied to the flag's id.
 
