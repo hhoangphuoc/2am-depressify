@@ -6,6 +6,7 @@ import { DEFAULT_SEED, DEMO_CLINICIAN_EMAIL } from "./generate.js";
 
 export const DEFAULT_PROJECT = "demo-twoam";
 export const DEFAULT_EMULATOR_HOST = "127.0.0.1:8080";
+export const DEFAULT_AUTH_EMULATOR_HOST = "127.0.0.1:9099";
 
 const TARGET_HELP = `Target:
   default           the Firestore emulator at $FIRESTORE_EMULATOR_HOST, or ${DEFAULT_EMULATOR_HOST},
@@ -31,9 +32,14 @@ Options:
 export const ALLOW_USAGE = `Usage: npm run allow-clinician -- --email <email> [--project id]
 
 Adds a Clinician to the clinicians allowlist (clinicians/{email}), so a new Patient's app may link
-to them. Writing it again changes nothing.
+to them, and gives the sign-in account with that email the custom claim role "clinician" and a
+verified email, so the security rules and functions treat it as the Clinician's. If no account has
+the email yet, says so and still writes the allowlist; run it again once the account exists.
+Running it again changes nothing. The Clinician signs out and in again (or reloads the dashboard)
+to pick up the claim.
 
-${TARGET_HELP}`;
+${TARGET_HELP}
+  With the emulator, the Auth emulator at $FIREBASE_AUTH_EMULATOR_HOST, or ${DEFAULT_AUTH_EMULATOR_HOST}.`;
 
 export const SILENCE_USAGE = `Usage: npm run silence-test -- --patient <id> [--project id]
 
@@ -67,6 +73,7 @@ ${TARGET_HELP}`;
  * @property {boolean} help
  * @property {string} projectId
  * @property {string | null} emulatorHost null for a real project
+ * @property {string | null} authEmulatorHost the Auth emulator, used whenever the Firestore one is; null for a real project
  * @property {string} email
  */
 
@@ -178,9 +185,10 @@ export function parseAllowCommand(argv, env) {
   });
   const help = values.help ?? false;
   const target = resolveTarget(values.project, env);
-  if (help) return { help, ...target, email: "" };
+  const authEmulatorHost = target.emulatorHost ? env.FIREBASE_AUTH_EMULATOR_HOST || DEFAULT_AUTH_EMULATOR_HOST : null;
+  if (help) return { help, ...target, authEmulatorHost, email: "" };
   if (values.email === undefined) throw new Error("--email <email> is required: the Clinician to allow");
-  return { help, ...target, email: clinicianEmail(values.email, "--email", target) };
+  return { help, ...target, authEmulatorHost, email: clinicianEmail(values.email, "--email", target) };
 }
 
 /** A single Firestore document id: no "/", not "." or "..", not reserved (`__...__`). */

@@ -3,10 +3,13 @@
 //   cd firebase && firebase emulators:exec --only auth,firestore --project demo-twoam "npm --prefix seed run test:emulator"
 import { assertFails, assertSucceeds, initializeTestEnvironment } from "@firebase/rules-unit-testing";
 import { deleteApp, initializeApp } from "firebase-admin/app";
+import { getAuth } from "firebase-admin/auth";
 import { getFirestore } from "firebase-admin/firestore";
+import { deleteApp as deleteClientApp, initializeApp as initializeClientApp } from "firebase/app";
+import { connectAuthEmulator, getAuth as getClientAuth, signInWithEmailAndPassword } from "firebase/auth";
 import { collection, doc, getDocs, onSnapshot, query, setDoc, where } from "firebase/firestore";
 import assert from "node:assert/strict";
-import { execFileSync } from "node:child_process";
+import { execFileSync, spawnSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { after, before, test } from "node:test";
@@ -28,6 +31,14 @@ const EMULATOR = process.env.FIRESTORE_EMULATOR_HOST;
 const CLINICIAN = "clinician@example.com";
 const DEMO_IDS = ["demo-declining", "demo-sparse", "demo-steady"];
 const seedDir = fileURLToPath(new URL("../../", import.meta.url));
+
+/**
+ * A Clinician's ID token as `npm run allow-clinician` leaves the account (ADR 0010): the claim and a
+ * verified email.
+ * @param {string} email
+ * @returns {import("@firebase/rules-unit-testing").TokenOptions}
+ */
+const clinicianToken = (email) => ({ email, email_verified: true, role: "clinician", firebase: { sign_in_provider: "password" } });
 
 if (!EMULATOR) throw new Error("FIRESTORE_EMULATOR_HOST is not set; run this inside firebase emulators:exec");
 const [host, port] = EMULATOR.split(":");
@@ -94,7 +105,7 @@ test("one command deletes the previous Demo Patients and recreates them", async 
 });
 
 test("the Clinician's list query sees all three Demo Patients under the rules", async () => {
-  const clinician = rules.authenticatedContext("clinician-uid", { email: CLINICIAN }).firestore();
+  const clinician = rules.authenticatedContext("clinician-uid", clinicianToken(CLINICIAN)).firestore();
   const list = await assertSucceeds(getDocs(query(collection(clinician, "patients"), ...listFilters(CLINICIAN))));
   const ids = list.docs.map((d) => d.id);
   for (const id of DEMO_IDS) assert.ok(ids.includes(id), `${id} missing from the Clinician's list`);
@@ -105,7 +116,7 @@ test("the Clinician's list query sees all three Demo Patients under the rules", 
 });
 
 test("the dashboard's queries leave out what demo-steady saved during its sharing pause", async () => {
-  const clinician = rules.authenticatedContext("clinician-uid", { email: CLINICIAN }).firestore();
+  const clinician = rules.authenticatedContext("clinician-uid", clinicianToken(CLINICIAN)).firestore();
   const expected = generateDemoPatients({ today: demoToday(Date.now()), nowMillis: Date.now() }).find((p) => p.id === "demo-steady");
   assert.ok(expected);
   for (const name of STAMPED_COLLECTIONS) {
@@ -128,7 +139,7 @@ test("a signed-out visitor cannot read the Demo Patients", async () => {
 });
 
 test("the dashboard list orders them red, amber, green and re-sorts live when a flag changes", async () => {
-  const clinician = rules.authenticatedContext("clinician-uid", { email: CLINICIAN }).firestore();
+  const clinician = rules.authenticatedContext("clinician-uid", clinicianToken(CLINICIAN)).firestore();
   /** @type {Record<string, number | null>} */
   const latestFlagAt = {};
   for (const id of DEMO_IDS) {
@@ -185,8 +196,12 @@ const newPatient = (email) => ({
   healthSource: "device", synthetic: false, sharingConsent: "undecided", sharingChangedAtMillis: null,
 });
 
-/** @param {string} uid */
-const asAnonymousPatient = (uid) => rules.authenticatedContext(uid, { firebase: { sign_in_provider: "anonymous" } }).firestore();
+/**
+ * A Patient's own verified account, as a new Patient record needs (ADR 0010).
+ * @param {string} uid
+ */
+const asPatient = (uid) =>
+  rules.authenticatedContext(uid, { email: `${uid}@example.com`, email_verified: true, firebase: { sign_in_provider: "password" } }).firestore();
 
 test("the seed allows its Clinician, so the app can link a new Patient to them", async () => {
   const output = runSeed(["--clinician", "Seeded@Example.com"]);
@@ -195,7 +210,7 @@ test("the seed allows its Clinician, so the app can link a new Patient to them",
   const demo = (await db.doc("patients/demo-steady").get()).data();
   assert.equal(demo?.clinicianEmail, "seeded@example.com");
 
-  const phone = asAnonymousPatient("seed-allow-phone");
+  const phone = asPatient("seed-allow-phone");
   await assertSucceeds(setDoc(doc(phone, "patients/seed-allow-phone"), newPatient("seeded@example.com")));
   await assertFails(setDoc(doc(phone, "patients/seed-allow-phone-2"), newPatient("not-allowed@example.com")));
 
@@ -203,13 +218,21 @@ test("the seed allows its Clinician, so the app can link a new Patient to them",
   assert.ok((await db.doc(`clinicians/${CLINICIAN}`).get()).exists);
 });
 
+/**
+ * Runs allow-clinician inside the emulators.
+ * @param {string[]} args
+ */
+const allow = (args) => {
+  const run = spawnSync(process.execPath, ["allow-clinician.js", ...args], { cwd: seedDir, env: process.env, encoding: "utf8" });
+  assert.equal(run.status, 0, run.stderr);
+  return { stdout: run.stdout, stderr: run.stderr };
+};
+
 test("allow-clinician adds a Clinician to the allowlist, and again changes nothing", async () => {
-  const allow = (/** @type {string[]} */ args) =>
-    execFileSync(process.execPath, ["allow-clinician.js", ...args], { cwd: seedDir, env: process.env, encoding: "utf8" });
-  const phone = asAnonymousPatient("allow-cli-phone");
+  const phone = asPatient("allow-cli-phone");
   await assertFails(setDoc(doc(phone, "patients/allow-cli-phone"), newPatient("new-clinician@example.com")));
 
-  assert.match(allow(["--email", "New-Clinician@example.com"]), /Allowed new-clinician@example\.com in clinicians/);
+  assert.match(allow(["--email", "New-Clinician@example.com"]).stdout, /Allowed new-clinician@example\.com in clinicians/);
   allow(["--email", "new-clinician@example.com"]);
   assert.deepEqual((await db.doc("clinicians/new-clinician@example.com").get()).data(), { email: "new-clinician@example.com" });
   await assertSucceeds(setDoc(doc(phone, "patients/allow-cli-phone"), newPatient("new-clinician@example.com")));
@@ -228,4 +251,51 @@ test("allow-clinician and the seed refuse a real project without a real Clinicia
   assert.match(fails("seed.js", ["--project", "twoam-prod"]), /needs the Clinician's email/);
   assert.match(fails("seed.js", ["--project", "twoam-prod", "--clinician", CLINICIAN]), /emulator placeholder/);
   assert.match(fails("allow-clinician.js", ["--project", "twoam-prod"]), /--email <email> is required/);
+});
+
+test("allow-clinician gives the Clinician's account the claim and a verified email, keeping its other claims", async () => {
+  if (!process.env.FIREBASE_AUTH_EMULATOR_HOST) throw new Error("run with the Auth emulator: --only auth,firestore");
+  const auth = getAuth(app);
+  const account = { email: "claimed-clinician@example.com", password: "demo-password-1" };
+  await auth.getUserByEmail(account.email).then((u) => auth.deleteUser(u.uid), () => undefined);
+  const { uid } = await auth.createUser({ ...account, emailVerified: false });
+  await auth.setCustomUserClaims(uid, { team: "north" });
+
+  const { stdout } = allow(["--email", "Claimed-Clinician@Example.com"]);
+  assert.match(stdout, /Allowed claimed-clinician@example\.com in clinicians/);
+  assert.match(stdout, new RegExp(`Gave the account ${uid} the Clinician role and marked its email verified`));
+  assert.match(stdout, /signs out and in again/);
+  const user = await auth.getUser(uid);
+  assert.deepEqual(user.customClaims, { team: "north", role: "clinician" });
+  assert.equal(user.emailVerified, true);
+  assert.ok((await db.doc(`clinicians/${account.email}`).get()).exists);
+
+  // Again: nothing changes.
+  allow(["--email", account.email]);
+  assert.deepEqual((await auth.getUser(uid)).customClaims, { team: "north", role: "clinician" });
+
+  // The Clinician's next sign-in carries the claim and the verified email in the ID token, which is
+  // what the rules, the functions and the dashboard read.
+  const client = initializeClientApp({ projectId: PROJECT_ID, apiKey: "demo-api-key" }, "allow-clinician-sign-in");
+  try {
+    const clientAuth = getClientAuth(client);
+    connectAuthEmulator(clientAuth, `http://${process.env.FIREBASE_AUTH_EMULATOR_HOST}`, { disableWarnings: true });
+    const { user: signedIn } = await signInWithEmailAndPassword(clientAuth, account.email, account.password);
+    const { claims } = await signedIn.getIdTokenResult();
+    assert.equal(claims.role, "clinician");
+    assert.equal(claims.email_verified, true);
+    assert.equal(claims.email, account.email);
+  } finally {
+    await deleteClientApp(client);
+  }
+});
+
+test("allow-clinician without a sign-in account says so clearly and still writes the allowlist", async () => {
+  const email = "no-account-yet@example.com";
+  await getAuth(app).getUserByEmail(email).then((u) => getAuth(app).deleteUser(u.uid), () => undefined);
+  const { stdout, stderr } = allow(["--email", email]);
+  assert.match(stdout, /Allowed no-account-yet@example\.com in clinicians/);
+  assert.match(stderr, /No sign-in account has the email no-account-yet@example\.com yet, so it has no Clinician role/);
+  assert.match(stderr, /run this command again/);
+  assert.deepEqual((await db.doc(`clinicians/${email}`).get()).data(), { email });
 });
