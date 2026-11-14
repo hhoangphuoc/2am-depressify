@@ -24,6 +24,7 @@ import type { Firestore } from "firebase-admin/firestore";
 import * as logger from "firebase-functions/logger";
 import { HttpsError, onCall } from "firebase-functions/v2/https";
 import { onSchedule } from "firebase-functions/v2/scheduler";
+import { SCHEDULER_REGION } from "./region";
 import { assertClinicianOf } from "./clinician";
 import {
   DIGEST_TIME_ZONE,
@@ -38,7 +39,6 @@ import {
 import { GEMINI_API_KEY, type TextModelClient } from "./gemini";
 import { patientIdOf } from "./intake";
 import { callerOf, requireAuth, safely, statusOf, type IntakeCall } from "./intakeFunctions";
-import { SCHEDULED_REGION } from "./region";
 import { isSharingActive, sharingStamp } from "./sharing";
 import { COLLECTIONS, type DailyDoc, type Digest, type PatientDoc, type Summary } from "./types";
 
@@ -241,7 +241,13 @@ export function createDigestFunctions(deps: DigestDepsFactory) {
   const lazyModel: TextModelClient = { generateText: (request) => deps.textModel().generateText(request) };
 
   const weeklyDigest = onSchedule(
-    { schedule: WEEKLY_DIGEST_SCHEDULE, timeZone: DIGEST_TIME_ZONE, region: SCHEDULED_REGION, secrets: [GEMINI_API_KEY], timeoutSeconds: 540 },
+    {
+      schedule: WEEKLY_DIGEST_SCHEDULE,
+      timeZone: DIGEST_TIME_ZONE,
+      region: SCHEDULER_REGION,
+      secrets: [GEMINI_API_KEY],
+      timeoutSeconds: 540,
+    },
     async (event) => {
       // The scheduled time, not the start time, so a late run still covers the right week.
       const scheduled = Date.parse(event.scheduleTime);

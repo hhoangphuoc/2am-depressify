@@ -1,6 +1,6 @@
 # Implementation status
 
-Status as of 14 November 2026. Covers issues #7, #8, #9, #10, #11, #12, #13, #23 and #29, plus the review decisions that followed. Terms follow [GLOSSARY.md](../GLOSSARY.md). The spec is issue #5 and the data contract is in [firestore-schema.md](firestore-schema.md).
+Status as of 14 November 2026. Covers issues #7, #8, #9, #10, #11, #12, #13, #23 and #29, the backend part of #22 (the red flag email), the silence check (#28), plus the review decisions that followed. Terms follow [GLOSSARY.md](../GLOSSARY.md). The spec is issue #5 and the data contract is in [firestore-schema.md](firestore-schema.md).
 
 ## How this branch was put together
 
@@ -60,7 +60,7 @@ Not enforced for the demo: `email_verified`. Production must require it (see the
   - The Clinician never sees records saved while sharing was off.
   - Records from earlier sharing periods become visible again when the Patient shares again.
 - **Helpers for functions:** `isSharingActive(patient)` and `sharingStamp(patient)` in `src/sharing.ts`.
-  - The red flag alert (#22) and the silence check (#28) must skip Patients who aren't sharing.
+  - The red flag alert (#22) and the silence check (#28) skip Patients who aren't sharing.
   - Every function that writes must stamp what it writes.
 - **Flag level on the Patient record:** `flagLevel` and `flagReasons` count only flags stamped `true`, so a flag raised while sharing was off doesn't leak its reason to the Clinician.
 
@@ -73,8 +73,8 @@ Not enforced for the demo: `email_verified`. Production must require it (see the
 | Start Check-in (Live token) | **Built:** `startCheckIn` (callable, the Patient or anyone for a Demo Patient) | Mints a single-use token locked to `gemini-3.8-live`, the Companion's instruction and tools (`src/checkIn.ts`). Not yet deployed, and not yet run against Gemini: the request follows the research note and the SDK's `authTokens.create`, without the spike's recorded shapes (#6). |
 | Finish Check-in | Not built | #14 and #20. It will be the only writer of Summaries, ratings, Voice cues, the crisis marker and Outcome fields. |
 | Map tool | Not built | #18 |
-| Red flag alert | Not built | #22 |
-| Silence check | Not built | #28 |
+| Red flag alert | **Built:** `redFlagAlert` (#22, backend part) | Firestore trigger on the creation of `patients/{patientId}/flags/{flagId}`, in `europe-north1`, retried on failure. For a flag that is red, uncleared and stamped `sharedWithClinician: true`, of a Patient who is sharing, isn't synthetic and has a `clinicianEmail`, it writes one Trigger Email document to `mail/red-flag-<sha256(patientId/flagId)>` with `create()`, so a retry never sends twice. The subject marks a crisis apart from other reds (`[CRISIS]` / `[RED]`). The body is the display name, the flag's reason, a fixed line per kind (a quiet phone isn't read as self-harm) and a link to the Patient page from `DASHBOARD_URL` (defaults to `https://<project>.web.app`). Pure logic in `src/alerts.ts`. Logs only ids, kind and outcome; a spy test checks this. **Sending needs the Trigger Email extension, which needs a person** (below). |
+| Silence check | **Built:** `silenceCheck` (#28) | Scheduled at the top of every hour, Europe/Helsinki, in `europe-west1` (`SCHEDULER_REGION`: Cloud Scheduler has no `europe-north1`). For each Patient who is sharing, isn't synthetic and was last seen (`lastSeenAtMillis`) more than 24 hours ago, it creates a red `silent` flag at `silent-<lastSeenAtMillis>`, stamped with `sharingStamp` (true), and raises the record's `flagLevel` and `flagReasons` in the same transaction, after reading the record again. Exactly 24 hours, never seen (`null`) and a time in the future are not silent. No second flag while one is open, and none again for a silence the Clinician already cleared. Reason: "The phone has been quiet: it has not connected for over 24 hours." It sends no email itself: `redFlagAlert` does. Pure logic in `src/silence.ts`. Logs only ids and counts; a spy test checks this. **Demo:** `npm run silence-test -- --patient <id> [--project <id>]` in `firebase/seed` sets a live, sharing Patient's last sign of life to 25 hours ago (refuses Demo Patients and Patients not sharing); force-run the Cloud Scheduler job to run the check at once. No callable or HTTP trigger was added. |
 
 There is also a trivial `health` endpoint.
 
@@ -122,7 +122,7 @@ The callables are reached through the Firebase SDK (`httpsCallable` in `europe-n
 | Maps agent tools (weather, text search, routes) | Not started | #18. The key will be the function secret `MAPS_API_KEY`; it never reaches the phone. |
 | Google Calendar API v3 | Not started | #19. Permission is granted on the phone. |
 | Health Connect and HealthKit | Not started | Read on the phone (ADR 0003), so there is no backend part beyond the `daily` contract. |
-| Trigger Email extension (`mail` collection) | Not started | #22. The rules already reserve `mail` for functions. |
+| Firebase Trigger Email extension (`firebase/firestore-send-email`, `mail` collection) | **Needs a person:** not installed | `redFlagAlert` writes the documents the extension sends. Installing it needs SMTP credentials (connection URI, password and a From address), so nobody has done it yet. Steps: [Red flag email](../README.md#red-flag-email) in the README: `firebase ext:install firebase/firestore-send-email --project prod`, collection `mail`, location `europe-north1`, then `firebase deploy --only extensions --project prod`. The rules keep `mail` closed to clients (rules test "The mail collection is not writable or readable by any client"). |
 
 ### Checked against the design, ADRs and research
 
@@ -134,7 +134,7 @@ The callables are reached through the Firebase SDK (`httpsCallable` in `europe-n
 | No name or id sent to Gemini | Gemini research, data handling | Holds for the Digest. An Intake report is sent as the Clinician pasted it, so paste only reports without identifiers. |
 | Paid tier and AI Studio logging off | Gemini research, data handling | A setup step, now in the README. Not something the code can enforce. |
 | Live tokens and Decisions need `v1beta` | Gemini research, API versions | Noted in `src/gemini.ts`; the SDK defaults to `v1`. |
-| EU region | System design, ADR 0008 | `europe-north1` for the callables and the dashboard; `europe-west1` for the scheduled Digest. |
+| EU region | System design, ADR 0008 | `europe-north1` for the functions and the dashboard; the scheduled `weeklyDigest` and `silenceCheck` run in `europe-west1`, because Cloud Scheduler has no `europe-north1` location. |
 | GitLive `firebase-kotlin-sdk` 2.8.0 in shared code | ADR 0008 | Holds. |
 | Anonymous Patient sign-in, linked to the one Clinician on first open | System design, roles | Holds, now behind `main`'s screens. |
 
@@ -167,11 +167,11 @@ Results on this branch, all from local runs on 14 November 2026:
 | Kotlin `shared` (session and view model wiring, with fakes) | `./gradlew :shared:testAndroidHostTest` | 10 pass |
 | Android build | `./gradlew :androidApp:assembleDebug` | APK builds |
 | iOS build | `xcodegen generate`, then `xcodebuild` for the arm64 simulator | Builds and links with the Firebase iOS SDK |
-| Functions | `cd firebase/functions && npm test` | 123 pass |
-| Seed | `cd firebase/seed && npm test` | 78 pass |
+| Functions | `cd firebase/functions && npm test` | 206 pass |
+| Seed | `cd firebase/seed && npm test` | 89 pass |
 | Dashboard helpers | `cd firebase/hosting && node --test` | 308 pass |
-| Rules, functions and end-to-end on the emulators | `firebase emulators:exec --only auth,firestore,functions --project demo-twoam "npm --prefix functions run test:emulator"` | Pass with Firebase CLI 15.36.0 |
-| Seed on the emulator | `... "npm --prefix seed run test:emulator"` | 14 pass |
+| Rules, functions and end-to-end on the emulators | `firebase emulators:exec --only auth,firestore,functions --project demo-twoam "npm --prefix functions run test:emulator"` | 86 pass with Firebase CLI 15.36.0, including the `redFlagAlert` trigger and the silence test raising red with one email |
+| Seed on the emulator | `... "npm --prefix seed run test:emulator"` | 16 pass (with the Functions emulator; the seeded Demo Patients' red flags are skipped as synthetic) |
 | Patient app on an Android emulator (API 36) against the Firebase emulators, with the dashboard open | By hand, see below | Pass |
 
 The emulator suite needs Firebase CLI 15 or newer. With CLI 14.22.0 the Functions emulator kills every function built with `firebase-functions` 7, and the six callable tests time out.
@@ -184,11 +184,32 @@ The end-to-end run on the Android emulator:
 4. With the connection to Firestore cut, "Stop sharing" showed "Your sharing choice could not be saved" after the timeout, and both the screen and the record stayed on `granted`.
 5. After a restart the app opened on Today with the stored choice, and the Patient was listed again.
 
+### Live deployment (14 November 2026)
+
+The real project `junction26hel-7400` ("Hack Junction 2026-7400", Blaze plan) is set up. It was deployed from the backend stack (`chore/real-project-config`), whose `firebase/` matches this branch's:
+
+| Part | State |
+|---|---|
+| Firestore `(default)` in `europe-north1` | Security rules and indexes deployed. A signed-out read of a Patient or of `clinicians` gets HTTP 403. |
+| Clinician allowlist | One allowed Clinician (the address is kept out of this repository). |
+| Demo Patients | Seeded: 401 synthetic documents, linked to the allowed Clinician. |
+| Functions in `europe-north1` | `extractIntake`, `saveIntake`, `generateDigest`, `health`. Callers can reach them; the callables refuse anyone not signed in ("Sign in to continue."). |
+| `weeklyDigest` in `europe-west1` | Cloud Scheduler has no `europe-north1` location (`SCHEDULER_REGION` in `region.ts`). Not publicly invokable. |
+| `GEMINI_API_KEY` secret | Set. One call with the stored key to `gemini-4-hydrogen` (storage off) answered in about 3 s. |
+| Container cleanup policies | Set in both regions. |
+
+Deploy notes:
+- Cloud Build runs `npm ci` with Node 22's npm 10, so regenerate `firebase/functions/package-lock.json` with npm 10 (`npx npm@10 install`). The lock on this branch passes `npx npm@10 ci`.
+- The first deploy didn't grant public invoker access on the callables. It was added by hand (`allUsers` → Cloud Run Invoker) on `extractintake`, `saveintake`, `generatedigest` and `health` only.
+
+`redFlagAlert` and `silenceCheck` are not deployed yet: deploy them with `firebase deploy --only functions:redFlagAlert,functions:silenceCheck --project prod` together with the Trigger Email extension.
+
 **Not verified (needs a person, hardware or credentials):**
 - The Patient app against the real project, and on iOS beyond the build.
-- Deploying from this branch.
-- A real Gemini call.
+- A full Intake extraction or Digest through the deployed callables, signed in as the Clinician. Only the one direct call to `gemini-4-hydrogen` above has been made.
 - The app on the S24+ and on an iPhone.
+- The red flag email arriving in an inbox: needs the Trigger Email extension installed with SMTP credentials, then a red flag on a live, sharing Patient (#22's S24+ check).
+- The silence check on the real project: deploy `silenceCheck`, run `npm run silence-test -- --patient <live id> --project <id>`, force-run the scheduler job (`gcloud scheduler jobs run firebase-schedule-silenceCheck-europe-west1 --location=europe-west1`; the job name is the Firebase default and has not been seen in a real project yet), then confirm red on the dashboard, the email, and no Crisis notice or notification on the phone (#28's last acceptance criterion).
 
 ## Decisions made in review
 
@@ -196,7 +217,7 @@ The end-to-end run on the Android emulator:
 2. **Re-consent shares future records only.** Only the off period is hidden, using the sharing stamp.
 3. **Ratings and Voice cues** are included until the Patient leaves them out.
 4. **Clearing a flag.** The dashboard computes the new level when a flag is cleared; the rules don't check it.
-5. **Region: `europe-north1` (Finland).** The real Firestore database is there, and every callable function runs there too; the scheduled `weeklyDigest` runs in `europe-west1`. It is set once for the functions (`REGION` in `firebase/functions/src/region.ts`) and once for the dashboard (`FUNCTIONS_REGION` in `firebase/hosting/js/functions.js`); `firebase/functions/test/region.test.ts` keeps the two in step. The database location itself is chosen when the database is created, not in this repository.
+5. **Region: `europe-north1` (Finland).** The real Firestore database is there, and every function runs there too, except the scheduled `weeklyDigest` and `silenceCheck`: Cloud Scheduler has no `europe-north1` location, so they run in `europe-west1` (`SCHEDULER_REGION`). It is set once for the functions (`REGION` in `firebase/functions/src/region.ts`) and once for the dashboard (`FUNCTIONS_REGION` in `firebase/hosting/js/functions.js`); `firebase/functions/test/region.test.ts` keeps the two in step. The database location itself is chosen when the database is created, not in this repository.
 6. **Values the spec didn't fix:**
    - The Baseline spread floor: `max(sample SD, 0.05 × |median|, 0.001)`.
    - A 28-day window for "what seems to help".
@@ -211,4 +232,7 @@ The end-to-end run on the Android emulator:
   - Retry a refused write with a fresh stamp, especially a crisis flag.
   - Create a new Suggestion rather than editing `kind` or `details`.
 - **Still open from the spec:** whether to delete Summaries and Digests when sharing is withdrawn.
-- **Blocked on #6** (needs the S24+, the Watch and an iPhone): #14–#22, #24–#28 and #30–#32.
+- **Red flag email for Demo Patients:** `redFlagAlert` skips `synthetic: true` Patients, because the seed recreates their red flags on every run. If a demo should email from a Demo Patient, that needs a demo control that raises a fresh flag, plus a decision to lift the skip for it.
+- **Red flag alert, app side (#22):** the Crisis notice, the dialler, the crisis controller, the offline queue and Support in Settings belong to the app team. The phone only has to create the red `crisis` flag (stamped, not duplicated while one is open). The email follows from that.
+- **Silence test from the phone (#31):** the demo panel's "Silence test" can write the Patient's own `lastSeenAtMillis` 25 hours back (the rules let the Patient update that field); until the panel exists, `npm run silence-test` does the same. The phone's daily job must not overwrite it before the next check runs.
+- **Blocked on #6** (needs the S24+, the Watch and an iPhone): #14–#22, #24–#27 and #30–#32. The backend part of #28 is built; its device check is not.

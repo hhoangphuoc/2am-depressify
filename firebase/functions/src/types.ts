@@ -268,7 +268,7 @@ export interface MailMessage {
   text: string;
 }
 
-/** Top-level `mail/{autoId}`. Written by functions only; read by the Trigger Email extension. */
+/** Top-level `mail/{mailId}`, one per red flag (`mailIdFor` in alerts.ts). Written by functions only (`redFlagAlert`); read by the Trigger Email extension. */
 export interface MailDoc {
   to: string;
   message: MailMessage;

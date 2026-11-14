@@ -5,7 +5,7 @@ import type { PatientDoc } from "./types";
  *
  * Functions use the Admin SDK, which bypasses the security rules, so every function that acts for
  * the Clinician must check this itself. While it is false:
- * - no flag email is sent for the Patient (Flag email, #22): flags are still recorded, so the
+ * - no flag email is sent for the Patient (`redFlagAlert`, #22): flags are still recorded, so the
  *   Patient's own record stays complete, but the Clinician is not alerted;
  * - the silence check skips the Patient (#28).
  * - the weekly Digest skips the Patient and "Generate now" is refused (#23).

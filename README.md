@@ -98,11 +98,13 @@ firebase emulators:exec --only auth,firestore,functions --project demo-twoam "np
 firebase emulators:exec --only auth,firestore --project demo-twoam "npm --prefix seed run test:emulator"
 ```
 
+With the Functions emulator as well (`--only auth,firestore,functions`, after `npm run build` in `firebase/functions`), the suites also call the deployed callables and check that the `redFlagAlert` trigger writes its email, including for the silence check's flag after the silence test. The first such run writes `firebase/functions/.env.local` with an empty `DASHBOARD_URL` (gitignored).
+
 The rules are described, with a who-can-do-what table, in [`docs/firestore-schema.md`](docs/firestore-schema.md#security-rules).
 
 ## Set up a real Firebase project
 
-The Firestore database and the callable functions are in `europe-north1` (Finland), and the scheduled `weeklyDigest` is in `europe-west1`; the functions' region is `REGION` in `firebase/functions/src/region.ts`, and the dashboard's copy is checked against it. Real IDs, keys and the Clinician's email go only into gitignored files (`secrets.properties`, `GoogleService-Info.plist`, `Secrets.plist`) or into Firestore, never into a commit. Deploying functions needs the Blaze plan.
+The Firestore database and every function are in `europe-north1` (Finland), except the scheduled `weeklyDigest` and `silenceCheck`, which run in `europe-west1` because Cloud Scheduler has no `europe-north1` location. The functions' regions are `REGION` and `SCHEDULER_REGION` in `firebase/functions/src/region.ts`, and the dashboard's copy of `REGION` is checked against it. Real IDs, keys and the Clinician's email go only into gitignored files (`secrets.properties`, `GoogleService-Info.plist`, `Secrets.plist`) or into Firestore, never into a commit. Deploying functions needs the Blaze plan.
 
 1. **Sign in and add the project under an alias.** `.firebaserc` keeps `demo-twoam` as the default so that local runs and tests never reach a real project, so name the real one explicitly every time:
    ```sh
@@ -135,6 +137,8 @@ The Firestore database and the callable functions are in `europe-north1` (Finlan
    ```sh
    firebase deploy --only functions --project prod
    ```
+
+8. **The red flag email (needs a person with SMTP credentials).** `redFlagAlert` deploys with the functions in step 7 and writes emails to the `mail` collection, but nothing is sent until the Firebase **Trigger Email** extension is installed. It needs an SMTP account, which only a person can provide. See [Red flag email](#red-flag-email) for the steps.
 
 The dashboard can then be deployed with `firebase deploy --only hosting --project prod`.
 
@@ -235,6 +239,95 @@ The Patient page shows the latest weekly Digest: the dates it covers, how many S
 | `generateDigest` | "Generate now" on the dashboard, Clinician only: `{patientId}` → `{digest}` | The current ISO week from Monday to today; pressing it again overwrites that week |
 
 Both call the text model with storage off and need the `GEMINI_API_KEY` secret. A week with no Check-ins is written from fixed copy without calling the model, so it works in the emulator; a week with Check-ins fails there with a retry, and nothing is sent to Gemini. Patients who are not sharing get no Digest. The scheduled job does not run in the emulator (it needs Pub/Sub); the emulator tests run its handler against Firestore with a fake model instead. Week semantics are in [`docs/firestore-schema.md`](docs/firestore-schema.md#digestsisoweek-digest).
+
+### Red flag email
+
+When a red flag is created (`patients/{id}/flags/{flagId}`), the `redFlagAlert` function writes one email for the Patient's Clinician to the top-level `mail` collection. The Firebase Trigger Email extension then sends it. Every red flag is covered, whoever raises it: the phone's crisis tool, Finish Check-in's backstop, the phone's daily job, and the hourly silence check (#28). They only have to create the flag.
+
+| Sent when | Not sent when |
+|---|---|
+| The flag is red, uncleared and stamped `sharedWithClinician: true`; the Patient's `sharingConsent` is `granted` now; the Patient is not a Demo Patient; `clinicianEmail` is an address | Amber or green; already cleared; stamped `false`; the Patient declined or withdrew sharing; `synthetic: true` (the seed recreates the Demo Patients' red flags on every run); no Clinician address |
+
+- **Subject:** `[CRISIS] Red flag for <name>: crisis in a Check-in`, or `[RED] Red flag for <name>: quiet phone` (or `sleep collapse`, `inactive`).
+- **Body:** the flag's reason, a fixed line for the kind, the time in Helsinki and a link to the Patient's dashboard page. It never includes a transcript, quote, Summary or Intake.
+- **Sent once per flag:** the mail document id is derived from the Patient and flag ids and written with `create()`, so a retried trigger never sends a second email.
+- **Logs:** ids, the kind and the outcome only.
+- **The link:** uses the `DASHBOARD_URL` parameter, which is not a secret. When it is empty (the default), the link goes to `https://<project-id>.web.app`. To set it, add `DASHBOARD_URL=https://...` to `firebase/functions/.env.<project-id>` (gitignored) before deploying, or answer the deploy prompt.
+
+The logic is in `firebase/functions/src/alerts.ts` (pure, `alertDecision`/`alertFor`) and `src/alertFunctions.ts` (the trigger).
+
+**Installing the Trigger Email extension (needs a person).** Nobody has installed it yet. You need:
+
+- an SMTP account that may send from your address, for example a Gmail app password, SendGrid, Mailgun or your organisation's relay;
+- its connection URI, for example `smtps://<username>@smtp.example.com:465`;
+- its password;
+- the From address, for example `Depressify <alerts@your-domain>`.
+
+None of these go into a commit.
+
+```sh
+cd firebase
+firebase ext:install firebase/firestore-send-email --project prod
+```
+
+Answer the prompts:
+
+| Prompt | Answer |
+|---|---|
+| Cloud Functions location | `europe-north1`, the database's region. If it isn't offered, pick the nearest EU region offered, and check the extension's docs that it still triggers on a database in `europe-north1`. |
+| Firestore instance ID / location | `(default)` / `europe-north1` |
+| Authentication type | Username and password |
+| SMTP connection URI | Your provider's URI, without the password |
+| SMTP password | Your provider's password. The extension stores it in Secret Manager. |
+| Email documents collection | `mail` |
+| Default FROM address | Your From address |
+| Default reply-to, users and templates collections, TTL | Leave empty, or keep the defaults |
+
+`ext:install` records the extension in `firebase.json` and writes `firebase/extensions/firestore-send-email.env`. That file can hold your SMTP username and is gitignored, so keep it out of commits. Then deploy:
+
+```sh
+firebase deploy --only extensions --project prod
+firebase deploy --only functions:redFlagAlert --project prod   # if the functions were deployed before this function existed
+```
+
+On the first deploy of a Firestore trigger, Google Cloud may report that Eventarc permissions are still propagating. If it does, wait a few minutes and deploy again.
+
+**To check it end to end:**
+
+1. On a live, sharing Patient (`synthetic: false`) linked to your Clinician, create a red flag, for example with the app's crisis phrase.
+2. Watch the `mail` document get a `delivery.state` of `SUCCESS` (the extension writes `delivery` back).
+3. Confirm the email arrives.
+
+### Silence check
+
+A phone cannot report its own silence, so `silenceCheck` watches for it. It runs at the top of every hour (Europe/Helsinki) in `europe-west1`, because Cloud Scheduler has no `europe-north1` location. It raises a red `silent` flag for each Patient whose phone has shown no sign of life (`lastSeenAtMillis`) for over 24 hours. `redFlagAlert` then emails the Clinician and the dashboard shows the banner, as for any red flag. Nothing reaches the Patient's phone.
+
+| Raised for | Skipped |
+|---|---|
+| A Patient who is sharing, is not synthetic, and was last seen more than 24 hours ago | Seen 24 hours ago or less (exactly 24 hours is not silent); never seen (`null`); last seen "in the future" (a clock ahead); not sharing; a Demo Patient (`synthetic: true`); a `silent` flag still open; this silence already flagged, even if the Clinician cleared it |
+
+- **The flag:** `patients/{id}/flags/silent-<lastSeenAtMillis>`, red, stamped `sharedWithClinician: true`. The reason is "The phone has been quiet: it has not connected for over 24 hours." It says nothing about mood or self-harm. The email adds that a quiet phone is not by itself a sign of self-harm.
+- **One flag per silence:** the id comes from the last sign of life, so every run during the same silence finds it, and a retried run never writes a second one. The flag and the Patient's raised `flagLevel` and `flagReasons` are written in one transaction, after the record is read again.
+- **Logs:** Patient and flag ids and counts only.
+- **In the emulator** the scheduled trigger does not run (it needs Cloud Scheduler and Pub/Sub). The emulator tests run its handler against Firestore, and with the Functions emulator they check that `redFlagAlert` writes exactly one email for the flag.
+
+The logic is in `firebase/functions/src/silence.ts` (pure: `silenceDecision`, `silencePlan`) and `src/silenceFunctions.ts` (the scheduled function and its Firestore transaction).
+
+**Silence test (demo).** To make the next check raise red for one live Patient, set that Patient's last sign of life to 25 hours ago:
+
+```sh
+cd firebase/seed
+npm run silence-test -- --patient <patient-id>                            # emulator
+npm run silence-test -- --patient <patient-id> --project <your-project-id> # a real project
+```
+
+The Patient id is the phone's auth uid; it is also in the dashboard's address bar (`#/patient/<id>`). The command changes only `lastSeenAtMillis`. It refuses a Demo Patient (synthetic Patients are never silent) and a Patient who isn't sharing, because the check would skip them. To run the deployed check now instead of waiting for the top of the hour, force-run its Cloud Scheduler job (the command prints it):
+
+```sh
+gcloud scheduler jobs run firebase-schedule-silenceCheck-europe-west1 --location=europe-west1 --project=<your-project-id>
+```
+
+The phone's daily job writes a new sign of life when it runs, which ends the silence, so run the check soon after the command. There is no callable or HTTP way to start the check: only someone with the project's credentials can run it early.
 
 ## Demo Patients
 

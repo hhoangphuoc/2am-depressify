@@ -40,7 +40,7 @@ patients/{patientId}                 PatientDoc      patientId = the Patient's a
   flags/{flagId}                     Flag
   visits/{visitId}                   Visit           written by the Clinician
   digests/{isoWeek}                  Digest          isoWeek = e.g. 2026-W46
-mail/{autoId}                        MailDoc         written by functions only; read by Trigger Email
+mail/{mailId}                        MailDoc         written by functions only; read by Trigger Email
 clinicians/{email}                   (allowlist)     the Clinicians a new Patient may link to; Admin SDK only
 ```
 
@@ -56,7 +56,7 @@ clinicians/{email}                   (allowlist)     the Clinicians a new Patien
 | `flagReasons` | string[] | `[]` | The reasons of those flags, highest level first, then newest. Plain sentences, never a number. |
 | `quietHoursStart` | int 0..23 | `21` | No Nudges inside quiet hours; the window may cross midnight. |
 | `quietHoursEnd` | int 0..23 | `9` | |
-| `lastSeenAtMillis` | int or null | `null` | Last sign of life from the phone. The hourly silence check reads it. |
+| `lastSeenAtMillis` | int or null | `null` | Last sign of life from the phone. The hourly silence check (`silenceCheck`, #28) reads it: older than 24 hours on a sharing, non-synthetic Patient raises red `silent`. `null` (never seen) is not silent. |
 | `lastCheckInAtMillis` | int or null | `null` | |
 | `healthSource` | HealthSource | `device` | Exactly one source per Patient. |
 | `synthetic` | boolean | `false` | `true` for Demo Patients. |
@@ -158,6 +158,10 @@ The app records a Suggestion and changes only `status` and `booked`. The Outcome
 | `clearedAtMillis` | int or null | Set only by the Clinician, and only on a flag they can see. History is kept. |
 | `sharedWithClinician` | boolean | The sharing stamp. A flag stamped `false` is never shown to the Clinician, never counts toward the Patient's `flagLevel`, and does not stop a shared flag of the same kind being raised later (the "not raised again" rule compares flags with the same stamp). |
 
+**The silence check's flags.** `silenceCheck` (#28, hourly) writes red `silent` flags with the id `silent-<lastSeenAtMillis>`: one id per silence, so a retried or overlapping run never writes a second flag for the same silence, and a silence whose flag the Clinician has cleared is not flagged again until the phone has been seen and gone quiet once more. It writes only for a Patient who is sharing (`isSharingActive`), is not synthetic, and whose `lastSeenAtMillis` is more than 24 hours old (exactly 24 hours, `null` and a time in the future are not silent), and only when no uncleared `silent` flag with the same stamp is open. In the same transaction it raises the Patient's `flagLevel` to `red` and puts the reason first in `flagReasons`, keeping the other reasons; nothing else on the record changes. The flag is stamped with `sharingStamp(patient)`, which is `true` there. The reason is always "The phone has been quiet: it has not connected for over 24 hours." It says nothing about mood or self-harm.
+
+**Creating a red flag emails the Clinician.** Any writer can create the flag: the phone's crisis tool, Finish Check-in's Decisions backstop (#20), the phone's daily job, or the hourly silence check (#28, `silent`). The `redFlagAlert` function reacts to every created flag and writes the email to [`mail`](#mailmailid-maildoc). A writer must never send mail itself, and must not create a red flag a second time to "resend" it. The "not raised again" rule already prevents that, and the email is tied to the flag's id.
+
 ### `visits/{visitId}`: Visit
 
 | Field | Type | Notes |
@@ -191,15 +195,30 @@ A Summary belongs to the week of its `createdAtMillis` in Helsinki time; a daily
 
 **Patients who are not sharing get no Digest.** The weekly job skips them (`isSharingActive`) and `generateDigest` refuses them (`assertClinicianOf`). A Digest is written for the Clinician, who cannot read it while sharing is off, so making one would send the Patient's week to the model with no reader. Digests written before sharing was withdrawn are kept: deleting derived records is an open decision (see [Sharing Consent](#sharing-consent)). Nothing logs a Summary, a quote, the prompt or the Digest text.
 
-### `mail/{autoId}`: MailDoc
+### `mail/{mailId}`: MailDoc
 
-The shape the Trigger Email extension reads. Written by functions only.
+Red flag emails for the Clinician (issue #22), in the shape the [Firebase Trigger Email extension](../README.md#red-flag-email) reads. **Written only by the `redFlagAlert` function** (`firebase/functions/src/alertFunctions.ts`, Admin SDK), and only when a flag is created in `patients/{patientId}/flags/{flagId}`. No client can read or write the collection.
 
 | Field | Type | Notes |
 |---|---|---|
-| `to` | string | The Clinician's email. |
-| `message.subject` | string | `[CRISIS]` or `[RED]` plus the display name. |
-| `message.text` | string | The reason and a dashboard link. Never a transcript or a quote. |
+| `to` | string | The Patient's `clinicianEmail`, read from the Patient record when the flag is created, trimmed and in lower case. Never in code. |
+| `message.subject` | string | `[CRISIS] Red flag for <display name>: crisis in a Check-in` for a crisis. Any other red is `[RED] Red flag for <display name>: <kind>`, where `silent` is worded "quiet phone". |
+| `message.text` | string | Plain text: who the flag is for and when (Helsinki time); `Reason: ` and the flag's reason on one line, at most 300 characters; a fixed line for the kind (the quiet-phone line says a quiet phone is not by itself a sign of self-harm); and a link to the Patient's dashboard page, `<DASHBOARD_URL>/#/patient/<patientId>`. It never carries a transcript, a quote, Summary text, the Intake or any other field, and it uses the companion's words: no diagnosis, treatment or score. |
+
+The extension adds a `delivery` map (state, attempts, error) to the document as it sends. Nothing in this repository reads it.
+
+**Document id:** `red-flag-` followed by the SHA-256 hex of `<patientId>/<flagId>`. The function writes it with `create()`. Triggers are delivered at least once and this one is retried on failure, so a second delivery finds the document and sends nothing. There is at most one email per flag.
+
+**When an email is written** (`alertDecision` in `firebase/functions/src/alerts.ts`, a pure function):
+
+- The flag is `red`, has `clearedAtMillis: null` and is stamped `sharedWithClinician: true`. Amber and green never email.
+- The Patient's `sharingConsent` is `granted` when the trigger runs (`isSharingActive`). A Patient who declined or withdrew sharing gets no email, and nothing is sent later if they share again.
+- The Patient is not a Demo Patient (`synthetic: false`). The seed deletes and recreates the Demo Patients' invented red flags on every run, and each run would otherwise email the Clinician.
+- `clinicianEmail` is an address.
+
+Each run logs one line: the Patient and flag ids, the flag's kind (a `FlagKind`, or `other`) and the outcome (`sent`, `duplicate`, or `skipped` with the check that stopped it). It never logs the reason, the display name, the address or the email.
+
+**`DASHBOARD_URL`** is a non-secret function parameter for the link. Empty, which is the default, means the project's Hosting site, `https://<project-id>.web.app`.
 
 ### `clinicians/{email}`: allowlist
 
@@ -220,6 +239,7 @@ The Clinicians a new Patient may link to, one document per email. The document i
 | Clear after follow-up | `patients/{id}/flags` where `sharedWithClinician == true`, then the reviewed flags by id in a transaction | none |
 | Digest functions | `summaries` by `createdAtMillis` range, `daily` by `date` range (Admin SDK); the stamp is filtered in code | single field (automatic) |
 | Seed reset | `patients` where `synthetic == true` (Admin SDK) | single field (automatic) |
+| Silence check | all `patients`, selecting `sharingConsent`, `synthetic` and `lastSeenAtMillis` only; then, in each silent Patient's transaction, `patients/{id}/flags` where `kind == "silent"` (Admin SDK) | single field (automatic) |
 
 The list query must carry the sharing filter (built by `clinicianListFilters` in `firebase/hosting/js/lib/sharing.js`); without it the rules reject the whole query. Likewise every query on a stamped collection is built by `patientCollectionQuery` in the same file (bound to the browser SDK in `js/queries.js`), which adds `sharedWithClinician == true`. A new query that adds an `orderBy` or range on another field needs a composite index.
 
@@ -264,7 +284,7 @@ A Clinician query on a stamped collection must filter on `sharedWithClinician ==
 The Patient decides whether their Clinician sees their progress (issue #29, ADR 0005). `undecided` (a new record) and `declined` both mean the Clinician sees nothing.
 
 - **Rules.** `clinicianCanRead` in `firestore.rules` requires `sharingConsent == 'granted'`, and every Clinician read and write of the record and its collections goes through it. Withdrawing takes effect at once: the dashboard's list query (which filters on `granted`) drops the Patient, and a listener already open on the Patient's record or collections gets `permission-denied`. The dashboard maps that error to a "sharing withdrawn" state with `sharingStateFromError` in `firebase/hosting/js/lib/sharing.js`; every Patient view should use it rather than show an error. A Demo Patient stays readable through the demo shortcut, so views also check the field with `sharingStateFromSnapshot`.
-- **Functions.** Functions use the Admin SDK and bypass the rules, so they check `isSharingActive(patient)` from `firebase/functions/src/sharing.ts` themselves. **The flag email (#22) and the silence check (#28) must use it**: while it is false no flag email is sent for the Patient and the silence check skips them. The weekly Digest (#23) skips them too, and `generateDigest` refuses them. Check-ins, Summaries and the Patient's own records continue.
+- **Functions.** Functions use the Admin SDK and bypass the rules, so they check `isSharingActive(patient)` from `firebase/functions/src/sharing.ts` themselves. **The flag email (#22, `redFlagAlert`) and the silence check (#28, `silenceCheck`) use it**: while it is false no flag email is sent for the Patient and the silence check skips them. The weekly Digest (#23) skips them too, and `generateDigest` refuses them. Check-ins, Summaries and the Patient's own records continue.
 - **Granting again** shares future records only: the Clinician sees what is saved from then on and, again, what was saved during earlier sharing periods, but never what was saved while the Patient was not sharing. That is the sharing stamp, below. The app says so where the Patient withdraws and where they share again (`SharingCopy` in `shared`). Whether records are deleted on withdrawal is an open decision.
 - **The app** shows the welcome and the sharing choice while `sharingConsent` is `undecided`, and saves a decision with `sharingChangedAtMillis` and `consents/sharing` in one transaction. Nothing moves a record back to `undecided`.
 
@@ -273,7 +293,7 @@ The Patient decides whether their Clinician sees their progress (issue #29, ADR 
 Re-consent shares future records only. Every document in `daily`, `checkIns`, `summaries`, `suggestions`, `flags` and `digests` carries `sharedWithClinician`, set when the document is created to whether the Patient's `sharingConsent` is `granted` at that moment, and never changed.
 
 - **Rules.** On a client create the stamp must equal `patient.sharingConsent == 'granted'` as it stands before the write; on a client update it must not change (nor be dropped). The Clinician reads a stamped document only when `clinicianCanRead` holds and the document is stamped `true`, and clears only flags stamped `true`. The Patient, and the demo shortcut, read everything.
-- **Writers.** The app stamps with `PatientDoc.sharingStamp()` (core) and functions with `sharingStamp(patient)` (`firebase/functions/src/sharing.ts`); the Admin SDK bypasses the rules, so every function writer must call it: the Digest functions today, and Finish Check-in (#14), the silence check (#28) and any other writer of these collections later. A writer that rewrites an existing document (the daily job's later runs, a retried finish) keeps the stamp the document has; it never deletes and recreates a document to change it.
+- **Writers.** The app stamps with `PatientDoc.sharingStamp()` (core) and functions with `sharingStamp(patient)` (`firebase/functions/src/sharing.ts`); the Admin SDK bypasses the rules, so every function writer must call it: the Digest functions and the silence check (#28) today, and Finish Check-in (#14) and any other writer of these collections later. A writer that rewrites an existing document (the daily job's later runs, a retried finish) keeps the stamp the document has; it never deletes and recreates a document to change it.
 - **Flags and the Patient's level.** The Clinician can read only flags stamped `true`, so the record's `flagLevel` and `flagReasons` count only those: a flag raised while not sharing is stamped `false`, leaves the level and reasons alone, and does not block raising a shared flag of the same kind later. That keeps the record free of reasons the Clinician must not see, and lets "Clear after follow-up" recompute the level from all the flags that make it. The dashboard shows the level and reasons from the visible open flags once they load (`shownAttention` in `firebase/hosting/js/lib/clear.js`), and from the record only until then.
 - **Dashboard.** Every query on a stamped collection goes through `patientCollectionQuery` (`firebase/hosting/js/lib/sharing.js`). On a Demo Patient any signed-in user has the Patient's access, so there the rules do not hide unshared documents; the dashboard's filter does.
 - **Not stamped.** `consents` (the current permissions the dashboard needs), `visits` (written by the Clinician) and the Patient record. The record's `lastSeenAtMillis` and `lastCheckInAtMillis` are current values, not records: after sharing again, `lastCheckInAtMillis` can be the time of a Check-in saved while not sharing.
