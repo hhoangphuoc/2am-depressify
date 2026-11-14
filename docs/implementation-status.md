@@ -1,6 +1,6 @@
 # Implementation status
 
-Status as of 14 November 2026. Covers issues #7, #8, #9, #10, #11, #12, #13, #23 and #29, the backend part of #22 (the red flag email), plus the review decisions that followed. Terms follow [GLOSSARY.md](../GLOSSARY.md). The spec is issue #5 and the data contract is in [firestore-schema.md](firestore-schema.md).
+Status as of 14 November 2026. Covers issues #7, #8, #9, #10, #11, #12, #13, #23 and #29, the backend part of #22 (the red flag email), the backend part of #14 (Start and Finish Check-in, and the Live protocol parsing in `core`), the review decisions that followed, and the backend half of the #6 spikes ([spike-results.md](spike-results.md)). Terms follow [GLOSSARY.md](../GLOSSARY.md).
 
 ## How this branch was put together
 
@@ -70,13 +70,21 @@ Not enforced for the demo: `email_verified`. Production must require it (see the
 |---|---|---|
 | Extract Intake | **Built:** `extractIntake` and `saveIntake` (#13) | Clinician-only callables. Extraction writes nothing; saving writes only `intakeHighlights` (at most 120 words). The report is never stored or logged, and a spy test checks this. |
 | Weekly Digest | **Built:** `weeklyDigest` (Mondays 07:00 Helsinki) and `generateDigest` (callable) (#23) | Document key is the ISO week (`2026-W46`). Uses only shared records. A week with no Check-ins gets fixed text and never calls the model. Patients who aren't sharing get no Digest. |
-| Start Check-in (Live token) | **Built:** `startCheckIn` (#14, backend part) | Patient (or anyone on a Demo Patient) only. Mints a single-use token with the recorded `bidiGenerateContentSetup` + `fieldMask` body, locked to `gemini-3.8-live`, the Brief plus fixed safety rules, the tool declarations (`src/tools.ts`, empty until #17), AUDIO output and both transcriptions; 60 s to connect, 10-minute lifetime. Creates `checkIns/{id}` (function-only fields empty, `sharingStamp`). A real mint and a typed turn on that token were checked by hand. Client contract in the [README](../README.md#check-in-start-and-finish). |
-| Finish Check-in | **Built:** `finishCheckIn` (#14, backend part); Decisions (#20) and the Outcome (#21) not yet | Text model with storage off and structured output; writes the Summary (keyed by the Check-in, a retry overwrites, stamp kept), the ratings, Voice cues (from the draft), crisis marker and end time, and the Patient's `lastCheckInAtMillis` / `lastSeenAtMillis`, in one transaction. Silent Check-ins and bad model output give a minimal Summary. The draft is never written or logged; a spy test checks this. `TODO(#20)` and `TODO(#21)` mark where the Decisions call and the Outcome write go. |
+| Start Check-in (Live token) | **Built:** `startCheckIn` (#14, backend part), callable in `europe-north1`, not deployed | Caller rule (`assertActsAsPatient` in `src/patientCaller.ts`, mirroring `actsAsPatient` in the rules): `auth.uid == patientId`, or anyone signed in when the Patient is `synthetic: true`; signed out is `unauthenticated`, anyone else or a missing Patient `permission-denied`. Request `{patientId, brief, mode?}` (Brief 1 to 12,000 characters, mode `typed` or `spoken`), response `{checkInId, token, model, endpoint, mode, connectByMillis, expiresAtMillis}`. Mints a single-use token with the recorded `bidiGenerateContentSetup` + `fieldMask` body, locked to `gemini-3.8-live`, the Brief plus fixed safety rules, the tool declarations (`src/tools.ts`, empty until #17), AUDIO output and both transcriptions; 60 s to connect, 10-minute lifetime. Creates `checkIns/{id}` (function-only fields empty, `sharingStamp`). A real mint and a typed turn on that token were checked by hand. Client contract in the [README](../README.md#check-in-start-and-finish). |
+| Finish Check-in | **Built:** `finishCheckIn` (#14, backend part), callable in `europe-north1`, not deployed; Decisions (#20) and the Outcome (#21) not yet | Same caller rule as Start Check-in. Request `{patientId, checkInId, draft, todayLines?, lastSuggestionId?}`, response `{checkInId, summary, minimal}`; a Check-in Start Check-in never created is `not-found`. Text model with storage off and structured output; writes the Summary (keyed by the Check-in, a retry overwrites, stamp kept), the ratings, Voice cues (from the draft), crisis marker and end time, and the Patient's `lastCheckInAtMillis` / `lastSeenAtMillis`, in one transaction. Silent Check-ins and bad model output give a minimal Summary. The draft is never written or logged; a spy test checks this. `TODO(#20)` and `TODO(#21)` mark where the Decisions call and the Outcome write go. |
 | Map tool | Not built | #18. Direct Places and Weather fixtures recorded; Maps agent tools needs `mapstools.googleapis.com` enabled ([spike results](spike-results.md#5-maps-18)). |
 | Red flag alert | **Built:** `redFlagAlert` (#22, backend part) | Firestore trigger on the creation of `patients/{patientId}/flags/{flagId}`, in `europe-north1`, retried on failure. For a flag that is red, uncleared and stamped `sharedWithClinician: true`, of a Patient who is sharing, isn't synthetic and has a `clinicianEmail`, it writes one Trigger Email document to `mail/red-flag-<sha256(patientId/flagId)>` with `create()`, so a retry never sends twice. The subject marks a crisis apart from other reds (`[CRISIS]` / `[RED]`). The body is the display name, the flag's reason, a fixed line per kind (a quiet phone isn't read as self-harm) and a link to the Patient page from `DASHBOARD_URL` (defaults to `https://<project>.web.app`). Pure logic in `src/alerts.ts`. Logs only ids, kind and outcome; a spy test checks this. **Sending needs the Trigger Email extension, which needs a person** (below). |
 | Silence check | Not built | #28. Only needs to create the red `silent` flag (stamped with `sharingStamp`); `redFlagAlert` sends the email. |
 
 There is also a trivial `health` endpoint.
+
+### Live protocol parsing (`core`, #14)
+
+`app.depressify.core.live.LiveProtocol`, pure common Kotlin (no platform imports; the purity check covers it):
+- `parse(frame: ByteArray | String | JsonObject): List<LiveEvent>`: one server frame (binary UTF-8 JSON) to events, in the order the phone must act on them. `LiveEvent` is `SetupComplete`, `AudioOut(pcm, sampleRate)`, `ModelText`, `InputText`, `OutputText`, `Interrupted`, `GenerationComplete`, `TurnComplete`, `ToolCall(id, name, args)`, `ToolCallCancellation`, `VoiceActivity(started)`, `Usage` and `GoAway`. Empty, unknown, malformed and `sessionResumptionUpdate` messages give no events; it never throws; bad base64 audio is skipped.
+- Builders: `setupMessage`, `textMessage` (`realtimeInput.text`, the verified typed path), `clientContentMessage`, `audioMessage` (16 kHz PCM16 base64), `audioStreamEndMessage`, `toolResponseMessage`.
+- `LiveProtocolFixturesTest` (JVM) parses every server message in `fixtures/spike/live/messages/` and the whole recorded session, and checks the builders against the recorded client messages; `LiveProtocolTest` (common) covers several parts in one message, an unknown message, a tool call and an interruption.
+- Not built here (app team): the Ktor `LiveClient`, audio, the Check-in runner and recorder, and the screens.
 
 ### Seed (`firebase/seed`)
 
@@ -104,8 +112,9 @@ There is also a trivial `health` endpoint.
 
 | Service ([research](research/)) | Status | Where |
 |---|---|---|
-| Gemini Interactions API, text model `gemini-4-hydrogen` with `store: false` | **Integrated** for Intake and Digest | `src/gemini.ts`: `@google/genai` 3.3.0, `TextModelClient` interface, 15-second timeout, `GEMINI_API_KEY` set through `defineSecret`. The tests use a fake client; a real call has not been made yet because there is no API key. |
-| Gemini Live, plus ephemeral tokens (`POST /v1beta/auth_tokens`) | **Integrated** for the token (#14) | The phone connects directly (ADR 0002). `startCheckIn` mints the token (`src/live.ts`, `fetch` with the key in `x-goog-api-key`). The pure Live protocol parser for the phone is in `core` (`app.depressify.core.live`); the WebSocket client and the runner belong to the app. |
+| Gemini Interactions API, text model `gemini-4-hydrogen` with `store: false` | **Integrated** for Intake, Digest and Finish Check-in | `src/gemini.ts`: `@google/genai` 3.3.0, `TextModelClient` interface, 15-second timeout, `GEMINI_API_KEY` set through `defineSecret`. The tests use a fake client. |
+| Interactions structured output (`response_format: {type: "text", mime_type: "application/json", schema}`) | **Integrated** for Finish Check-in (#14) | `TextRequest.response_format` in `src/gemini.ts`; the schema is `SUMMARY_SCHEMA` in `src/checkIn.ts` (the spike's recorded schema). The reply is read from `output_text`, then validated and capped in code (ratings 1 to 5 or null, at most 3 quotes of 200 characters that must be the Patient's own words, at most 4 themes); missing or malformed output gives the minimal Summary. One real call with fictional text (opt-in emulator test) parsed into a full Summary in about 8 s. |
+| Gemini Live, plus ephemeral tokens (`POST /v1beta/auth_tokens`) | **Integrated** for the token (#14) | The phone connects directly (ADR 0002). `startCheckIn` mints the token (`src/live.ts`, `fetch` with the key in `x-goog-api-key`). Token body: `uses: 1`, `newSessionExpireTime` now + 60 s, `expireTime` now + 10 min, `bidiGenerateContentSetup` (`models/gemini-3.8-live`, AUDIO, the Brief plus fixed rules, `tools`, both transcriptions) and `fieldMask` `model,generationConfig,systemInstruction,tools,inputAudioTranscription,outputAudioTranscription`. A real mint with this body and the empty tool list, then a typed turn on that token, were checked by hand (setupComplete, audio plus output transcript, the AI disclosure). The pure Live protocol parser for the phone is in `core` (`app.depressify.core.live`); the WebSocket client and the runner belong to the app. |
 | Gemini Decisions API (`gemini-decision-1`) | **Spiked** (#6) | Finish Check-in's three yes/no questions (#20). Request, answers and error shapes recorded. |
 | Maps agent tools (weather, text search, routes) | **Spiked** (#6), blocked | #18. The key is the function secret `MAPS_API_KEY` and never reaches the phone. `mapstools.googleapis.com` and `routes.googleapis.com` aren't enabled (HTTP 403); direct Places (New) and Weather calls work. |
 | Google Calendar API v3 | Not started | #19. Permission is granted on the phone. The spike needs a person; the steps are in [spike-results.md](spike-results.md#6-calendar-steps-for-a-person). |
@@ -147,7 +156,7 @@ Useful when the dashboard design is merged:
 
 ## Verification
 
-Results on this branch, all from local runs on 14 November 2026:
+Results on `feat/14-typed-checkin-on-49` (on #50, with #52's spike fixtures merged in), all from local runs on 14 November 2026:
 
 | Suite | Command | Result |
 |---|---|---|
@@ -168,8 +177,10 @@ The emulator suite needs Firebase CLI 15 or newer. With CLI 14.22.0 the Function
 **Not verified (needs a person, hardware or credentials):**
 - The Patient app against the emulators or a real project on a phone or simulator. The wiring is tested with fakes only.
 - Deploying to a real Firebase project, including whether Cloud Scheduler accepts `europe-north1` for `weeklyDigest`.
-- A real Gemini call.
 - The app on the S24+ and on an iPhone.
+- A full Intake extraction or Digest through the deployed callables, signed in as the Clinician.
+- **`startCheckIn` and `finishCheckIn` are not deployed.** Through the Functions emulator only the paths that never reach Gemini ran (refusals, a silent finish). The real-model path ran only through the handlers, by hand, against the Firestore emulator.
+- A real Check-in end to end: the phone's Live client, a typed or spoken session on a minted token, Finish Check-in with the real model, and the Summary on the phone and the dashboard within about ten seconds (app team and a person).
 - The red flag email arriving in an inbox: needs the Trigger Email extension installed with SMTP credentials, then a red flag on a live, sharing Patient (#22's S24+ check).
 
 ## Decisions made in review
@@ -186,7 +197,11 @@ The emulator suite needs Firebase CLI 15 or newer. With CLI 14.22.0 the Function
 
 ## Open items for the backend
 
-- **Moved from the daily job:** the spec has the phone's daily job write `objectiveChange` and `outcomeScore`. These are now function-only, so Finish Check-in (#14) must compute them.
+- **Moved from the daily job:** the spec has the phone's daily job write `objectiveChange` and `outcomeScore`. These are now function-only, so Finish Check-in must compute them (#21, below).
+- **Seams left by #14:**
+  - **#17 (tool catalog):** `LIVE_TOOL_DECLARATIONS` in `firebase/functions/src/tools.ts` is empty, so every token locks no tools. #17 fills it from `core`'s `ToolCatalog` export and adds the comparison test; the token body, field mask and the crisis rule (which names `raise_crisis` once it is declared) need no change.
+  - **#20 (Decisions):** `TODO(#20)` in `finishCheckInHandler` (`src/checkInFunctions.ts`) marks where the three yes/no questions go, on the same in-memory transcript; the flags and the Patient's level belong in the same `writeFinish` transaction.
+  - **#21 (Outcome):** `TODO(#21)` in the same handler. `lastSuggestionId` is validated and the Suggestion read (its details go into the prompt); `ModelSummary.previousTried` and `previousFelt` are parsed but nothing writes the Outcome, `objectiveChange` or `outcomeScore` yet.
 - **Last Check-in time:** `lastCheckInAtMillis` on the Patient record isn't stamped. After sharing resumes, the list can show the time of a Check-in made while not sharing (only the time).
 - **Phone writers:**
   - Keep each record's stamp; never delete and recreate a record.
@@ -195,4 +210,13 @@ The emulator suite needs Firebase CLI 15 or newer. With CLI 14.22.0 the Function
 - **Still open from the spec:** whether to delete Summaries and Digests when sharing is withdrawn.
 - **Red flag email for Demo Patients:** `redFlagAlert` skips `synthetic: true` Patients, because the seed recreates their red flags on every run. If a demo should email from a Demo Patient, that needs a demo control that raises a fresh flag, plus a decision to lift the skip for it.
 - **Red flag alert, app side (#22):** the Crisis notice, the dialler, the crisis controller, the offline queue and Support in Settings belong to the app team. The phone only has to create the red `crisis` flag (stamped, not duplicated while one is open). The email follows from that.
-- **Blocked on #6** (needs the S24+, the Watch and an iPhone): #14–#22, #24–#28 and #30–#32.
+- **Spike results (#6):** the backend half is recorded in [spike-results.md](spike-results.md), with raw fixtures in `fixtures/spike/`.
+  - **Unblocked backend work:**
+    - #14: built (backend part).
+    - #20: the Decisions call, once #14 is in.
+    - #18: the Map tool function, using direct Places and Weather now, or Maps agent tools once `mapstools.googleapis.com` is enabled; it still also waits on #17.
+  - **Still waiting on a person (S24+, Watch, iPhone, Google account):**
+    - The on-phone Live test (#15).
+    - Health Connect, HRV and usage statistics (#24).
+    - The Calendar consent (#19).
+    - The iPhone Live test (#30).
