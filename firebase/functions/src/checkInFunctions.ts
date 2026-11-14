@@ -9,35 +9,54 @@
 //                  `resource-exhausted` without minting.
 //   finishCheckIn  {patientId, checkInId, draft, todayLines?, lastSuggestionId?}
 //                    -> {checkInId, summary, minimal}
-//                  Calls the text model (storage off, structured output) for the Summary, writes
-//                  `summaries/{checkInId}`, the ratings, Voice cues (from the draft), crisis marker and
-//                  end time on the Check-in, and `lastCheckInAtMillis` / `lastSeenAtMillis` on the
-//                  Patient, all in one transaction. A retry overwrites the same Summary,
-//                  but one without model output keeps what the model wrote before.
+//                  Calls the text model (storage off, structured output) for the Summary and, at
+//                  the same time, the Decisions API (#20) with the three yes/no questions. Writes
+//                  `summaries/{checkInId}`, the ratings, Voice cues (from the draft), crisis marker,
+//                  assessment, `previousTried` and end time on the Check-in, any new flags
+//                  (`flags/<kind>-<checkInId>`), and `lastCheckInAtMillis` / `lastSeenAtMillis` and
+//                  the raised flag level on the Patient, all in one transaction. A retry overwrites
+//                  the same Summary, but one without model output keeps what the model wrote before.
 //                  A caller who is not the Patient (the demo shortcut) may finish only a Check-in
-//                  they started. A model timeout or server error answers `unavailable` and saves
-//                  nothing, so the phone can retry while it still holds the draft.
+//                  they started. A text model timeout or server error answers `unavailable` and
+//                  saves nothing but the flags the judgment raised, so the phone can retry while it
+//                  still holds the draft. A Decisions failure never blocks the Summary: it raises
+//                  nothing and marks the Check-in "assessment unavailable". The response never says
+//                  anything about a flag or a level: the Patient never sees one.
 //
 // The Brief, the token and the draft are never written or logged, including on error paths: every
 // failure becomes an HttpsError with fixed wording, and log lines carry ids and an HTTP status only.
 // test/checkin-logging.test.ts checks this through the callables' HTTP layer.
 import { randomUUID } from "node:crypto";
-import type { Firestore } from "firebase-admin/firestore";
+import type { Firestore, Transaction } from "firebase-admin/firestore";
 import * as logger from "firebase-functions/logger";
 import { HttpsError, onCall } from "firebase-functions/v2/https";
 import {
   buildSummaryRequest,
   finishWrites,
+  transcriptText,
   newCheckIn,
   parseFinishRequest,
   parseModelSummary,
   patientSpoke,
   summaryContent,
+  type CheckInDraft,
   type FinishCheckInResponse,
   type FinishConsents,
   type FinishContent,
   type ModelSummary,
 } from "./checkIn";
+import {
+  DECISION_FLAG_KINDS,
+  buildDecisionsRequest,
+  decisionFlagWrites,
+  decisionsFailure,
+  parseDecisionAnswers,
+  routeDecisions,
+  type DecisionsOutcome,
+  type Judgment,
+} from "./decisions";
+import type { DecisionsClient } from "./decisionsApi";
+import type { StoredFlag } from "./flags";
 import { GEMINI_API_KEY, type TextModelClient } from "./gemini";
 import { callerOf, requireAuth, safely, statusOf, type IntakeCall } from "./intakeFunctions";
 import { PATIENT_LIMITS, storedStarts, withStart, type CheckInStart } from "./limits";
@@ -53,7 +72,7 @@ import {
   type StartCheckInResponse,
 } from "./live";
 import { assertActsAsPatient } from "./patientCaller";
-import { COLLECTIONS, type CheckIn, type PatientDoc, type Summary, type Suggestion } from "./types";
+import { COLLECTIONS, type CheckIn, type Flag, type PatientDoc, type Summary, type Suggestion } from "./types";
 
 /** What the Check-in functions read and write. */
 export interface CheckInStore {
@@ -72,11 +91,18 @@ export interface CheckInStore {
   /** Creates `checkIns/{checkIn.id}`; fails if it exists. */
   createCheckIn(patientId: string, checkIn: CheckIn): Promise<void>;
   /**
-   * In one transaction: reads the Patient, the Check-in and any earlier Summary, applies
-   * `finishWrites`, and writes the Summary, the Check-in's fields and the Patient's times.
-   * Returns the Summary written.
+   * In one transaction: reads the Patient, the Check-in, any earlier Summary and the Patient's flags
+   * of the Decisions kinds, applies `finishWrites`, and writes the Summary, the Check-in's fields,
+   * the new flags and the Patient's times and level. Returns the Summary written.
    */
-  writeFinish(patientId: string, checkInId: string, content: FinishContent, nowMillis: number): Promise<Summary>;
+  writeFinish(patientId: string, checkInId: string, content: FinishContent, judgment: Judgment, nowMillis: number): Promise<Summary>;
+  /**
+   * In one transaction: reads the Patient, the Check-in and the Patient's flags of the Decisions
+   * kinds, applies `decisionFlagWrites`, and creates the new flags and raises the Patient's level.
+   * Nothing else. Used when the Summary cannot be made yet, so a raised flag is not lost.
+   * Resolves to the number of flags created.
+   */
+  writeFlags(patientId: string, checkInId: string, judgment: Judgment, nowMillis: number): Promise<number>;
 }
 
 export interface StartCheckInDeps {
@@ -89,6 +115,7 @@ export interface StartCheckInDeps {
 export interface FinishCheckInDeps {
   store: CheckInStore;
   textModel: TextModelClient;
+  decisions: DecisionsClient;
   clock?: () => number;
 }
 
@@ -98,6 +125,10 @@ export function adminCheckInStore(db: Firestore): CheckInStore {
   const checkInRef = (patientId: string, checkInId: string) => patientRef(patientId).collection(COLLECTIONS.checkIns).doc(checkInId);
   const summaryRef = (patientId: string, checkInId: string) => patientRef(patientId).collection(COLLECTIONS.summaries).doc(checkInId);
   const limitsRef = (patientId: string) => db.collection(PATIENT_LIMITS).doc(patientId);
+  const flagsRef = (patientId: string) => patientRef(patientId).collection(COLLECTIONS.flags);
+  /** The Patient's flags of the kinds the Decisions routing raises, open or cleared (one `in` filter, no composite index). */
+  const decisionFlags = async (tx: Transaction, patientId: string): Promise<StoredFlag[]> =>
+    (await tx.get(flagsRef(patientId).where("kind", "in", [...DECISION_FLAG_KINDS]))).docs.map((doc) => ({ id: doc.id, flag: doc.data() as Partial<Flag> }));
   return {
     async getPatient(patientId) {
       const snapshot = await patientRef(patientId).get();
@@ -131,12 +162,13 @@ export function adminCheckInStore(db: Firestore): CheckInStore {
     async createCheckIn(patientId, checkIn) {
       await checkInRef(patientId, checkIn.id).create(checkIn);
     },
-    async writeFinish(patientId, checkInId, content, nowMillis) {
+    async writeFinish(patientId, checkInId, content, judgment, nowMillis) {
       return db.runTransaction(async (tx) => {
-        const [patient, checkIn, summary] = await Promise.all([
+        const [patient, checkIn, summary, flags] = await Promise.all([
           tx.get(patientRef(patientId)),
           tx.get(checkInRef(patientId, checkInId)),
           tx.get(summaryRef(patientId, checkInId)),
+          decisionFlags(tx, patientId),
         ]);
         if (!patient.exists || !checkIn.exists) throw new Error("The Patient or the Check-in is missing.");
         const writes = finishWrites(
@@ -144,15 +176,39 @@ export function adminCheckInStore(db: Firestore): CheckInStore {
             patient: patient.data() as Partial<PatientDoc>,
             checkIn: checkIn.data() as Partial<CheckIn>,
             summary: summary.exists ? (summary.data() as Partial<Summary>) : undefined,
+            flags,
           },
           checkInId,
           content,
           nowMillis,
+          judgment,
         );
         tx.set(summaryRef(patientId, checkInId), writes.summary);
         tx.update(checkInRef(patientId, checkInId), writes.checkIn);
         tx.update(patientRef(patientId), writes.patient);
+        // create(): a flag id that exists fails the transaction rather than overwrite a flag.
+        for (const { id, flag } of writes.flags) tx.create(flagsRef(patientId).doc(id), flag);
         return writes.summary;
+      });
+    },
+    async writeFlags(patientId, checkInId, judgment, nowMillis) {
+      if (judgment.flags.length === 0) return 0;
+      return db.runTransaction(async (tx) => {
+        const [patient, checkIn, flags] = await Promise.all([
+          tx.get(patientRef(patientId)),
+          tx.get(checkInRef(patientId, checkInId)),
+          decisionFlags(tx, patientId),
+        ]);
+        if (!patient.exists || !checkIn.exists) throw new Error("The Patient or the Check-in is missing.");
+        const writes = decisionFlagWrites(
+          { patient: patient.data() as Partial<PatientDoc>, checkIn: checkIn.data() as Partial<CheckIn>, flags },
+          checkInId,
+          judgment.flags,
+          nowMillis,
+        );
+        for (const { id, flag } of writes.flags) tx.create(flagsRef(patientId).doc(id), flag);
+        if (writes.attention) tx.update(patientRef(patientId), writes.attention);
+        return writes.flags.length;
       });
     },
   };
@@ -246,59 +302,118 @@ export async function finishCheckInHandler(call: IntakeCall, deps: FinishCheckIn
   if (!checkIn) throw new HttpsError("not-found", "This Check-in was not started.");
   const consents: FinishConsents = { ratings: ratingsConsent !== false, voiceCues: voiceCuesConsent !== false };
 
-  // A silent Check-in gets the minimal Summary without a model call: there is nothing to summarise,
-  // and nothing can be invented.
-  let model: ModelSummary | null = null;
-  if (patientSpoke(draft)) {
-    const startedAt = Date.now();
-    try {
-      const previousSuggestion = typeof previous?.details === "string" ? previous.details : null;
-      model = parseModelSummary(await deps.textModel.generateText(buildSummaryRequest(draft, todayLines, previousSuggestion)));
-      if (model === null) logger.warn("finishCheckIn: the text model's reply was not usable; saving a minimal Summary", ids);
-    } catch (error) {
-      // Never log the error itself: its message or body may echo the transcript. Its class name and
-      // the time it took tell a timeout from a refusal.
-      const status = statusOf(error);
-      // A timeout, a lost connection, rate limiting or a server error may pass: save nothing and let
-      // the phone retry while it still holds the draft. Any other refusal would fail again the same
-      // way, so the Check-in ends with the minimal Summary instead of never ending.
-      const mayPass = status === null || status === 408 || status === 429 || status >= 500;
-      logger.warn("finishCheckIn: the text model call failed; " + (mayPass ? "nothing saved, the phone can retry" : "saving a minimal Summary"), {
-        ...ids,
-        status,
-        error: error instanceof Error ? error.name : typeof error,
-        elapsedMs: Date.now() - startedAt,
-      });
-      if (mayPass) throw new HttpsError("unavailable", "Could not make your Summary. Try again.");
-    }
-  }
+  // A silent Check-in gets the minimal Summary without a model call, and no review: there is
+  // nothing to summarise or judge, and nothing can be invented. Its crisis marker still counts.
+  // Otherwise the text model and the Decisions API run at the same time on the same in-memory
+  // transcript; neither call throws here.
+  const spoke = patientSpoke(draft);
+  const previousSuggestion = typeof previous?.details === "string" ? previous.details : null;
+  const [summarised, outcome] = await Promise.all([
+    spoke ? summarise(deps.textModel, draft, todayLines, previousSuggestion, ids) : Promise.resolve({ model: null, retry: false }),
+    spoke ? judge(deps.decisions, draft, previousSuggestion, ids) : Promise.resolve<DecisionsOutcome>({ kind: "skipped" }),
+  ]);
+  const judgment = routeDecisions(outcome, draft.crisis);
+  const nowMillis = (deps.clock ?? Date.now)();
 
-  // TODO(#20): ask the Decisions API (gemini-decision-1) the three yes/no questions (crisis, decline,
-  // tried the last Suggestion) here, from the same in-memory transcript, and route the answers to
-  // flags and the Patient's level inside `writeFinish`. The draft's crisis marker already sets
-  // `crisis` on the Check-in; the red crisis flag itself is raised by the phone.
+  if (summarised.retry) {
+    // The Summary waits for the phone's retry, but a flag the judgment raised is written now, so a
+    // crisis is not lost if the phone never retries. Its id is fixed per Check-in and kind, so the
+    // retry does not raise it again.
+    if (judgment.flags.length > 0) {
+      try {
+        await deps.store.writeFlags(patientId, checkInId, judgment, nowMillis);
+      } catch {
+        logger.warn("finishCheckIn: could not save the flags before the retry", ids);
+      }
+    }
+    throw new HttpsError("unavailable", "Could not make your Summary. Try again.");
+  }
+  const model = summarised.model;
 
   const content = summaryContent(model, draft, consents);
   let summary: Summary;
   try {
-    summary = await deps.store.writeFinish(patientId, checkInId, content, (deps.clock ?? Date.now)());
+    summary = await deps.store.writeFinish(patientId, checkInId, content, judgment, nowMillis);
   } catch {
     logger.warn("finishCheckIn: could not save the Summary", ids);
     throw new HttpsError("unavailable", "Could not save your Summary. Try again.");
   }
 
-  // TODO(#21): write the Outcome on `suggestions/{lastSuggestionId}` from `model.previousTried` and
-  // `model.previousFelt` (and the Decisions answer from #20), then `objectiveChange` and
-  // `outcomeScore` from the day's steps against Baseline. `lastSuggestionId` is validated and the
-  // Suggestion read above; nothing writes it yet.
+  // TODO(#21): write the Outcome on `suggestions/{lastSuggestionId}` from `judgment.tried` (the
+  // Decisions answer: "yes", "no" or "unknown", also saved as `previousTried` on the Check-in) and
+  // `model.previousTried` / `model.previousFelt`, then `objectiveChange` and `outcomeScore` from
+  // the day's steps against Baseline. `lastSuggestionId` is validated and the Suggestion read
+  // above; nothing writes it yet.
 
+  // Only the Summary: never the judgment, a flag or a level (the Patient never sees one).
   return { checkInId, summary, minimal: model === null };
+}
+
+/**
+ * The text model call. `retry` when it failed in a way that may pass (a timeout, a lost connection,
+ * rate limiting, a server error): nothing is saved and the phone retries. A reply that is not
+ * usable, or a refusal that would fail again the same way, gives `model: null` (the minimal Summary).
+ */
+async function summarise(
+  textModel: TextModelClient,
+  draft: CheckInDraft,
+  todayLines: readonly string[],
+  previousSuggestion: string | null,
+  ids: Record<string, string>,
+): Promise<{ model: ModelSummary | null; retry: boolean }> {
+  const startedAt = Date.now();
+  try {
+    const model = parseModelSummary(await textModel.generateText(buildSummaryRequest(draft, todayLines, previousSuggestion)));
+    if (model === null) logger.warn("finishCheckIn: the text model's reply was not usable; saving a minimal Summary", ids);
+    return { model, retry: false };
+  } catch (error) {
+    // Never log the error itself: its message or body may echo the transcript. Its class name and
+    // the time it took tell a timeout from a refusal.
+    const status = statusOf(error);
+    const mayPass = status === null || status === 408 || status === 429 || status >= 500;
+    logger.warn("finishCheckIn: the text model call failed; " + (mayPass ? "nothing saved, the phone can retry" : "saving a minimal Summary"), {
+      ...ids,
+      status,
+      error: error instanceof Error ? error.name : typeof error,
+      elapsedMs: Date.now() - startedAt,
+    });
+    return { model: null, retry: mayPass };
+  }
+}
+
+/**
+ * The Decisions call (#20): the three yes/no questions about the same transcript. Never throws: a
+ * safety refusal is `refused`, any other failure (a timeout, an error, an unusable reply) `failed`.
+ * Logs only the outcome, the HTTP status and the time it took: never the input or an error body.
+ */
+async function judge(
+  decisions: DecisionsClient,
+  draft: CheckInDraft,
+  previousSuggestion: string | null,
+  ids: Record<string, string>,
+): Promise<DecisionsOutcome> {
+  const startedAt = Date.now();
+  let outcome: DecisionsOutcome;
+  let status: number | null = null;
+  try {
+    outcome = parseDecisionAnswers(await decisions.decide(buildDecisionsRequest(transcriptText(draft.turns), previousSuggestion)), previousSuggestion !== null);
+  } catch (error) {
+    status = statusOf(error);
+    outcome = decisionsFailure(error);
+  }
+  if (outcome.kind === "refused") {
+    logger.warn("finishCheckIn: the Decisions API declined to judge the Check-in; raising amber unassessed", { ...ids, status, elapsedMs: Date.now() - startedAt });
+  } else if (outcome.kind === "failed") {
+    logger.warn("finishCheckIn: the Decisions call failed; no flag from it, assessment unavailable", { ...ids, status, elapsedMs: Date.now() - startedAt });
+  }
+  return outcome;
 }
 
 /** How the callables get their dependencies, built per request so secrets are read at run time. */
 export interface CheckInDepsFactory {
   store: () => CheckInStore;
   textModel: () => TextModelClient;
+  decisions: () => DecisionsClient;
   liveTokens: () => LiveTokenClient;
   clock?: () => number;
   newId?: () => string;
@@ -322,6 +437,8 @@ export function createCheckInFunctions(deps: CheckInDepsFactory) {
       finishCheckInHandler(callerOf(request), {
         store: deps.store(),
         textModel: { generateText: (textRequest) => deps.textModel().generateText(textRequest) },
+        // Built only when called, so a missing key is a Decisions failure, not a failed finish.
+        decisions: { decide: (decisionsRequest) => deps.decisions().decide(decisionsRequest) },
         clock: deps.clock,
       }),
     ),

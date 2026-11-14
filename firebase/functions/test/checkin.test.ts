@@ -356,9 +356,12 @@ describe("finishWrites", () => {
     expect(retry.themes).toEqual(["Retry theme"]);
   });
 
-  it("sets the ratings, Voice cues, crisis marker and end time on the Check-in, and nothing else", () => {
+  it("sets the ratings, Voice cues, crisis marker, assessment and end time on the Check-in, and nothing else", () => {
     const writes = finishWrites({ patient: sharing, checkIn, summary: undefined }, "c1", { ...content, crisis: true }, 1_000);
-    expect(writes.checkIn).toEqual({ mood: 3, energy: 2, sleepQuality: 2, voiceCues: DRAFT.voiceCues, crisis: true, endedAtMillis: 1_000 });
+    expect(writes.checkIn).toEqual({
+      mood: 3, energy: 2, sleepQuality: 2, voiceCues: DRAFT.voiceCues, crisis: true, endedAtMillis: 1_000, assessment: null, previousTried: null,
+    });
+    expect(writes.flags).toEqual([]);
     expect(Object.keys(writes.checkIn)).not.toContain("sharedWithClinician");
     expect(Object.keys(writes.checkIn)).not.toContain("startedAtMillis");
   });
@@ -391,6 +394,8 @@ describe("newCheckIn", () => {
       sleepQuality: null,
       voiceCues: [],
       crisis: false,
+      assessment: null,
+      previousTried: null,
       sharedWithClinician: true,
     });
     expect(newCheckIn("c1", { sharingConsent: "undecided" }, 42).sharedWithClinician).toBe(false);

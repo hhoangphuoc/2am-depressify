@@ -8,7 +8,9 @@ import { HttpsError } from "firebase-functions/v2/https";
 import type { JsonResponseFormat, TextRequest } from "./gemini";
 import { patientIdOf } from "./intake";
 import { TEXT_MODEL } from "./models";
-import { sharingStamp } from "./sharing";
+import { decisionFlagWrites, triedValue, type DecisionFlagWrites, type Judgment } from "./decisions";
+import type { StoredFlag } from "./flags";
+import { checkInStamp, sharingStamp } from "./sharing";
 import { SUGGESTION_KINDS, SUGGESTION_STATUSES, type CheckIn, type PatientDoc, type Summary, type SuggestionKind, type SuggestionStatus, type VoiceCue } from "./types";
 
 // ---------------------------------------------------------------------------------------------
@@ -419,15 +421,27 @@ export interface FinishCurrent {
   checkIn: Partial<CheckIn>;
   /** The Summary from an earlier finish of this Check-in, if any. */
   summary: Partial<Summary> | undefined;
+  /** The Patient's stored flags of the Decisions kinds (`DECISION_FLAG_KINDS`), open or cleared. */
+  flags?: readonly StoredFlag[];
 }
 
 export interface FinishWrites {
   /** `summaries/{checkInId}`, written whole (a retry overwrites, unless it has no model output and the saved one has). */
   summary: Summary;
   /** Fields set on `checkIns/{checkInId}`; its stamp and start time are left alone. */
-  checkIn: Pick<CheckIn, "mood" | "energy" | "sleepQuality" | "voiceCues" | "crisis" | "endedAtMillis">;
-  /** Fields set on the Patient record. */
-  patient: Pick<PatientDoc, "lastCheckInAtMillis" | "lastSeenAtMillis">;
+  checkIn: Pick<CheckIn, "mood" | "energy" | "sleepQuality" | "voiceCues" | "crisis" | "endedAtMillis" | "assessment" | "previousTried">;
+  /** Fields set on the Patient record: the times, and the flag level and reasons when a shared flag is raised. */
+  patient: Pick<PatientDoc, "lastCheckInAtMillis" | "lastSeenAtMillis"> & Partial<Pick<PatientDoc, "flagLevel" | "flagReasons">>;
+  /** Flags to create (`flags/{id}`), from the Decisions routing (#20). */
+  flags: DecisionFlagWrites["flags"];
+}
+
+/** No review: nothing raised, nothing assessed, "tried" unknown. */
+export const NOT_REVIEWED: Judgment = { assessment: null, flags: [], tried: "unknown" };
+
+/** Whether an assessment is a result of the review (answered or refused), rather than "no result". */
+function reviewed(assessment: unknown): assessment is "assessed" | "unassessed" {
+  return assessment === "assessed" || assessment === "unassessed";
 }
 
 function later(existing: number | null | undefined, nowMillis: number): number {
@@ -441,8 +455,18 @@ function later(existing: number | null | undefined, nowMillis: number): number {
  * shared only when the Check-in was started while sharing and the Patient still shares now: a
  * conversation held while not sharing, or one the Patient stopped sharing during, never reaches
  * the Clinician.
+ *
+ * The Decisions `judgment` (#20) adds the Check-in's `assessment` and `previousTried`, the flags to
+ * create and the Patient's raised level (`decisionFlagWrites`). A retry whose review gave no result
+ * (a failure, or nothing to review) keeps the assessment and `previousTried` an earlier attempt saved.
  */
-export function finishWrites(current: FinishCurrent, checkInId: string, content: FinishContent, nowMillis: number): FinishWrites {
+export function finishWrites(
+  current: FinishCurrent,
+  checkInId: string,
+  content: FinishContent,
+  nowMillis: number,
+  judgment: Judgment = NOT_REVIEWED,
+): FinishWrites {
   const existing = current.summary;
   // A retry that could not use the model (a lost reply, then a model error) must not wipe the
   // Summary and ratings an earlier attempt saved: keep what the model wrote the first time.
@@ -466,9 +490,11 @@ export function finishWrites(current: FinishCurrent, checkInId: string, content:
     sharedWithClinician:
       typeof existing?.sharedWithClinician === "boolean"
         ? existing.sharedWithClinician
-        : current.checkIn.sharedWithClinician === true && sharingStamp(current.patient),
+        : checkInStamp(current.checkIn, current.patient),
   };
   const endedAtMillis = typeof current.checkIn.endedAtMillis === "number" ? current.checkIn.endedAtMillis : nowMillis;
+  const keepReview = !reviewed(judgment.assessment) && reviewed(current.checkIn.assessment);
+  const raised = decisionFlagWrites({ patient: current.patient, checkIn: current.checkIn, flags: current.flags ?? [] }, checkInId, judgment.flags, nowMillis);
   return {
     summary,
     checkIn: {
@@ -478,12 +504,16 @@ export function finishWrites(current: FinishCurrent, checkInId: string, content:
       voiceCues: content.voiceCues.map((cue) => ({ ...cue })),
       crisis: current.checkIn.crisis === true || content.crisis,
       endedAtMillis,
+      assessment: keepReview ? current.checkIn.assessment! : judgment.assessment,
+      previousTried: keepReview ? (current.checkIn.previousTried ?? null) : triedValue(judgment.tried),
     },
     patient: {
       lastCheckInAtMillis: later(current.patient.lastCheckInAtMillis, endedAtMillis),
       // Finishing is a sign of life from the phone; the silence check (#28) reads it.
       lastSeenAtMillis: later(current.patient.lastSeenAtMillis, nowMillis),
+      ...(raised.attention ?? {}),
     },
+    flags: raised.flags,
   };
 }
 
@@ -498,6 +528,8 @@ export function newCheckIn(checkInId: string, patient: Partial<PatientDoc>, nowM
     sleepQuality: null,
     voiceCues: [],
     crisis: false,
+    assessment: null,
+    previousTried: null,
     sharedWithClinician: sharingStamp(patient),
   };
 }
