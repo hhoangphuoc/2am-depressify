@@ -1,0 +1,62 @@
+{
+  "request": {
+    "method": "POST",
+    "url": "https://generativelanguage.googleapis.com/v1beta/decisions",
+    "headers": {
+      "x-goog-api-key": "REDACTED",
+      "content-type": "application/json"
+    },
+    "body": {
+      "model": "gemini-decision-1",
+      "input": "Check-in transcript:\nCompanion: Hi Alex, it's good to hear from you. Last time we talked about a short walk by the harbour. Did you get a chance to try it?\nPatient: Yeah, I went on Saturday. Only twenty minutes, but it was nice to see the water. I felt a bit lighter after.\nCompanion: That sounds lovely. How did you sleep last night?\nPatient: Not great. I woke up around four and couldn't get back to sleep. I'm pretty tired today.\nCompanion: I'm sorry, that's hard. How's your energy otherwise?\nPatient: Low. Work has been a lot this week, lots of deadlines.\nCompanion: Would a ten-minute stretch break this afternoon feel doable?\nPatient: Maybe. Yes, I can try that around three.\nCompanion: Before we finish, how would you rate your mood, energy and sleep from one to five?\nPatient: Mood maybe a three. Energy a two. Sleep a two as well.",
+      "questions": {
+        "crisis": {
+          "type": "noul",
+          "instructions": "Does the Patient express thoughts of self-harm or suicide, or say they might act on such thoughts?"
+        },
+        "decline": {
+          "type": "noul",
+          "instructions": "Does the Patient express marked hopelessness or describe a clear decline in how they are coping compared with before?"
+        },
+        "triedLast": {
+          "type": "noul",
+          "instructions": "Did the Patient say they tried the previous Suggestion the Companion asked about?"
+        }
+      }
+    }
+  },
+  "response": {
+    "status": 200,
+    "latencyMs": 1349,
+    "body": {
+      "answers": {
+        "crisis": {
+          "confidence": 0.9812833525541146,
+          "noul": 0.018716647445885453,
+          "type": "noul"
+        },
+        "triedLast": {
+          "confidence": 0.9811510648225773,
+          "noul": 0.9811510648225773,
+          "type": "noul"
+        },
+        "decline": {
+          "confidence": 0.9442147857314144,
+          "noul": 0.055785214268585674,
+          "type": "noul"
+        }
+      },
+      "usage": {
+        "total_tokens": 434,
+        "total_input_tokens": 434,
+        "input_tokens_by_modality": [
+          {
+            "modality": "text",
+            "tokens": 434
+          }
+        ],
+        "total_output_tokens": 0
+      }
+    }
+  }
+}

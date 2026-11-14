@@ -1,0 +1,11 @@
+{
+  "direction": "server->client",
+  "websocketFrame": "binary",
+  "tMs": 12971,
+  "message": {
+    "voiceActivity": {
+      "type": "ACTIVITY_END",
+      "audioOffset": "6.600s"
+    }
+  }
+}

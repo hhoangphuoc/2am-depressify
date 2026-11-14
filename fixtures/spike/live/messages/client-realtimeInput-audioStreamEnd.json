@@ -1,0 +1,10 @@
+{
+  "direction": "client->server",
+  "websocketFrame": "text",
+  "tMs": 13778,
+  "message": {
+    "realtimeInput": {
+      "audioStreamEnd": true
+    }
+  }
+}

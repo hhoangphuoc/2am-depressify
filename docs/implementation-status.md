@@ -1,6 +1,6 @@
 # Implementation status
 
-Status as of 14 November 2026. Covers issues #7, #8, #9, #10, #11, #12, #13, #23 and #29, plus the review decisions that followed. Terms follow [GLOSSARY.md](../GLOSSARY.md). The spec is issue #5 and the data contract is in [firestore-schema.md](firestore-schema.md).
+Status as of 14 November 2026. Covers issues #7, #8, #9, #10, #11, #12, #13, #23 and #29, the review decisions that followed, and the backend half of the #6 spikes ([spike-results.md](spike-results.md)). Terms follow [GLOSSARY.md](../GLOSSARY.md). The spec is issue #5 and the data contract is in [firestore-schema.md](firestore-schema.md).
 
 ## Scope from here on
 
@@ -72,9 +72,9 @@ Not enforced for the demo: `email_verified`. Production must require it (see the
 |---|---|---|
 | Extract Intake | **Built:** `extractIntake` and `saveIntake` (#13) | Clinician-only callables. Extraction writes nothing; saving writes only `intakeHighlights` (at most 120 words). The report is never stored or logged, and a spy test checks this. |
 | Weekly Digest | **Built:** `weeklyDigest` (Mondays 07:00 Helsinki) and `generateDigest` (callable) (#23) | Document key is the ISO week (`2026-W46`). Uses only shared records. A week with no Check-ins gets fixed text and never calls the model. Patients who aren't sharing get no Digest. |
-| Start Check-in (Live token) | Not built | #14, blocked by #6 (spike results) |
+| Start Check-in (Live token) | Not built | #14. Token body shape recorded in [spike-results.md](spike-results.md#1-ephemeral-token-for-gemini-live). |
 | Finish Check-in | Not built | #14 and #20. It will be the only writer of Summaries, ratings, Voice cues, the crisis marker and Outcome fields. |
-| Map tool | Not built | #18 |
+| Map tool | Not built | #18. Direct Places and Weather fixtures recorded; Maps agent tools needs `mapstools.googleapis.com` enabled ([spike results](spike-results.md#5-maps-18)). |
 | Red flag alert | Not built | #22 |
 | Silence check | Not built | #28 |
 
@@ -107,10 +107,10 @@ There is also a trivial `health` endpoint.
 | Service ([research](research/)) | Status | Where |
 |---|---|---|
 | Gemini Interactions API, text model `gemini-4-hydrogen` with `store: false` | **Integrated** for Intake and Digest | `src/gemini.ts`: `@google/genai` 3.3.0, `TextModelClient` interface, 15-second timeout, `GEMINI_API_KEY` set through `defineSecret`. The tests use a fake client; a real call has not been made yet because there is no API key. |
-| Gemini Live, plus ephemeral tokens (`POST /v1beta/auth_tokens`) | Not started | The phone connects directly (ADR 0002). The backend part is the token-minting callable (#14), which waits on #6's recorded request shapes. |
-| Gemini Decisions API (`gemini-decision-1`) | Not started | Finish Check-in's three yes/no questions (#20) |
-| Maps agent tools (weather, text search, routes) | Not started | #18 |
-| Google Calendar API v3 | Not started | #19. Permission is granted on the phone. |
+| Gemini Live, plus ephemeral tokens (`POST /v1beta/auth_tokens`) | **Spiked** (#6) | The phone connects directly (ADR 0002). Token minting and the whole Live protocol were exercised from Kotlin/Ktor on the JVM; the request shapes are recorded. The backend part is the token-minting callable (#14). |
+| Gemini Decisions API (`gemini-decision-1`) | **Spiked** (#6) | Finish Check-in's three yes/no questions (#20). Request, answers and error shapes recorded. |
+| Maps agent tools (weather, text search, routes) | **Spiked** (#6), blocked | #18. `mapstools.googleapis.com` and `routes.googleapis.com` aren't enabled (HTTP 403); direct Places (New) and Weather calls work. |
+| Google Calendar API v3 | Not started | #19. Permission is granted on the phone. The spike needs a person; the steps are in [spike-results.md](spike-results.md#6-calendar-steps-for-a-person). |
 | Health Connect and HealthKit | Not started | Read on the phone (ADR 0003), so there is no backend part beyond the `daily` contract. |
 | Trigger Email extension (`mail` collection) | Not started | #22. The rules already reserve `mail` for functions. |
 
@@ -189,4 +189,13 @@ Deploy notes:
   - Retry a refused write with a fresh stamp, especially a crisis flag.
   - Create a new Suggestion rather than editing `kind` or `details`.
 - **Still open from the spec:** whether to delete Summaries and Digests when sharing is withdrawn.
-- **Blocked on #6** (needs the S24+, the Watch and an iPhone): #14–#22, #24–#28 and #30–#32.
+- **Spike results (#6):** the backend half is recorded in [spike-results.md](spike-results.md), with raw fixtures in `fixtures/spike/`.
+  - **Unblocked backend work:**
+    - #14: the Start Check-in token callable and Finish Check-in's structured-output call.
+    - #20: the Decisions call, once #14 is in.
+    - #18: the Map tool function, using direct Places and Weather now, or Maps agent tools once `mapstools.googleapis.com` is enabled; it still also waits on #17.
+  - **Still waiting on a person (S24+, Watch, iPhone, Google account):**
+    - The on-phone Live test (#15).
+    - Health Connect, HRV and usage statistics (#24).
+    - The Calendar consent (#19).
+    - The iPhone Live test (#30).

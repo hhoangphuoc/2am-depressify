@@ -1,0 +1,6 @@
+{
+  "direction": "server->client",
+  "websocketFrame": "binary",
+  "tMs": 1449,
+  "message": {}
+}
