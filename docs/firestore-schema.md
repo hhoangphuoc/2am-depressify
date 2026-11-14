@@ -11,6 +11,7 @@ The mirrors are kept in step by tests. The `core` JVM tests export the Kotlin co
 - **Enumerations** are stored as lower-case words, for example `sleep_collapse`. A Signal is stored by its key, which is also a field name (`sleepMinutes`).
 - **Missing is null, never zero.** Every field is written, and a missing value is written as an explicit `null`. A night without the watch is `null` sleep, not `0`. In Kotlin, `FirestoreJson` writes with `encodeDefaults` and `explicitNulls`; the app writes through GitLive with `encodeDefaults = true`, and a JVM test checks that the two agree.
 - **Ratings** (mood, energy, sleep quality) are integers 1 to 5, or `null` when not given. Voice cue intensity is 1 to 5.
+- **The sharing stamp.** Every document in `daily`, `checkIns`, `summaries`, `suggestions`, `flags` and `digests` has `sharedWithClinician` (boolean): whether the Patient's `sharingConsent` was `granted` when the document was created. It is set once and never changes. The Clinician reads only documents stamped `true`. `consents`, `visits` and the Patient record are not stamped. See [The sharing stamp](#the-sharing-stamp).
 
 ## Enumerations
 
@@ -50,8 +51,8 @@ mail/{autoId}                        MailDoc         written by functions only; 
 | `clinicianEmail` | string | the demo Clinician (`DemoConfig.CLINICIAN_EMAIL`) | Links the Patient to the Clinician; the dashboard queries on it. |
 | `intakeHighlights` | string | `""` | Extracted from the Intake, at most 120 words, reviewed by the Clinician. Written only by the `saveIntake` function (Clinician only); no client writes it. The report itself is never stored. |
 | `tmsEndDate` | date string or null | `null` | Set by the Clinician. Week 1 starts the day after. |
-| `flagLevel` | FlagLevel | `green` | The highest uncleared flag. Never shown to the Patient. |
-| `flagReasons` | string[] | `[]` | Plain sentences, never a number. |
+| `flagLevel` | FlagLevel | `green` | The highest uncleared flag stamped `sharedWithClinician: true`. A flag raised while the Patient was not sharing never counts. Never shown to the Patient. |
+| `flagReasons` | string[] | `[]` | The reasons of those flags, highest level first, then newest. Plain sentences, never a number. |
 | `quietHoursStart` | int 0..23 | `21` | No Nudges inside quiet hours; the window may cross midnight. |
 | `quietHoursEnd` | int 0..23 | `9` | |
 | `lastSeenAtMillis` | int or null | `null` | Last sign of life from the phone. The hourly silence check reads it. |
@@ -70,6 +71,7 @@ mail/{autoId}                        MailDoc         written by functions only; 
 | `vsBaseline` | map of Signal key to number or null | Today's distance from the Patient's own Baseline, in units of their spread. `null` with fewer than 5 valid prior days or no value today. |
 | `composite` | number or null | Mean of the oriented comparisons that exist; `null` if none. |
 | `demoOverride` | boolean | `true` when a demo control wrote this record. Overrides only ever touch these. |
+| `sharedWithClinician` | boolean | The sharing stamp. A record rewritten later in the day keeps the stamp it was created with. |
 
 #### Baseline
 
@@ -97,14 +99,17 @@ The rule is pinned by a shared fixture, [`fixtures/baseline/baseline-cases.json`
 
 ### `checkIns/{checkInId}`: CheckIn
 
+The app creates the Check-in and owns only its times. The ratings, Voice cues and crisis marker are written by Finish Check-in (#14) from the draft it receives, the same draft the Summary is made from, so the app creates them empty (`null`, `[]`, `false`) and never changes them. Write the Check-in once and change its times with an update of those fields; a full rewrite after Finish Check-in would be refused.
+
 | Field | Type | Notes |
 |---|---|---|
 | `id` | string | Same as the document id. |
-| `startedAtMillis` | int | |
-| `endedAtMillis` | int or null | |
-| `mood`, `energy`, `sleepQuality` | int 1..5 or null | Unanswered is `null`. |
-| `voiceCues` | VoiceCue[] | `{label, intensity 1..5, heard}`. Observations, never a diagnosis. |
-| `crisis` | boolean | `true` when the Check-in raised a crisis. |
+| `startedAtMillis` | int | Written by the app. |
+| `endedAtMillis` | int or null | Written by the app. |
+| `mood`, `energy`, `sleepQuality` | int 1..5 or null | Unanswered is `null`. Written by Finish Check-in only. |
+| `voiceCues` | VoiceCue[] | `{label, intensity 1..5, heard}`. Observations, never a diagnosis. Written by Finish Check-in only, from the draft. |
+| `crisis` | boolean | `true` when the Check-in raised a crisis. Written by Finish Check-in only, from the draft's crisis marker. The red crisis flag itself is still raised by the phone at once (`flags`). |
+| `sharedWithClinician` | boolean | The sharing stamp. |
 
 ### `summaries/{checkInId}`: Summary
 
@@ -121,21 +126,25 @@ The Patient reads exactly what the Clinician reads.
 | `suggestion` | string or null | The Suggestion made, or `null`. |
 | `previousOutcome` | string or null | What the Patient said about the previous Suggestion. |
 | `quotes` | string[] | At most three, each at most 200 characters. |
+| `sharedWithClinician` | boolean | The sharing stamp, from `sharingStamp` when Finish Check-in writes it. A retried finish keeps the stamp the Summary already has. |
 
 ### `suggestions/{suggestionId}`: Suggestion
+
+The app records a Suggestion and changes only `status` and `booked`. The Outcome (`tried`, `felt`, `objectiveChange`, `outcomeScore`) is written by functions only: `null` when the app creates the Suggestion, and never changed by the app. The spec has the phone's daily job fill in `objectiveChange` and `outcomeScore`; under these rules that has to happen in a function instead (Finish Check-in, which writes `tried` and `felt`, can compute both, since the day's steps comparison is already on the daily record).
 
 | Field | Type | Notes |
 |---|---|---|
 | `id` | string | Same as the document id. |
-| `kind` | SuggestionKind | |
-| `details` | string | |
-| `suggestedAtMillis` | int | |
-| `status` | SuggestionStatus | `proposed` until the Patient answers. |
-| `booked` | boolean | Set only after the calendar write succeeds. |
-| `tried` | boolean or null | `null` until answered; `false` is "not this time". |
-| `felt` | int 1..5 or null | |
-| `objectiveChange` | number or null | That day's oriented steps comparison with Baseline. |
-| `outcomeScore` | number or null | `null` until the Patient answers. |
+| `kind` | SuggestionKind | Set when the app creates it. |
+| `details` | string | Set when the app creates it. |
+| `suggestedAtMillis` | int | Set when the app creates it. |
+| `status` | SuggestionStatus | `proposed` until the Patient answers. The app may change it. |
+| `booked` | boolean | Set only after the calendar write succeeds. The app may change it. |
+| `tried` | boolean or null | `null` until answered; `false` is "not this time". Functions only. |
+| `felt` | int 1..5 or null | Functions only. |
+| `objectiveChange` | number or null | That day's oriented steps comparison with Baseline. Functions only. |
+| `outcomeScore` | number or null | `null` until the Patient answers. Functions only. |
+| `sharedWithClinician` | boolean | The sharing stamp. An Outcome filled in later does not change it. |
 
 ### `flags/{flagId}`: Flag
 
@@ -145,7 +154,8 @@ The Patient reads exactly what the Clinician reads.
 | `kind` | FlagKind | A kind with an uncleared flag is not raised again. |
 | `reason` | string | A plain sentence, never a score. |
 | `raisedAtMillis` | int | |
-| `clearedAtMillis` | int or null | Set only by the Clinician. History is kept. |
+| `clearedAtMillis` | int or null | Set only by the Clinician, and only on a flag they can see. History is kept. |
+| `sharedWithClinician` | boolean | The sharing stamp. A flag stamped `false` is never shown to the Clinician, never counts toward the Patient's `flagLevel`, and does not stop a shared flag of the same kind being raised later (the "not raised again" rule compares flags with the same stamp). |
 
 ### `visits/{visitId}`: Visit
 
@@ -167,6 +177,9 @@ A short weekly account of one Patient for the Clinician (issue #23), written by 
 | `summaryCount` | int | How many Summaries the text drew on. `0` means the week had no Check-ins. |
 | `text` | string | At most 180 words. Written by the text model with storage off, from that week's Summaries and daily Signals only; or, for a week with no Check-ins, a fixed sentence saying so (the model is not called). |
 | `generatedAtMillis` | int | |
+| `sharedWithClinician` | boolean | The sharing stamp (`sharingStamp`). Digests are written only for sharing Patients, so it is `true`. |
+
+The text and `summaryCount` draw only on Summaries and daily records stamped `sharedWithClinician: true` (`weekData` in `firebase/functions/src/digest.ts`): a week that spans a time without sharing never tells the Clinician what was said or measured then.
 
 Which week each writer covers:
 
@@ -192,14 +205,18 @@ The shape the Trigger Email extension reads. Written by functions only.
 | Who | Query | Index |
 |---|---|---|
 | Dashboard Patient list | `patients` where `clinicianEmail == <signed-in email>` and `sharingConsent == "granted"` | none: two equality filters are served by merging the automatic single-field indexes. Adding an `orderBy` on another field needs a composite index in `firestore.indexes.json`. |
-| Dashboard newest-flag order | `patients/{id}/flags` for each listed Patient | none |
+| Dashboard newest-flag order, banner and level | `patients/{id}/flags` where `sharedWithClinician == true`, for each listed Patient | none: one equality filter |
+| Dashboard Patient page | `daily`, `checkIns`, `summaries`, `suggestions`, `flags` where `sharedWithClinician == true`; `consents`, `visits` unfiltered | none: one equality filter, sorted in the browser |
+| Dashboard latest Digest | `patients/{id}/digests` where `sharedWithClinician == true`, order by `isoWeek` descending, limit 1 | composite `digests (sharedWithClinician ASC, isoWeek DESC)` in [`firestore.indexes.json`](../firebase/firestore.indexes.json). The emulator does not enforce indexes; production does. |
+| Clear after follow-up | `patients/{id}/flags` where `sharedWithClinician == true`, then the reviewed flags by id in a transaction | none |
+| Digest functions | `summaries` by `createdAtMillis` range, `daily` by `date` range (Admin SDK); the stamp is filtered in code | single field (automatic) |
 | Seed reset | `patients` where `synthetic == true` (Admin SDK) | single field (automatic) |
 
-The list query must carry the sharing filter (built by `clinicianListFilters` in `firebase/hosting/js/lib/sharing.js`); without it the rules reject the whole query.
+The list query must carry the sharing filter (built by `clinicianListFilters` in `firebase/hosting/js/lib/sharing.js`); without it the rules reject the whole query. Likewise every query on a stamped collection is built by `patientCollectionQuery` in the same file (bound to the browser SDK in `js/queries.js`), which adds `sharedWithClinician == true`. A new query that adds an `orderBy` or range on another field needs a composite index.
 
 ## Demo Patients
 
-`firebase/seed` writes three Demo Patients with the Admin SDK: `demo-steady` (green), `demo-declining` (amber flags, then red in the last two days) and `demo-sparse` (seven Check-ins at most, days of missing Signals, amber for low mood). Each has `synthetic: true`, `healthSource: "synthetic"`, `sharingConsent: "granted"`, the demo Clinician, an Intake that begins "Synthetic demo data", 42 daily records ending today, a TMS end date 42 days ago, one Visit 21 days ago with a PHQ-9 score, every Consent granted, and Check-ins with Summaries and Suggestions (most with an Outcome score). Every value is invented. Flags sit on the first morning the spec's starting thresholds hold. Document ids are stable: daily records by date, `checkin-<date>` (also the Summary id), `suggestion-<date>`, `<kind>-<date>` for flags and `visit-<date>`.
+`firebase/seed` writes three Demo Patients with the Admin SDK: `demo-steady` (green), `demo-declining` (amber flags, then red in the last two days) and `demo-sparse` (seven Check-ins at most, days of missing Signals, amber for low mood). Each has `synthetic: true`, `healthSource: "synthetic"`, `sharingConsent: "granted"`, the demo Clinician, an Intake that begins "Synthetic demo data", 42 daily records ending today, a TMS end date 42 days ago, one Visit 21 days ago with a PHQ-9 score, every Consent granted, and Check-ins with Summaries and Suggestions (most with an Outcome score). Every value is invented. Flags sit on the first morning the spec's starting thresholds hold. Every stamped document is `sharedWithClinician: true`, except that `demo-steady` stopped sharing from 06:00 30 days ago to 06:00 27 days ago: its three daily records, Check-ins, Summaries and Suggestions from that time are stamped `false`, so the dashboard shows a three-day gap; its `sharingChangedAtMillis` and `consents/sharing` are the time it shared again. Document ids are stable: daily records by date, `checkin-<date>` (also the Summary id), `suggestion-<date>`, `<kind>-<date>` for flags and `visit-<date>`.
 
 
 ## Security rules
@@ -216,14 +233,19 @@ The list query must carry the sharing filter (built by `clinicianListFilters` in
 | Patient record: create | own id only, `clinicianEmail` the demo Clinician, `synthetic` false, `tmsEndDate` null, `intakeHighlights` empty | no | no | no |
 | Patient record: update | `quietHoursStart`, `quietHoursEnd`, `lastSeenAtMillis`, `lastCheckInAtMillis`, `healthSource`, `sharingConsent` (to `granted` or `declined`, always with a new `sharingChangedAtMillis`), `sharingChangedAtMillis`; `flagLevel` and `flagReasons` only to raise (level never lower, reasons kept) | `displayName`, `tmsEndDate`, and a reset of `flagLevel` and `flagReasons` | no | no |
 | Patient record: delete | no | no | no | no |
-| `daily`, `consents`, `checkIns`, `suggestions` | read, write | read | no | no |
-| `summaries` | read | read | no | no |
-| `flags` | read; create uncleared flags; no change or delete | read; set `clearedAtMillis` only | no | no |
+| `daily` | read, write (create stamped as now; the stamp never changes) | read documents stamped `true` | no | no |
+| `consents` | read, write | read | no | no |
+| `checkIns` | read; create with no ratings, no Voice cues and `crisis: false`, stamped as now; update `startedAtMillis` and `endedAtMillis` only; delete | read documents stamped `true` | no | no |
+| `suggestions` | read; create with no Outcome, stamped as now; update `status` and `booked` only; delete | read documents stamped `true` | no | no |
+| `summaries` | read | read documents stamped `true` | no | no |
+| `flags` | read; create uncleared flags stamped as now; no change or delete | read documents stamped `true`; set `clearedAtMillis` only, on those | no | no |
 | `visits` | read | read, create, update, delete | no | no |
-| `digests` | read | read | no | no |
+| `digests` | read | read documents stamped `true` | no | no |
 | `mail` | no | no | no | no |
 
-Anything not listed, including a collection outside this schema, is denied. Field owners: `displayName`, `tmsEndDate` and clearing flags belong to the Clinician; `intakeHighlights` and Summaries are written by functions only, so the Patient cannot edit what the Clinician reads; `synthetic` and `clinicianEmail` never change after creation from a client.
+Anything not listed, including a collection outside this schema, is denied. Field owners: `displayName`, `tmsEndDate` and clearing flags belong to the Clinician; `intakeHighlights`, Summaries, a Check-in's ratings, Voice cues and crisis marker, and a Suggestion's Outcome are written by functions only, so what reaches the Clinician is recorded by the app and functions, not edited by hand; `synthetic` and `clinicianEmail` never change after creation from a client; `sharedWithClinician` never changes after creation.
+
+A Clinician query on a stamped collection must filter on `sharedWithClinician == true`, or the whole query is refused. A Clinician `get` of a stamped document that does not exist is refused like a hidden one, so a refusal never tells that a document exists.
 
 `flagLevel`, `flagReasons` and `flags` are readable by the Patient's own app, because the phone raises flags and needs the open ones to avoid duplicates. The app never shows them (ADR 0005, ADR 0009).
 
@@ -233,5 +255,15 @@ The Patient decides whether their Clinician sees their progress (issue #29, ADR 
 
 - **Rules.** `clinicianCanRead` in `firestore.rules` requires `sharingConsent == 'granted'`, and every Clinician read and write of the record and its collections goes through it. Withdrawing takes effect at once: the dashboard's list query (which filters on `granted`) drops the Patient, and a listener already open on the Patient's record or collections gets `permission-denied`. The dashboard maps that error to a "sharing withdrawn" state with `sharingStateFromError` in `firebase/hosting/js/lib/sharing.js`; every Patient view should use it rather than show an error. A Demo Patient stays readable through the demo shortcut, so views also check the field with `sharingStateFromSnapshot`.
 - **Functions.** Functions use the Admin SDK and bypass the rules, so they check `isSharingActive(patient)` from `firebase/functions/src/sharing.ts` themselves. **The flag email (#22) and the silence check (#28) must use it**: while it is false no flag email is sent for the Patient and the silence check skips them. The weekly Digest (#23) skips them too, and `generateDigest` refuses them. Check-ins, Summaries and the Patient's own records continue.
-- **Granting again** gives access from then on. The rules do not filter by time, so the Clinician can then also read what was saved while the Patient was not sharing; the app says so before the Patient shares again. Whether records are deleted on withdrawal is an open decision.
+- **Granting again** shares future records only: the Clinician sees what is saved from then on and, again, what was saved during earlier sharing periods, but never what was saved while the Patient was not sharing. That is the sharing stamp, below. The app says so where the Patient withdraws and where they share again (`SharingCopy` in `shared`). Whether records are deleted on withdrawal is an open decision.
 - **The app** shows the welcome and the sharing choice while `sharingConsent` is `undecided`, and saves a decision with `sharingChangedAtMillis` and `consents/sharing` in one transaction. Nothing moves a record back to `undecided`.
+
+### The sharing stamp
+
+Re-consent shares future records only. Every document in `daily`, `checkIns`, `summaries`, `suggestions`, `flags` and `digests` carries `sharedWithClinician`, set when the document is created to whether the Patient's `sharingConsent` is `granted` at that moment, and never changed.
+
+- **Rules.** On a client create the stamp must equal `patient.sharingConsent == 'granted'` as it stands before the write; on a client update it must not change (nor be dropped). The Clinician reads a stamped document only when `clinicianCanRead` holds and the document is stamped `true`, and clears only flags stamped `true`. The Patient, and the demo shortcut, read everything.
+- **Writers.** The app stamps with `PatientDoc.sharingStamp()` (core) and functions with `sharingStamp(patient)` (`firebase/functions/src/sharing.ts`); the Admin SDK bypasses the rules, so every function writer must call it: the Digest functions today, and Finish Check-in (#14), the silence check (#28) and any other writer of these collections later. A writer that rewrites an existing document (the daily job's later runs, a retried finish) keeps the stamp the document has; it never deletes and recreates a document to change it.
+- **Flags and the Patient's level.** The Clinician can read only flags stamped `true`, so the record's `flagLevel` and `flagReasons` count only those: a flag raised while not sharing is stamped `false`, leaves the level and reasons alone, and does not block raising a shared flag of the same kind later. That keeps the record free of reasons the Clinician must not see, and lets "Clear after follow-up" recompute the level from all the flags that make it. The dashboard shows the level and reasons from the visible open flags once they load (`shownAttention` in `firebase/hosting/js/lib/clear.js`), and from the record only until then.
+- **Dashboard.** Every query on a stamped collection goes through `patientCollectionQuery` (`firebase/hosting/js/lib/sharing.js`). On a Demo Patient any signed-in user has the Patient's access, so there the rules do not hide unshared documents; the dashboard's filter does.
+- **Not stamped.** `consents` (the current permissions the dashboard needs), `visits` (written by the Clinician) and the Patient record. The record's `lastSeenAtMillis` and `lastCheckInAtMillis` are current values, not records: after sharing again, `lastCheckInAtMillis` can be the time of a Check-in saved while not sharing.

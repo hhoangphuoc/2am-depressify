@@ -75,11 +75,11 @@ The rules are described, with a who-can-do-what table, in [`docs/firestore-schem
 
 ## Deploy the security rules
 
-Deploying needs a real Firebase project and a signed-in CLI (`firebase login`). Run the rules tests first, then:
+Deploying needs a real Firebase project and a signed-in CLI (`firebase login`). Run the rules tests first, then deploy the rules with the indexes (the dashboard's latest-Digest query needs the composite index in `firestore.indexes.json`; the emulator does not check indexes):
 
 ```sh
 cd firebase
-firebase deploy --only firestore:rules --project <your-project-id>
+firebase deploy --only firestore:rules,firestore:indexes --project <your-project-id>
 ```
 
 Before a production deploy, require `email_verified` in `authEmail()` in `firestore.rules` (see the comment there) and change the demo Clinician in `linkableClinicians()` together with `DemoConfig.CLINICIAN_EMAIL` (a functions test keeps the two in step).
@@ -100,7 +100,7 @@ This starts Auth (9099), Firestore (8080), Functions (5001), Hosting (5002) and 
      -d '{"email":"clinician@example.com","password":"demo-password-1","returnSecureToken":true}'
    ```
 2. Open http://localhost:5002 and sign in as that Clinician. The Patient list is empty.
-3. Run the Android debug build (after `adb reverse`, above). The app signs in anonymously and creates the Patient record, then shows the welcome and the sharing choice. Choose **Share**: the app lands on Today and "Live patient" appears on the dashboard without a reload. **Don't share** also lands on Today, and the Patient stays off the dashboard (the security rules allow the Clinician to see a Patient only while sharing is granted). Withdrawing in Settings → Sharing and privacy removes them from the open dashboard at once.
+3. Run the Android debug build (after `adb reverse`, above). The app signs in anonymously and creates the Patient record, then shows the welcome and the sharing choice. Choose **Share**: the app lands on Today and "Live patient" appears on the dashboard without a reload. **Don't share** also lands on Today, and the Patient stays off the dashboard (the security rules allow the Clinician to see a Patient only while sharing is granted). Withdrawing in Settings → Sharing and privacy removes them from the open dashboard at once. Sharing again shows what is saved from then on and what was shared before, never what was saved in between: every shared record is stamped `sharedWithClinician` when it is saved (see [the sharing stamp](docs/firestore-schema.md#the-sharing-stamp)).
 
 Use only the `demo-twoam` project with the emulators. Do not run `firebase deploy` against it.
 
@@ -162,4 +162,4 @@ npm run seed -- --today 2026-11-14            # a fixed day, for a rehearsal
 npm run seed -- --project <your-project-id>   # a real project (Application Default Credentials)
 ```
 
-The same inputs (`--today`, `--seed`) give the same data. The Clinician sees `demo-declining` (red), `demo-sparse` (amber) and `demo-steady` (green), in that order. Live Patients are never touched. Needs Node 22 or newer.
+The same inputs (`--today`, `--seed`) give the same data. The Clinician sees `demo-declining` (red), `demo-sparse` (amber) and `demo-steady` (green), in that order. `demo-steady` stopped sharing for three days about four weeks ago, so its Signals and Summaries show a gap there: what was saved while not sharing stays hidden from the Clinician. Live Patients are never touched. Needs Node 22 or newer.
