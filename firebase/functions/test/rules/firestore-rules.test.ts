@@ -8,14 +8,17 @@ import {
   doc,
   getDoc,
   getDocs,
+  limit,
+  orderBy,
   query,
   setDoc,
   updateDoc,
   where,
   writeBatch,
+  type Query,
 } from "firebase/firestore";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
-import { clinicianListFilters } from "../../../hosting/js/lib/sharing.js";
+import { STAMPED_COLLECTIONS, clinicianListFilters, patientCollectionQuery } from "../../../hosting/js/lib/sharing.js";
 import { newPatientDoc } from "../../src/types";
 import {
   ALICE,
@@ -25,21 +28,26 @@ import {
   CLINICIAN_READ_ONLY,
   CRISIS_REASON,
   DEMO,
+  OFF_PERIOD_ID,
   OTHER_CLINICIAN,
   PATIENT_READ_ONLY,
   PATIENT_WRITABLE,
   SAMPLES,
   SHARED_AT,
+  STAMPED,
   STRANGER,
   SUBCOLLECTIONS,
+  appCreates,
   asClinician,
   asPatient,
+  checkIn,
   crisisFlag,
   mail,
   samplePath,
   seed,
   signedOut,
   startEnv,
+  suggestion,
   visit,
   type Subcollection,
 } from "./fixtures";
@@ -63,15 +71,25 @@ const readPaths = (patientId: string) => [`patients/${patientId}`, ...SUBCOLLECT
 const dashboardList = (db: ReturnType<typeof signedOut>, email: string) =>
   query(collection(db, "patients"), ...clinicianListFilters(email).map(([field, op, value]) => where(field, op, value)));
 
-/** Create, update and delete on one collection of one Patient. */
-async function writes(db: ReturnType<typeof signedOut>, patientId: string, sub: Subcollection) {
+/**
+ * Create (as the app creates the document, stamped `shared`), update (rewriting the stored
+ * document unchanged) and delete on one collection of one Patient.
+ */
+async function writes(db: ReturnType<typeof signedOut>, patientId: string, sub: Subcollection, shared = true) {
   const sample = SAMPLES[sub];
   return [
-    () => setDoc(doc(db, `patients/${patientId}/${sub}/new-doc`), sample.data),
+    () => setDoc(doc(db, `patients/${patientId}/${sub}/new-doc`), appCreates(sub, shared)),
     () => setDoc(doc(db, samplePath(patientId, sub)), sample.data),
     () => deleteDoc(doc(db, samplePath(patientId, sub))),
   ];
 }
+
+/** The npm SDK's functions, in the shape the dashboard's query helper takes. */
+const FS = { collection, query, where };
+
+/** The query the dashboard runs on a Patient's collection (`patientCollectionQuery` in hosting/js/lib/sharing.js). */
+const dashboardQuery = (db: ReturnType<typeof signedOut>, patientId: string, sub: Subcollection, ...constraints: unknown[]) =>
+  patientCollectionQuery(FS, db, patientId, sub, ...constraints) as Query;
 
 describe("A Patient reads and writes their own record and its collections, but can only read Visits and Digests", () => {
   it("creates their own record the way the app does, linked to the demo Clinician, and reads it", async () => {
@@ -191,7 +209,7 @@ describe("The Clinician reads everything for their Patients, writes Visits, the 
     const db = asClinician(env, CLINICIAN);
     await assertSucceeds(getDocs(dashboardList(db, CLINICIAN)));
     for (const path of readPaths(ALICE)) await assertSucceeds(getDoc(doc(db, path)));
-    for (const sub of SUBCOLLECTIONS) await assertSucceeds(getDocs(collection(db, `patients/${ALICE}/${sub}`)));
+    for (const sub of SUBCOLLECTIONS) await assertSucceeds(getDocs(dashboardQuery(db, ALICE, sub)));
   });
 
   it("creates, updates and deletes Visits", async () => {
@@ -272,7 +290,7 @@ describe("Without sharing Consent the Clinician cannot read that Patient's recor
   async function clinicianLocksOut(patientId: string) {
     const db = asClinician(env, CLINICIAN);
     for (const path of readPaths(patientId)) await assertFails(getDoc(doc(db, path)));
-    for (const sub of SUBCOLLECTIONS) await assertFails(getDocs(collection(db, `patients/${patientId}/${sub}`)));
+    for (const sub of SUBCOLLECTIONS) await assertFails(getDocs(dashboardQuery(db, patientId, sub)));
     await assertFails(setDoc(doc(db, `patients/${patientId}/visits/v2`), visit));
     await assertFails(updateDoc(doc(db, `patients/${patientId}/visits/v1`), { score: 3 }));
     await assertFails(deleteDoc(doc(db, `patients/${patientId}/visits/v1`)));
@@ -285,7 +303,7 @@ describe("Without sharing Consent the Clinician cannot read that Patient's recor
   async function clinicianReads(patientId: string) {
     const db = asClinician(env, CLINICIAN);
     for (const path of readPaths(patientId)) await assertSucceeds(getDoc(doc(db, path)));
-    for (const sub of SUBCOLLECTIONS) await assertSucceeds(getDocs(collection(db, `patients/${patientId}/${sub}`)));
+    for (const sub of SUBCOLLECTIONS) await assertSucceeds(getDocs(dashboardQuery(db, patientId, sub)));
   }
 
   async function listedIds() {
@@ -315,6 +333,9 @@ describe("Without sharing Consent the Clinician cannot read that Patient's recor
     const carol = asPatient(env, "carol");
     await assertSucceeds(setDoc(doc(carol, "patients/carol"), newPatientDoc("Live patient", CLINICIAN)));
     await choose("carol", "granted", SHARED_AT + 1);
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      for (const sub of SUBCOLLECTIONS) await setDoc(doc(ctx.firestore(), samplePath("carol", sub)), SAMPLES[sub].data);
+    });
 
     await clinicianReads("carol");
     expect(await listedIds()).toEqual([ALICE, "carol"]);
@@ -360,8 +381,8 @@ describe("Without sharing Consent the Clinician cannot read that Patient's recor
     await choose(ALICE, "declined", SHARED_AT + 1);
     const db = asPatient(env, ALICE);
     for (const path of readPaths(ALICE)) await assertSucceeds(getDoc(doc(db, path)));
-    for (const sub of PATIENT_WRITABLE) for (const write of await writes(db, ALICE, sub)) await assertSucceeds(write());
-    await assertSucceeds(setDoc(doc(db, `patients/${ALICE}/flags/f2`), crisisFlag));
+    for (const sub of PATIENT_WRITABLE) for (const write of await writes(db, ALICE, sub, false)) await assertSucceeds(write());
+    await assertSucceeds(setDoc(doc(db, `patients/${ALICE}/flags/f2`), { ...crisisFlag, sharedWithClinician: false }));
   });
 });
 
@@ -397,6 +418,203 @@ describe("On a flag the Clinician can set only the cleared time, and can reset t
   });
 });
 
+describe("Re-consent shares future records only: the Clinician reads only what was saved while sharing", () => {
+  /** The Patient records their choice the way the app does: the record and `consents/sharing` together. */
+  async function choose(patientId: string, choice: "granted" | "declined", atMillis: number) {
+    const db = asPatient(env, patientId);
+    const batch = writeBatch(db);
+    batch.update(doc(db, `patients/${patientId}`), { sharingConsent: choice, sharingChangedAtMillis: atMillis });
+    batch.set(doc(db, `patients/${patientId}/consents/sharing`), { subject: "sharing", granted: choice === "granted", changedAtMillis: atMillis });
+    await assertSucceeds(batch.commit());
+  }
+
+  /** The ids the dashboard's query returns for one collection. */
+  async function shownIds(patientId: string, sub: Subcollection) {
+    const snap = await assertSucceeds(getDocs(dashboardQuery(asClinician(env, CLINICIAN), patientId, sub)));
+    return snap.docs.map((d) => d.id).sort();
+  }
+
+  it("the stamped collections are the ones the dashboard filters", () => {
+    expect([...STAMPED_COLLECTIONS].sort()).toEqual([...STAMPED].sort());
+  });
+
+  it("the Clinician cannot get or query a document saved while the Patient was not sharing", async () => {
+    const db = asClinician(env, CLINICIAN);
+    for (const sub of STAMPED) {
+      await assertFails(getDoc(doc(db, `patients/${ALICE}/${sub}/${OFF_PERIOD_ID}`)));
+      // A missing document is refused the same way, so a refusal does not tell that one is hidden.
+      await assertFails(getDoc(doc(db, `patients/${ALICE}/${sub}/no-such-doc`)));
+      await assertSucceeds(getDoc(doc(db, samplePath(ALICE, sub))));
+      // Without the sharing filter the whole query is rejected; with it, the off period is left out.
+      await assertFails(getDocs(collection(db, `patients/${ALICE}/${sub}`)));
+      await assertFails(getDocs(query(collection(db, `patients/${ALICE}/${sub}`), where("sharedWithClinician", "==", false))));
+      expect(await shownIds(ALICE, sub)).toEqual([SAMPLES[sub].id]);
+    }
+  });
+
+  it("the Patient still reads everything they saved, the time without sharing included", async () => {
+    const db = asPatient(env, ALICE);
+    for (const sub of STAMPED) {
+      await assertSucceeds(getDoc(doc(db, `patients/${ALICE}/${sub}/${OFF_PERIOD_ID}`)));
+      const snap = await assertSucceeds(getDocs(collection(db, `patients/${ALICE}/${sub}`)));
+      expect(snap.docs.map((d) => d.id)).toContain(OFF_PERIOD_ID);
+    }
+  });
+
+  it("after sharing again, the Clinician reads the earlier sharing period and what comes next, never the time in between", async () => {
+    const patient = asPatient(env, ALICE);
+    const writable = ["daily", "checkIns", "suggestions", "flags"] as const;
+
+    await choose(ALICE, "declined", SHARED_AT + 1);
+    for (const sub of writable) await assertSucceeds(setDoc(doc(patient, `patients/${ALICE}/${sub}/while-off`), appCreates(sub, false)));
+
+    await choose(ALICE, "granted", SHARED_AT + 2);
+    for (const sub of writable) await assertSucceeds(setDoc(doc(patient, `patients/${ALICE}/${sub}/after`), appCreates(sub, true)));
+
+    const db = asClinician(env, CLINICIAN);
+    for (const sub of writable) {
+      await assertSucceeds(getDoc(doc(db, samplePath(ALICE, sub)))); // the earlier sharing period
+      await assertSucceeds(getDoc(doc(db, `patients/${ALICE}/${sub}/after`)));
+      await assertFails(getDoc(doc(db, `patients/${ALICE}/${sub}/while-off`)));
+      await assertFails(getDoc(doc(db, `patients/${ALICE}/${sub}/${OFF_PERIOD_ID}`)));
+      expect(await shownIds(ALICE, sub)).toEqual(["after", SAMPLES[sub].id].sort());
+    }
+    // Sharing again does not reach back: the Patient cannot restamp what was saved while off.
+    for (const sub of writable) {
+      await assertFails(updateDoc(doc(patient, `patients/${ALICE}/${sub}/while-off`), { sharedWithClinician: true }));
+    }
+  });
+
+  it("a client cannot create a document with the wrong stamp, or without one", async () => {
+    const alice = asPatient(env, ALICE);
+    for (const sub of ["daily", "checkIns", "suggestions", "flags"] as const) {
+      const { sharedWithClinician: _drop, ...unstamped } = appCreates(sub, true) as Record<string, unknown>;
+      await assertFails(setDoc(doc(alice, `patients/${ALICE}/${sub}/new-doc`), appCreates(sub, false)));
+      await assertFails(setDoc(doc(alice, `patients/${ALICE}/${sub}/new-doc`), unstamped));
+      await assertFails(setDoc(doc(alice, `patients/${ALICE}/${sub}/new-doc`), { ...unstamped, sharedWithClinician: "yes" }));
+      await assertSucceeds(setDoc(doc(alice, `patients/${ALICE}/${sub}/new-doc`), appCreates(sub, true)));
+      // The demo shortcut too: this Demo Patient has not decided, so only false is right.
+      const stranger = asPatient(env, STRANGER);
+      await assertFails(setDoc(doc(stranger, `patients/${DEMO}/${sub}/new-doc`), appCreates(sub, true)));
+      await assertSucceeds(setDoc(doc(stranger, `patients/${DEMO}/${sub}/new-doc`), appCreates(sub, false)));
+    }
+    await choose(ALICE, "declined", SHARED_AT + 1);
+    for (const sub of ["daily", "checkIns", "suggestions", "flags"] as const) {
+      await assertFails(setDoc(doc(alice, `patients/${ALICE}/${sub}/while-off`), appCreates(sub, true)));
+      await assertSucceeds(setDoc(doc(alice, `patients/${ALICE}/${sub}/while-off`), appCreates(sub, false)));
+    }
+  });
+
+  it("a client cannot change or drop the stamp", async () => {
+    const alice = asPatient(env, ALICE);
+    for (const sub of ["daily", "checkIns", "suggestions", "flags"] as const) {
+      await assertFails(updateDoc(doc(alice, samplePath(ALICE, sub)), { sharedWithClinician: false }));
+      await assertFails(updateDoc(doc(alice, `patients/${ALICE}/${sub}/${OFF_PERIOD_ID}`), { sharedWithClinician: true }));
+      const { sharedWithClinician: _drop, ...unstamped } = SAMPLES[sub].data as Record<string, unknown>;
+      await assertFails(setDoc(doc(alice, samplePath(ALICE, sub)), unstamped));
+    }
+    // A daily record rewritten later keeps its stamp, whatever sharing is now.
+    await choose(ALICE, "declined", SHARED_AT + 1);
+    await assertSucceeds(setDoc(doc(alice, samplePath(ALICE, "daily")), { ...SAMPLES.daily.data, composite: -0.2 }));
+    await assertFails(setDoc(doc(alice, samplePath(ALICE, "daily")), { ...SAMPLES.daily.data, sharedWithClinician: false }));
+  });
+
+  it("the Clinician can clear only a flag they can see", async () => {
+    const db = asClinician(env, CLINICIAN);
+    await assertFails(updateDoc(doc(db, `patients/${ALICE}/flags/${OFF_PERIOD_ID}`), { clearedAtMillis: 1_700_000_500_000 }));
+    await assertSucceeds(updateDoc(doc(db, samplePath(ALICE, "flags")), { clearedAtMillis: 1_700_000_500_000 }));
+  });
+
+  it("the dashboard's own queries succeed under the rules, including the Digest's newest-week query", async () => {
+    const db = asClinician(env, CLINICIAN);
+    for (const sub of SUBCOLLECTIONS) await assertSucceeds(getDocs(dashboardQuery(db, ALICE, sub)));
+    const latest = await assertSucceeds(getDocs(dashboardQuery(db, ALICE, "digests", orderBy("isoWeek", "desc"), limit(1))));
+    expect(latest.docs.map((d) => d.id)).toEqual([SAMPLES.digests.id]);
+  });
+});
+
+describe("Ratings, Voice cues, the crisis marker and the Outcome are recorded by functions, not edited by hand", () => {
+  const RATINGS_AND_MARKERS: Record<string, unknown>[] = [
+    { mood: 4 },
+    { energy: 1 },
+    { sleepQuality: 5 },
+    { voiceCues: [{ label: "bright tone", intensity: 1, heard: "laughed" }] },
+    { crisis: true },
+  ];
+  const OUTCOME: Record<string, unknown>[] = [{ tried: true }, { tried: false }, { felt: 4 }, { objectiveChange: 0.4 }, { outcomeScore: 0.6 }];
+
+  /** The Patient themselves, and anyone signed in through the demo shortcut, stamped as each shares now. */
+  const actors = () => [
+    { name: "the Patient", db: asPatient(env, ALICE), patientId: ALICE, shared: true },
+    { name: "the demo shortcut", db: asPatient(env, STRANGER), patientId: DEMO, shared: false },
+  ];
+
+  it("the Patient creates a Check-in with its times only, and later sets its times", async () => {
+    for (const { db, patientId, shared } of actors()) {
+      const ref = doc(db, `patients/${patientId}/checkIns/c2`);
+      await assertSucceeds(setDoc(ref, appCreates("checkIns", shared)));
+      await assertSucceeds(updateDoc(ref, { endedAtMillis: 1_700_000_190_000 }));
+      await assertSucceeds(updateDoc(ref, { startedAtMillis: 1_700_000_010_000, endedAtMillis: 1_700_000_200_000 }));
+    }
+  });
+
+  it("the Patient cannot set ratings, Voice cues or the crisis marker on a new Check-in", async () => {
+    for (const { db, patientId, shared } of actors()) {
+      for (const field of RATINGS_AND_MARKERS) {
+        await assertFails(setDoc(doc(db, `patients/${patientId}/checkIns/c2`), { ...appCreates("checkIns", shared), ...field }));
+      }
+    }
+  });
+
+  it("the Patient cannot change the ratings, Voice cues or crisis marker Finish Check-in wrote", async () => {
+    for (const { db, patientId } of actors()) {
+      const ref = doc(db, samplePath(patientId, "checkIns"));
+      for (const field of [...RATINGS_AND_MARKERS, { mood: null }, { voiceCues: [] }, { id: "other" }]) {
+        await assertFails(updateDoc(ref, field));
+      }
+      await assertFails(setDoc(ref, { ...checkIn, mood: 5 }));
+    }
+  });
+
+  it("the Patient records a Suggestion and changes its status and booking", async () => {
+    for (const { db, patientId, shared } of actors()) {
+      const ref = doc(db, `patients/${patientId}/suggestions/s2`);
+      await assertSucceeds(setDoc(ref, { ...appCreates("suggestions", shared), status: "proposed" }));
+      await assertSucceeds(updateDoc(ref, { status: "accepted" }));
+      await assertSucceeds(updateDoc(ref, { booked: true }));
+      await assertSucceeds(updateDoc(doc(db, samplePath(patientId, "suggestions")), { status: "declined", booked: false }));
+    }
+  });
+
+  it("the Patient cannot set the Outcome on a new Suggestion", async () => {
+    for (const { db, patientId, shared } of actors()) {
+      for (const field of OUTCOME) {
+        await assertFails(setDoc(doc(db, `patients/${patientId}/suggestions/s2`), { ...appCreates("suggestions", shared), ...field }));
+      }
+    }
+  });
+
+  it("the Patient cannot fill in or change the Outcome, or rewrite what was suggested", async () => {
+    for (const { db, patientId } of actors()) {
+      const ref = doc(db, samplePath(patientId, "suggestions"));
+      for (const field of [...OUTCOME, { kind: "music" }, { details: "Something else" }, { suggestedAtMillis: 1 }]) {
+        await assertFails(updateDoc(ref, field));
+      }
+      await assertFails(setDoc(ref, { ...suggestion, tried: true, felt: 5 }));
+    }
+  });
+
+  it("the Clinician still writes neither Check-ins nor Suggestions", async () => {
+    const db = asClinician(env, CLINICIAN);
+    await assertFails(setDoc(doc(db, `patients/${ALICE}/checkIns/c2`), appCreates("checkIns", true)));
+    await assertFails(updateDoc(doc(db, samplePath(ALICE, "checkIns")), { mood: 1 }));
+    await assertFails(updateDoc(doc(db, samplePath(ALICE, "checkIns")), { endedAtMillis: 1 }));
+    await assertFails(setDoc(doc(db, `patients/${ALICE}/suggestions/s2`), appCreates("suggestions", true)));
+    await assertFails(updateDoc(doc(db, samplePath(ALICE, "suggestions")), { status: "declined" }));
+    await assertFails(updateDoc(doc(db, samplePath(ALICE, "suggestions")), { tried: true, outcomeScore: 0.5 }));
+  });
+});
+
 describe("Any signed-in user can read and write a Patient marked synthetic", () => {
   it("anyoneSignedInCanActAsSyntheticPatient: reads the record and every collection", async () => {
     for (const db of [asPatient(env, STRANGER), asPatient(env, ALICE), asClinician(env, OTHER_CLINICIAN)]) {
@@ -406,10 +624,11 @@ describe("Any signed-in user can read and write a Patient marked synthetic", () 
   });
 
   it("writes what the Patient writes: the phone's fields and the Patient's collections", async () => {
+    // This Demo Patient has not decided on sharing, so what is saved now is stamped false.
     const db = asPatient(env, STRANGER);
     await assertSucceeds(updateDoc(doc(db, `patients/${DEMO}`), { lastSeenAtMillis: 1_700_000_400_000 }));
-    for (const sub of PATIENT_WRITABLE) for (const write of await writes(db, DEMO, sub)) await assertSucceeds(write());
-    await assertSucceeds(setDoc(doc(db, `patients/${DEMO}/flags/f2`), crisisFlag));
+    for (const sub of PATIENT_WRITABLE) for (const write of await writes(db, DEMO, sub, false)) await assertSucceeds(write());
+    await assertSucceeds(setDoc(doc(db, `patients/${DEMO}/flags/f2`), { ...crisisFlag, sharedWithClinician: false }));
   });
 
   it("cannot write Summaries, Visits or Digests through the demo shortcut", async () => {

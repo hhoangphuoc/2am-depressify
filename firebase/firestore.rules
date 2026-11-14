@@ -6,14 +6,18 @@ rules_version = '2';
 // Who may see a Patient's progress: the Patient themselves, their Clinician, and, as a demo
 // shortcut, any signed-in user for a Patient marked synthetic.
 //
-//   Patient    reads and writes their own record and its collections. Visits and Digests are
-//              read-only to them; flags are append-only (only the Clinician clears one); on the
-//              record they write only the fields the phone owns, and may raise but never lower
-//              their own flag level.
-//   Clinician  reads everything for the Patients whose clinicianEmail is their sign-in email,
-//              while that Patient's sharing Consent is granted.
-//              Writes Visits, the TMS end date and display name, the cleared time on a flag,
-//              and resets the Patient's flag level and reasons after follow-up. Nothing else.
+//   Patient    reads and writes their own record and its collections. Summaries, Visits and
+//              Digests are read-only to them; flags are append-only (only the Clinician clears
+//              one); on a Check-in they own only the times, and on a Suggestion only its status
+//              and booking (ratings, Voice cues, the crisis marker and the Outcome are written by
+//              functions); on the record they write only the fields the phone owns, and may raise
+//              but never lower their own flag level.
+//   Clinician  reads the record, Consents and Visits of the Patients whose clinicianEmail is their
+//              sign-in email, while that Patient's sharing Consent is granted, and of the other
+//              collections only the documents stamped `sharedWithClinician` (saved while the
+//              Patient was sharing). Writes Visits, the TMS end date and display name, the
+//              cleared time on a flag they can see, and resets the Patient's flag level and
+//              reasons after follow-up. Nothing else.
 //   Demo       any signed-in user acts as the Patient on a record marked synthetic.
 //   mail       no client access. Functions write it with the Admin SDK, which bypasses rules.
 //
@@ -141,8 +145,10 @@ service cloud.firestore {
     }
 
     // The phone raises flags (its daily rules and the crisis tool) and sets the level to the
-    // highest uncleared one. Nothing but the Clinician lowers a level, so from the phone the
-    // level may only stay or rise, and existing reasons are kept.
+    // highest uncleared flag the Clinician can see (stamped `sharedWithClinician`); a flag raised
+    // while not sharing leaves the level and reasons alone, so the record never carries its
+    // reason. Nothing but the Clinician lowers a level, so from the phone the level may only stay
+    // or rise, and existing reasons are kept.
     function flagRaisedOnly() {
       let after = request.resource.data;
       return after.flagLevel in flagLevels()
@@ -152,7 +158,9 @@ service cloud.firestore {
     }
 
     // The Clinician renames the Patient, sets the TMS end date, and after follow-up resets the
-    // level to the highest remaining uncleared flag, or green, with its reasons.
+    // level to the highest remaining uncleared flag, or green, with its reasons. The Clinician can
+    // read every flag that counts toward the level (those stamped `sharedWithClinician`), so the
+    // reset is computed from all of them.
     function clinicianUpdate() {
       let after = request.resource.data;
       return changedKeys().hasOnly(['displayName', 'tmsEndDate', 'flagLevel', 'flagReasons'])
@@ -192,39 +200,100 @@ service cloud.firestore {
         return patientAccess() || clinicianCanRead(patient());
       }
 
+      // ---- The sharing stamp ---------------------------------------------------------------
+      //
+      // Re-consent shares future records only. Every document in daily, checkIns, summaries,
+      // suggestions, flags and digests carries `sharedWithClinician`: whether the Patient's
+      // sharing Consent was granted when the document was created. It never changes. The Clinician
+      // reads only documents stamped true, so what was saved while sharing was off never reaches
+      // them, and what was saved during an earlier sharing period is visible again once the
+      // Patient shares again. Consents, Visits and the record itself are not stamped.
+      //
+      // A Clinician query on a stamped collection must filter on `sharedWithClinician == true`
+      // (`clinicianCollectionFilters` in hosting/js/lib/sharing.js), or Firestore rejects it.
+      // Functions stamp with `sharingStamp` (functions/src/sharing.ts). On a Demo Patient any
+      // signed-in user has the Patient's access, so there only the dashboard's filter hides
+      // unshared documents.
+
+      // A Clinician `get` of a missing document is refused like a hidden one, so a refusal never
+      // tells that a document exists. The dashboard only queries these collections.
+      function canReadStamped() {
+        return patientAccess()
+          || (clinicianCanRead(patient()) && resource.data.sharedWithClinician == true);
+      }
+
+      // A new document stamped with whether the Patient shares right now (before this write).
+      function stampedNow() {
+        return request.resource.data.sharedWithClinician == (patient().sharingConsent == 'granted');
+      }
+
+      function stampKept() {
+        return !changedKeys().hasAny(['sharedWithClinician']);
+      }
+
+      // ---- The collections -----------------------------------------------------------------
+
       // The Patient's own records. The Clinician only reads them.
       match /daily/{date} {
-        allow read: if canRead();
-        allow write: if patientAccess();
+        allow read: if canReadStamped();
+        allow create: if patientAccess() && stampedNow();
+        allow update: if patientAccess() && stampKept();
+        allow delete: if patientAccess();
       }
       match /consents/{subject} {
         allow read: if canRead();
         allow write: if patientAccess();
       }
+
+      // The app creates a Check-in and owns only its times. The ratings, Voice cues and crisis
+      // marker are written by Finish Check-in (Admin SDK) from the draft, so they are empty when
+      // the app creates the Check-in and the app never changes them.
       match /checkIns/{checkInId} {
-        allow read: if canRead();
-        allow write: if patientAccess();
+        allow read: if canReadStamped();
+        allow create: if patientAccess() && stampedNow() && checkInAsAppCreatesIt();
+        allow update: if patientAccess() && changedKeys().hasOnly(['startedAtMillis', 'endedAtMillis']);
+        allow delete: if patientAccess();
       }
+
+      function checkInAsAppCreatesIt() {
+        let c = request.resource.data;
+        return c.mood == null && c.energy == null && c.sleepQuality == null
+          && c.voiceCues is list && c.voiceCues.size() == 0
+          && c.crisis == false;
+      }
+
       // Written only by Finish Check-in (Admin SDK) from the Check-in itself. Read-only to every
       // client, the Patient included, so what the Clinician reads cannot be edited by hand.
       match /summaries/{checkInId} {
-        allow read: if canRead();
+        allow read: if canReadStamped();
       }
+
+      // The app records a Suggestion and changes only its status and booking. The Outcome (tried,
+      // felt, objective change, Outcome score) is written by functions only.
       match /suggestions/{suggestionId} {
-        allow read: if canRead();
-        allow write: if patientAccess();
+        allow read: if canReadStamped();
+        allow create: if patientAccess() && stampedNow() && noOutcomeYet();
+        allow update: if patientAccess() && changedKeys().hasOnly(['status', 'booked']);
+        allow delete: if patientAccess();
+      }
+
+      function noOutcomeYet() {
+        let s = request.resource.data;
+        return s.tried == null && s.felt == null && s.objectiveChange == null && s.outcomeScore == null;
       }
 
       // Flags are history. The phone appends uncleared flags (a retried write that changes
-      // nothing is allowed); only the Clinician clears one, by setting its cleared time and
-      // nothing else. No client deletes a flag.
+      // nothing is allowed); only the Clinician clears one they can see, by setting its cleared
+      // time and nothing else. No client deletes a flag.
       match /flags/{flagId} {
-        allow read: if canRead();
+        allow read: if canReadStamped();
         allow create: if patientAccess()
+          && stampedNow()
           && request.resource.data.level in flagLevels()
           && request.resource.data.clearedAtMillis == null;
         allow update: if (patientAccess() && changedKeys().size() == 0)
           || (clinicianCanWrite(patient())
+              && resource.data.sharedWithClinician == true
               && changedKeys().hasOnly(['clearedAtMillis'])
               && request.resource.data.clearedAtMillis is int);
         allow delete: if false;
@@ -243,7 +312,7 @@ service cloud.firestore {
 
       // Written by the weekly Digest function (Admin SDK). Read-only to every client.
       match /digests/{isoWeek} {
-        allow read: if canRead();
+        allow read: if canReadStamped();
       }
     }
 

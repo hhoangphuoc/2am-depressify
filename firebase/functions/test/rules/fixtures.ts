@@ -43,6 +43,7 @@ export const daily: DailyDoc = {
   vsBaseline: { sleepMinutes: -1.4, steps: null },
   composite: -1.4,
   demoOverride: false,
+  sharedWithClinician: true,
 };
 export const consent: Consent = { subject: "steps", granted: true, changedAtMillis: 1_700_000_000_000 };
 export const checkIn: CheckIn = {
@@ -54,6 +55,7 @@ export const checkIn: CheckIn = {
   sleepQuality: 2,
   voiceCues: [{ label: "flat tone", intensity: 2, heard: "short answers" }],
   crisis: false,
+  sharedWithClinician: true,
 };
 export const summary: Summary = {
   checkInId: "c1",
@@ -67,6 +69,7 @@ export const summary: Summary = {
   suggestion: "A short walk by the river",
   previousOutcome: null,
   quotes: [],
+  sharedWithClinician: true,
 };
 export const suggestion: Suggestion = {
   id: "s1",
@@ -79,6 +82,7 @@ export const suggestion: Suggestion = {
   felt: null,
   objectiveChange: null,
   outcomeScore: null,
+  sharedWithClinician: true,
 };
 export const openFlag: Flag = {
   level: "amber",
@@ -86,6 +90,7 @@ export const openFlag: Flag = {
   reason: AMBER_REASON,
   raisedAtMillis: 1_700_000_000_000,
   clearedAtMillis: null,
+  sharedWithClinician: true,
 };
 export const crisisFlag: Flag = {
   level: "red",
@@ -93,6 +98,7 @@ export const crisisFlag: Flag = {
   reason: CRISIS_REASON,
   raisedAtMillis: 1_700_000_300_000,
   clearedAtMillis: null,
+  sharedWithClinician: true,
 };
 export const visit: Visit = { date: "2026-10-23", questionnaire: "phq9", score: 7 };
 export const digest: Digest = {
@@ -102,13 +108,18 @@ export const digest: Digest = {
   summaryCount: 5,
   text: "A steady week.",
   generatedAtMillis: 1_700_000_000_000,
+  sharedWithClinician: true,
 };
 export const mail: MailDoc = {
   to: CLINICIAN,
   message: { subject: "[RED] Alice", text: "A red flag was raised. Open the dashboard." },
 };
 
-/** One document per Patient collection, keyed by collection. A new collection in the contract must add one here. */
+/**
+ * One document per Patient collection as it is stored (functions have filled in the Check-in's
+ * ratings), keyed by collection. Stamped documents were saved while sharing. A new collection in
+ * the contract must add one here.
+ */
 export const SAMPLES: Record<Subcollection, { id: string; data: object }> = {
   daily: { id: daily.date, data: daily },
   consents: { id: consent.subject, data: consent },
@@ -120,6 +131,25 @@ export const SAMPLES: Record<Subcollection, { id: string; data: object }> = {
   digests: { id: digest.isoWeek, data: digest },
 };
 export const SUBCOLLECTIONS = Object.keys(SAMPLES) as Subcollection[];
+
+/** The collections whose documents carry `sharedWithClinician`. */
+export const STAMPED: Subcollection[] = ["daily", "checkIns", "summaries", "suggestions", "flags", "digests"];
+
+/** The same document saved while the Patient was not sharing: the Clinician never reads it. */
+export const OFF_PERIOD_ID = "off-period";
+
+/**
+ * A new document as the Patient's app creates it, stamped with whether the Patient shares now. A
+ * Check-in starts with no ratings, Voice cues or crisis marker, and a Suggestion with no Outcome:
+ * Finish Check-in writes those.
+ */
+export function appCreates(sub: Subcollection, sharedWithClinician: boolean): object {
+  const data = SAMPLES[sub].data as Record<string, unknown>;
+  if (sub === "checkIns") {
+    return { ...checkIn, endedAtMillis: null, mood: null, energy: null, sleepQuality: null, voiceCues: [], crisis: false, sharedWithClinician };
+  }
+  return STAMPED.includes(sub) ? { ...data, sharedWithClinician } : data;
+}
 
 /** The collections a Patient reads and writes. Visits and Digests are read-only to them; flags are append-only. */
 export const PATIENT_WRITABLE: Subcollection[] = ["daily", "consents", "checkIns", "suggestions"];
@@ -151,7 +181,11 @@ export async function startEnv(): Promise<RulesTestEnvironment> {
   });
 }
 
-/** Alice, Bob and a Demo Patient, each with one document in every collection, plus one mail document. */
+/**
+ * Alice, Bob and a Demo Patient, each with one document in every collection, plus one mail
+ * document. Alice also has one document in each stamped collection saved while she was not sharing
+ * (`OFF_PERIOD_ID`, stamped false).
+ */
 export async function seed(env: RulesTestEnvironment): Promise<void> {
   await env.clearFirestore();
   await env.withSecurityRulesDisabled(async (ctx) => {
@@ -159,6 +193,9 @@ export async function seed(env: RulesTestEnvironment): Promise<void> {
     for (const [id, record] of [[ALICE, alice], [BOB, bob], [DEMO, demo]] as const) {
       await setDoc(doc(db, "patients", id), record);
       for (const sub of SUBCOLLECTIONS) await setDoc(doc(db, samplePath(id, sub)), SAMPLES[sub].data);
+    }
+    for (const sub of STAMPED) {
+      await setDoc(doc(db, `patients/${ALICE}/${sub}/${OFF_PERIOD_ID}`), { ...SAMPLES[sub].data, sharedWithClinician: false });
     }
     await setDoc(doc(db, "mail/m1"), mail);
   });
