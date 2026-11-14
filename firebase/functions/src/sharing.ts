@@ -8,6 +8,7 @@ import type { PatientDoc } from "./types";
  * - no flag email is sent for the Patient (Flag email, #22): flags are still recorded, so the
  *   Patient's own record stays complete, but the Clinician is not alerted;
  * - the silence check skips the Patient (#28).
+ * - the weekly Digest skips the Patient and "Generate now" is refused (#23).
  * Check-ins, Summaries and the Patient's own records continue as usual. Re-granting shares from
  * then on only: nothing raised while sharing was off is emailed afterwards.
  *

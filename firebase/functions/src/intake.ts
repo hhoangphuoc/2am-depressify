@@ -120,7 +120,7 @@ function field(data: unknown, key: string): unknown {
   return data !== null && typeof data === "object" ? (data as Record<string, unknown>)[key] : undefined;
 }
 
-function patientIdOf(data: unknown): string {
+export function patientIdOf(data: unknown): string {
   const patientId = field(data, "patientId");
   if (typeof patientId !== "string" || patientId.trim() === "" || patientId.includes("/")) {
     throw new HttpsError("invalid-argument", "A Patient id is required.");
