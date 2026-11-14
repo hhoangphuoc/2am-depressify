@@ -1,15 +1,18 @@
 // Overview blocks of the Patient page (see the slot contract in views/patient.js):
-//   mountAttention  the Attention flag level word and its reasons, first on the page
+//   mountAttention  the Attention flag level word and its reasons, first on the page: from the open
+//                   flags the Clinician can see, and from the Patient record until they load
 //   mountTimeline   the Phase timeline: weeks since the end of TMS, Phases between Visits, the weekly
 //                   Mood rating and Questionnaire scores in separate lanes, and the same as a table.
 //                   Without a TMS end date it shows calendar weeks and asks for the date.
-import { collection, onSnapshot } from "https://www.gstatic.com/firebasejs/13.3.0/firebase-firestore.js";
+import { onSnapshot } from "https://www.gstatic.com/firebasejs/13.3.0/firebase-firestore.js";
+import { shownAttention } from "../lib/clear.js";
 import { COLLECTIONS } from "../lib/contract.js";
 import { isDateKey, shortDate } from "../lib/dates.js";
 import { levelWord } from "../lib/list-row.js";
 import { moodByWeek, questionnairePoints, timelineRows } from "../lib/timeline.js";
 import { drawTimeline, timelineTable } from "./timeline-chart.js";
 import { mountTmsEndForm } from "./tms-end.js";
+import { patientQuery } from "../queries.js";
 
 const COPY = {
   attention: "Attention flag",
@@ -35,26 +38,53 @@ function el(tag, attrs = {}, text) {
 }
 
 /**
- * The level word and reasons, as on the Patient list.
+ * The level word and reasons, as on the Patient list: from the open flags the Clinician can see
+ * (`shownAttention`), and from the Patient record until those load.
  * @param {HTMLElement} container
+ * @param {{ db: import("firebase/firestore").Firestore, patientId: string }} ctx
  */
-export function mountAttention(container) {
+export function mountAttention(container, { db, patientId }) {
   const block = el("section", { class: "panel attention", "aria-labelledby": "attention-heading" });
   container.replaceChildren(block);
+  /** @type {object | null} */
+  let patient = null;
+  /** @type {object[] | null} null until the flags load, or when they cannot be read */
+  let flags = null;
+
+  function render() {
+    if (!patient) return;
+    const shown = shownAttention(patient, flags);
+    const level = shown.flagLevel;
+    const reasons = shown.flagReasons.length ? shown.flagReasons : [level === "green" ? COPY.nothingRaised : COPY.noReason];
+    const heading = el("h4", { id: "attention-heading" }, COPY.attention);
+    const chip = el("span", { class: `level level-${level}` }, levelWord(level));
+    const list = el("ul", { class: "reasons" });
+    for (const reason of reasons) list.append(el("li", {}, reason));
+    const row = el("div", { class: "attention-row" });
+    row.append(chip, list);
+    block.replaceChildren(heading, row);
+  }
+
+  const stopFlags = onSnapshot(
+    patientQuery(db, patientId, COLLECTIONS.flags),
+    (snapshot) => {
+      flags = snapshot.docs.map((d) => ({ ...d.data(), id: d.id }));
+      render();
+    },
+    // Withdrawn sharing is shown by the page; otherwise fall back to the record.
+    () => {
+      flags = null;
+      render();
+    },
+  );
+
   return {
-    update({ patient }) {
-      const level = ["red", "amber"].includes(patient.flagLevel) ? patient.flagLevel : "green";
-      const given = Array.isArray(patient.flagReasons) ? patient.flagReasons.filter((r) => typeof r === "string" && r) : [];
-      const reasons = given.length ? given : [level === "green" ? COPY.nothingRaised : COPY.noReason];
-      const heading = el("h4", { id: "attention-heading" }, COPY.attention);
-      const chip = el("span", { class: `level level-${level}` }, levelWord(level));
-      const list = el("ul", { class: "reasons" });
-      for (const reason of reasons) list.append(el("li", {}, reason));
-      const row = el("div", { class: "attention-row" });
-      row.append(chip, list);
-      block.replaceChildren(heading, row);
+    update(view) {
+      patient = view.patient;
+      render();
     },
     destroy() {
+      stopFlags();
       block.remove();
     },
   };
@@ -103,7 +133,7 @@ export function mountTimeline(container, { db, patientId }) {
   let drawnWidth = 0;
 
   const stopCheckIns = onSnapshot(
-    collection(db, COLLECTIONS.patients, patientId, COLLECTIONS.checkIns),
+    patientQuery(db, patientId, COLLECTIONS.checkIns),
     (snapshot) => {
       checkIns = snapshot.docs.map((d) => d.data());
       ratingsFailed = false;

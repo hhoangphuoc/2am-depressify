@@ -3,6 +3,7 @@
 // A row shows who the Patient is, the Attention flag level as a word with its reasons, the latest
 // Check-in and how fresh their data is. It never shows a number that reads as a score: no
 // composite, no Outcome score, no comparison with Baseline.
+import { shownAttention } from "./clear.js";
 import { sortPatients } from "./sort.js";
 
 /**
@@ -86,11 +87,14 @@ export function freshness(lastSeenAtMillis, nowMillis) {
 /**
  * @param {{ id: string, data: Partial<import("./contract.js").PatientDoc> }} doc
  * @param {Clock} clock
+ * @param {import("./clear.js").FlagRecord[]} [flags] the Patient's visible flags, once loaded: the
+ *   level and reasons then come from the open ones (`shownAttention`), else from the record
  * @returns {ListRow}
  */
-export function toListRow({ id, data }, { nowMillis, timeZone }) {
-  const flagLevel = knownLevel(data.flagLevel);
-  const given = Array.isArray(data.flagReasons) ? data.flagReasons.filter((r) => typeof r === "string" && r) : [];
+export function toListRow({ id, data }, { nowMillis, timeZone }, flags) {
+  const shown = shownAttention(data, flags);
+  const flagLevel = knownLevel(shown.flagLevel);
+  const given = shown.flagReasons;
   const reasons = given.length ? given : [flagLevel === "green" ? "Nothing raised." : "No reason recorded."];
   const fresh = freshness(data.lastSeenAtMillis, nowMillis);
   return {
@@ -110,11 +114,13 @@ export function toListRow({ id, data }, { nowMillis, timeZone }) {
  * @param {{ id: string, data: Partial<import("./contract.js").PatientDoc> }[]} docs
  * @param {Record<string, number | null | undefined>} latestFlagAtById
  * @param {Clock} clock
+ * @param {Record<string, import("./clear.js").FlagRecord[] | undefined>} [flagsById] each Patient's
+ *   visible flags, where loaded
  * @returns {ListRow[]}
  */
-export function patientListRows(docs, latestFlagAtById, clock) {
+export function patientListRows(docs, latestFlagAtById, clock, flagsById = {}) {
   return sortPatients(
-    docs.map((doc) => toListRow(doc, clock)),
+    docs.map((doc) => toListRow(doc, clock, flagsById[doc.id])),
     latestFlagAtById,
   );
 }

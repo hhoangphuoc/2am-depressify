@@ -3,14 +3,9 @@
 // Patient's `digests` collection itself and calls `generateDigest` through `calls`, so it can be
 // mounted in any slot (the Overview and the Summaries sections). The logic is the pure state
 // machine in js/lib/digest.js; this file only draws it and runs the call.
-import {
-  collection,
-  limit,
-  onSnapshot,
-  orderBy,
-  query,
-} from "https://www.gstatic.com/firebasejs/13.3.0/firebase-firestore.js";
+import { limit, onSnapshot, orderBy } from "https://www.gstatic.com/firebasejs/13.3.0/firebase-firestore.js";
 import { COLLECTIONS } from "../lib/contract.js";
+import { patientQuery } from "../queries.js";
 import {
   digestButtonLabel,
   digestCoverage,
@@ -101,9 +96,10 @@ export function mountDigest(slot, { db, patientId, calls }) {
 
   button.addEventListener("click", () => dispatch({ type: "generate" }));
 
-  // The latest week first. Ids are zero-padded ISO weeks, so they sort by week.
+  // The latest shared week first. Ids are zero-padded ISO weeks, so they sort by week. The sharing
+  // filter plus this order needs the composite index in firestore.indexes.json.
   const stop = onSnapshot(
-    query(collection(db, COLLECTIONS.patients, patientId, COLLECTIONS.digests), orderBy("isoWeek", "desc"), limit(1)),
+    patientQuery(db, patientId, COLLECTIONS.digests, orderBy("isoWeek", "desc"), limit(1)),
     (snapshot) => dispatch({ type: "loaded", digest: snapshot.empty ? null : snapshot.docs[0].data() }),
     // Withdrawn sharing also lands here; the Patient page shows that state and hides this slot.
     () => dispatch({ type: "loadFailed" }),

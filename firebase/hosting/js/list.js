@@ -6,13 +6,17 @@
 //
 // The banner is built from every listed Patient before any filter applies, so search and the level
 // filter never hide it, and it stays until the flag is cleared.
-import { collection, onSnapshot } from "https://www.gstatic.com/firebasejs/13.3.0/firebase-firestore.js";
+//
+// A row's level and reasons come from that Patient's visible open flags once they load (the rows
+// fall back to the Patient record until then), so a reason is never shown without its flag.
+import { onSnapshot } from "https://www.gstatic.com/firebasejs/13.3.0/firebase-firestore.js";
 import { newRedFlags } from "./lib/banner.js";
 import { COLLECTIONS } from "./lib/contract.js";
 import { listViewModel } from "./lib/list-filter.js";
 import { patientListRows } from "./lib/list-row.js";
 import { patientHref } from "./lib/route.js";
 import { newestOpenFlagAt } from "./lib/sort.js";
+import { patientQuery } from "./queries.js";
 
 const COPY = {
   failed: "Could not load the Patient list. Reload the page to try again.",
@@ -61,9 +65,9 @@ export function createPatientList(db, elements, { onNewRed = () => {} } = {}) {
   }
 
   function watchFlags(id) {
-    const flags = collection(db, COLLECTIONS.patients, id, COLLECTIONS.flags);
+    // Only the flags the Clinician can see (raised while the Patient was sharing).
     return onSnapshot(
-      flags,
+      patientQuery(db, id, COLLECTIONS.flags),
       (snapshot) => {
         const current = snapshot.docs.map((d) => ({ ...d.data(), id: d.id, patientId: id }));
         const fresh = newRedFlags(flagsById[id] ?? null, current, {
@@ -148,7 +152,7 @@ export function createPatientList(db, elements, { onNewRed = () => {} } = {}) {
 
   function render() {
     if (docs === null) return;
-    const all = patientListRows(docs, latestFlagAtById, { nowMillis: Date.now() });
+    const all = patientListRows(docs, latestFlagAtById, { nowMillis: Date.now() }, flagsById);
     const view = listViewModel({ rows: all, flagsByPatient: flagsById, search: search.value, level: level.value });
     renderBanner(view.banner);
     controls.hidden = all.length === 0;

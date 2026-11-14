@@ -3,7 +3,8 @@
 // said it felt. Kinds are ordered by their Outcomes, then by count; the Outcome score itself is
 // never shown, and there is no effectiveness percentage. The arithmetic is in js/lib/what-helps.js.
 // Listens to `suggestions` only, and stops in destroy().
-import { collection, onSnapshot } from "https://www.gstatic.com/firebasejs/13.3.0/firebase-firestore.js";
+import { onSnapshot } from "https://www.gstatic.com/firebasejs/13.3.0/firebase-firestore.js";
+import { patientQuery } from "../queries.js";
 import { COLLECTIONS } from "../lib/contract.js";
 import { shortDate } from "../lib/dates.js";
 import { feelingText, whatHelps, whatHelpsWindow } from "../lib/what-helps.js";
@@ -55,7 +56,7 @@ export function mountWhatHelps(container, { db, patientId }) {
   let failed = false;
 
   const stop = onSnapshot(
-    collection(db, COLLECTIONS.patients, patientId, COLLECTIONS.suggestions),
+    patientQuery(db, patientId, COLLECTIONS.suggestions),
     (snapshot) => {
       suggestions = snapshot.docs.map((d) => d.data());
       failed = false;

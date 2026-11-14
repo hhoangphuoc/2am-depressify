@@ -6,20 +6,23 @@
 // came from, when it was raised) and the history of cleared flags. Each open flag has a "Clear
 // after follow-up" button that opens a dialog naming the Patient. The logic is pure, in
 // js/lib/flag-detail.js and js/lib/clear.js; this file draws it and runs the clearing transaction.
+import { doc, getDocs, onSnapshot, runTransaction } from "https://www.gstatic.com/firebasejs/13.3.0/firebase-firestore.js";
 import {
-  collection,
-  doc,
-  getDocs,
-  onSnapshot,
-  runTransaction,
-} from "https://www.gstatic.com/firebasejs/13.3.0/firebase-firestore.js";
-import { clearDialogReducer, clearErrorMessage, clearFlags, initialClearDialog, levelAfterClearing, reviewOf } from "../lib/clear.js";
+  clearDialogReducer,
+  clearErrorMessage,
+  clearFlags,
+  initialClearDialog,
+  levelAfterClearing,
+  reviewOf,
+  shownAttention,
+} from "../lib/clear.js";
 import { COLLECTIONS } from "../lib/contract.js";
 import { flagDetailModel } from "../lib/flag-detail.js";
 import { levelWord } from "../lib/list-row.js";
 import { sharingStateFromError, sharingStateFromSnapshot } from "../lib/sharing.js";
+import { QUERY_FUNCTIONS, patientQuery } from "../queries.js";
 
-const FIRESTORE = { collection, doc, getDocs, runTransaction };
+const FIRESTORE = { ...QUERY_FUNCTIONS, doc, getDocs, runTransaction };
 
 const COPY = {
   heading: "Attention",
@@ -162,7 +165,7 @@ export function mountFlagDetail(slot, { db, patientId, patient: initialPatient =
     const focusedId = /** @type {HTMLElement | null} */ (document.activeElement)?.closest?.("[data-flag-id]")?.getAttribute("data-flag-id");
     const model = flagDetailModel(flags);
     content.replaceChildren(
-      el("p", { class: "attention-level" }, `${COPY.level}: `, chip(patient.flagLevel)),
+      el("p", { class: "attention-level" }, `${COPY.level}: `, chip(shownAttention(patient, flags).flagLevel)),
       el("h4", { text: COPY.open }),
       model.open.length
         ? el("ul", { class: "flag-list" }, ...model.open.map((line) => flagItem(line, true)))
@@ -347,7 +350,7 @@ export function mountFlagDetail(slot, { db, patientId, patient: initialPatient =
     (error) => (sharingStateFromError(error).status === "withdrawn" ? hide() : ((failed = true), drawSection())),
   );
   const stopFlags = onSnapshot(
-    collection(db, COLLECTIONS.patients, patientId, COLLECTIONS.flags),
+    patientQuery(db, patientId, COLLECTIONS.flags),
     (snapshot) => {
       failed = false;
       flags = snapshot.docs.map((d) => ({ ...d.data(), id: d.id }));

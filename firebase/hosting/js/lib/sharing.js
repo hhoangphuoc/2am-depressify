@@ -11,6 +11,55 @@
 
 export const SHARING_GRANTED = "granted";
 
+// ---------------------------------------------------------------------------------------------
+// The sharing stamp: re-consent shares future records only
+// ---------------------------------------------------------------------------------------------
+//
+// Every document in these collections carries `sharedWithClinician`: whether the Patient was
+// sharing when it was created. It never changes. The rules let the Clinician read only documents
+// stamped true, so nothing saved while sharing was off is ever shown, and what was saved during an
+// earlier sharing period comes back when the Patient shares again. A Clinician query on one of
+// these collections must filter on the stamp, or the rules reject the whole query; every query the
+// dashboard runs on a Patient's collection is built by `patientCollectionQuery` below.
+
+/** The field every stamped document carries. */
+export const SHARED_WITH_CLINICIAN = "sharedWithClinician";
+
+/** The collections under a Patient whose documents are stamped. Consents and Visits are not. */
+export const STAMPED_COLLECTIONS = Object.freeze(["daily", "checkIns", "summaries", "suggestions", "flags", "digests"]);
+
+/**
+ * The `where` clauses a Clinician query on one of a Patient's collections needs, as
+ * [field, op, value] triples: the sharing stamp for a stamped collection, nothing otherwise.
+ * @param {string} collectionName
+ * @returns {[string, "==", boolean][]}
+ */
+export function clinicianCollectionFilters(collectionName) {
+  return STAMPED_COLLECTIONS.includes(collectionName) ? [[SHARED_WITH_CLINICIAN, "==", true]] : [];
+}
+
+/**
+ * The query the dashboard runs on one of a Patient's collections, with the sharing filter where
+ * the collection is stamped, then any further constraints (orderBy, limit). Takes the Firestore
+ * functions, so the page passes the browser SDK (js/queries.js) and the emulator tests the npm one.
+ *
+ * Indexes: an equality filter alone needs none; adding orderBy or a range on another field needs a
+ * composite index in firebase/firestore.indexes.json (the Digest's `isoWeek` order has one).
+ *
+ * @param {{ collection: Function, query: Function, where: Function }} fs
+ * @param {unknown} db
+ * @param {string} patientId
+ * @param {string} collectionName
+ * @param {...unknown} constraints
+ */
+export function patientCollectionQuery(fs, db, patientId, collectionName, ...constraints) {
+  return fs.query(
+    fs.collection(db, "patients", patientId, collectionName),
+    ...clinicianCollectionFilters(collectionName).map(([field, op, value]) => fs.where(field, op, value)),
+    ...constraints,
+  );
+}
+
 /**
  * The `where` clauses of the Clinician's Patient list, as [field, op, value] triples:
  * `query(collection(db, "patients"), ...clinicianListFilters(email).map((f) => where(...f)))`.

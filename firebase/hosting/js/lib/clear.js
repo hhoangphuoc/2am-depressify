@@ -7,11 +7,16 @@
 // open, or green, with the open flags' reasons. A reason raised while the Clinician was reviewing
 // asks for a new review instead of being cleared unseen.
 //
+// Which flags count: the Clinician reads only flags stamped `sharedWithClinician` (raised while the
+// Patient was sharing), and only those count toward the Patient's `flagLevel` (a flag raised while
+// not sharing never does), so "the flags still open" here are all the flags that make the level.
+//
 // Which flags one clear covers: one flag. The Clinician clears the flag they followed up on; any
 // other open flag stays, and the Patient's level drops only to the highest of those. This keeps
 // "nothing but the Clinician lowers a level" true flag by flag: clearing a crisis never also clears
 // a drift flag the Clinician has not looked at, and the dialog shows what stays open.
 import { isOpen } from "./banner.js";
+import { patientCollectionQuery } from "./sharing.js";
 import { levelRank } from "./sort.js";
 
 /** @typedef {"green" | "amber" | "red"} FlagLevel */
@@ -55,6 +60,23 @@ export function levelAfterClearing(flags, clearIds) {
     if (reason && !reasons.includes(reason)) reasons.push(reason);
   }
   return { flagLevel: known(remaining[0]?.level), flagReasons: reasons };
+}
+
+/**
+ * The Attention level and reasons the dashboard shows: from the open flags the Clinician can see
+ * when they are loaded, so a reason never appears without its flag; from the Patient record only
+ * until they arrive (or when they could not be read). The record counts the same flags, so the
+ * two agree once the flags load.
+ * @param {{ flagLevel?: string, flagReasons?: unknown }} patient
+ * @param {FlagRecord[] | null | undefined} flags the visible flags, or null/undefined while unknown
+ * @returns {{ flagLevel: FlagLevel, flagReasons: string[] }}
+ */
+export function shownAttention(patient, flags) {
+  if (Array.isArray(flags)) return levelAfterClearing(flags, []);
+  return {
+    flagLevel: known(patient?.flagLevel),
+    flagReasons: Array.isArray(patient?.flagReasons) ? patient.flagReasons.filter((r) => typeof r === "string" && r) : [],
+  };
 }
 
 /**
@@ -111,17 +133,18 @@ function clearError(code) {
  * raised after the listing changes the Patient record and the transaction sees it (or retries).
  * Any difference from the review rejects with code `flag/changed` and writes nothing.
  *
- * @param {{ runTransaction: Function, doc: Function, collection: Function, getDocs: Function }} fs
+ * @param {{ runTransaction: Function, doc: Function, collection: Function, query: Function, where: Function, getDocs: Function }} fs
  *   the Firestore functions (browser SDK on the page, the npm SDK in the emulator tests)
  * @param {unknown} db
  * @param {{ patientId: string, flagIds: string[], reviewed: Review, nowMillis: number }} request
  * @returns {Promise<{ flagLevel: FlagLevel, flagReasons: string[] }>}
  */
 export async function clearFlags(fs, db, { patientId, flagIds, reviewed, nowMillis }) {
-  const { runTransaction, doc, collection, getDocs } = fs;
+  const { runTransaction, doc, getDocs } = fs;
   if (flagIds.length === 0 || !flagIds.every((id) => reviewed.openFlagIds.includes(id))) throw clearError("flag/not-open");
 
-  const listed = await getDocs(collection(db, "patients", patientId, "flags"));
+  // The flags the Clinician can see: the sharing filter is required by the rules.
+  const listed = await getDocs(patientCollectionQuery(fs, db, patientId, "flags"));
   const openNow = listed.docs.filter((/** @type {any} */ d) => isOpen(d.data())).map((/** @type {any} */ d) => d.id);
   if (!sameSet(openNow, reviewed.openFlagIds)) throw clearError("flag/changed");
 

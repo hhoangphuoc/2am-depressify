@@ -8,7 +8,8 @@
 // the phone; no place or coordinate is ever read here.
 //
 // Listens to `daily` and `consents` only, and stops both in destroy().
-import { collection, onSnapshot } from "https://www.gstatic.com/firebasejs/13.3.0/firebase-firestore.js";
+import { onSnapshot } from "https://www.gstatic.com/firebasejs/13.3.0/firebase-firestore.js";
+import { patientQuery } from "../queries.js";
 import { COLLECTIONS, SIGNALS } from "../lib/contract.js";
 import { daysBetween, shortDate } from "../lib/dates.js";
 import {
@@ -120,7 +121,7 @@ export function mountSignals(container, { db, patientId }) {
     render();
   };
   const stopDaily = onSnapshot(
-    collection(db, COLLECTIONS.patients, patientId, COLLECTIONS.daily),
+    patientQuery(db, patientId, COLLECTIONS.daily),
     (snapshot) => {
       daily = snapshot.docs.map((d) => ({ date: d.id, ...d.data() }));
       failed = false;
@@ -130,7 +131,7 @@ export function mountSignals(container, { db, patientId }) {
     onError,
   );
   const stopConsents = onSnapshot(
-    collection(db, COLLECTIONS.patients, patientId, COLLECTIONS.consents),
+    patientQuery(db, patientId, COLLECTIONS.consents),
     (snapshot) => {
       consents = Object.fromEntries(snapshot.docs.map((d) => [d.id, d.data()]));
       dataVersion++;

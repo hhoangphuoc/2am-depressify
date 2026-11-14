@@ -23,6 +23,10 @@
 //                today      yyyy-MM-dd in the browser's time zone
 //                timeZone   the browser's time zone, for giving a millisecond time its date
 //
+// Read a Patient's collections with `patientQuery` (js/queries.js): in the stamped collections the
+// Clinician may read only what was saved while the Patient was sharing, and the rules reject a
+// query without that filter.
+//
 // Blocks are mounted only while the Patient shares their progress (#29). When sharing is withdrawn
 // the page destroys every block, so each must stop its own listeners in destroy(), and shows only
 // the withdrawn message. A block that listens to a collection should also treat a permission-denied
@@ -47,10 +51,11 @@
 //
 // To fill a slot: import the mount function and add one line to SLOT_MOUNTS. An empty slot shows
 // nothing. Section headings are <h3>; a block's own heading is <h4>.
-import { collection, doc, onSnapshot } from "https://www.gstatic.com/firebasejs/13.3.0/firebase-firestore.js";
+import { doc, onSnapshot } from "https://www.gstatic.com/firebasejs/13.3.0/firebase-firestore.js";
 import { COLLECTIONS } from "../lib/contract.js";
 import { dateInZone } from "../lib/dates.js";
 import { sharingMessage, sharingStateFromError, sharingStateFromSnapshot } from "../lib/sharing.js";
+import { patientQuery } from "../queries.js";
 import { phases } from "../lib/timeline.js";
 import { sortVisits } from "../lib/visit.js";
 import { mountDigest } from "./digest.js";
@@ -253,7 +258,7 @@ export function showPatient({ root, db, patientId, calls }) {
   );
 
   const stopVisits = onSnapshot(
-    collection(db, COLLECTIONS.patients, patientId, COLLECTIONS.visits),
+    patientQuery(db, patientId, COLLECTIONS.visits),
     (snapshot) => {
       visits = sortVisits(snapshot.docs.map((d) => ({ id: d.id, ...d.data() })));
       refresh();

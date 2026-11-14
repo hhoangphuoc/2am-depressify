@@ -8,6 +8,7 @@ import {
   levelAfterClearing,
   reviewChanged,
   reviewOf,
+  shownAttention,
 } from "../js/lib/clear.js";
 
 const flag = (id, level, raisedAtMillis, extra = {}) => ({
@@ -17,6 +18,7 @@ const flag = (id, level, raisedAtMillis, extra = {}) => ({
   reason: `${id} reason.`,
   raisedAtMillis,
   clearedAtMillis: null,
+  sharedWithClinician: true,
   ...extra,
 });
 
@@ -90,12 +92,21 @@ function fakeFirestore(initial) {
   const snap = (path) => ({ id: path.split("/").at(-1), exists: () => docs.has(path), data: () => docs.get(path) });
   const fs = {
     doc: (_db, ...segments) => ({ path: segments.join("/"), id: segments.at(-1) }),
-    collection: (_db, ...segments) => ({ path: segments.join("/") }),
-    getDocs: async (col) => ({
-      docs: [...docs.keys()]
-        .filter((p) => p.startsWith(`${col.path}/`) && !p.slice(col.path.length + 1).includes("/"))
-        .map(snap),
-    }),
+    collection: (_db, ...segments) => ({ path: segments.join("/"), filters: [] }),
+    query: (col, ...constraints) => ({ ...col, filters: [...col.filters, ...constraints] }),
+    where: (field, op, value) => ({ field, op, value }),
+    getDocs: async (col) => {
+      // Like the rules: a query on flags without the sharing filter is rejected.
+      if (col.path.endsWith("/flags") && !col.filters.some((f) => f.field === "sharedWithClinician" && f.value === true)) {
+        throw Object.assign(new Error("permission-denied"), { code: "permission-denied" });
+      }
+      return {
+        docs: [...docs.keys()]
+          .filter((p) => p.startsWith(`${col.path}/`) && !p.slice(col.path.length + 1).includes("/"))
+          .filter((p) => col.filters.every((f) => docs.get(p)[f.field] === f.value))
+          .map(snap),
+      };
+    },
     runTransaction: async (_db, run) => {
       hooks.beforeTransaction();
       const writes = [];
@@ -239,4 +250,37 @@ test("if the flag being cleared is no longer open, the dialog closes", () => {
   const state = clearDialogReducer(initialClearDialog(), { type: "open", flagId: "a", reviewed });
   const gone = { flagLevel: "green", flagReasons: [], openFlagIds: [] };
   assert.equal(clearDialogReducer(state, { type: "current", current: gone }).mode, "closed");
+});
+
+// ---- What the dashboard shows --------------------------------------------------------------------
+
+test("the shown level and reasons come from the visible open flags once they are loaded", () => {
+  // The record still says red with a reason whose flag the Clinician cannot see: the flags win.
+  const record = { flagLevel: "red", flagReasons: ["A reason from a flag the Clinician cannot see."] };
+  assert.deepEqual(shownAttention(record, [flag("drift", "amber", 2), flag("old", "red", 1, { clearedAtMillis: 3 })]), {
+    flagLevel: "amber",
+    flagReasons: ["drift reason."],
+  });
+  assert.deepEqual(shownAttention(record, []), { flagLevel: "green", flagReasons: [] });
+});
+
+test("until the flags load, the shown level and reasons come from the record", () => {
+  assert.deepEqual(shownAttention({ flagLevel: "amber", flagReasons: ["drift reason.", "", 3] }, null), {
+    flagLevel: "amber",
+    flagReasons: ["drift reason."],
+  });
+  assert.deepEqual(shownAttention({}, undefined), { flagLevel: "green", flagReasons: [] });
+});
+
+test("clearing lists only the flags the Clinician can see, as the rules require", async () => {
+  const { fs, db, docs } = fakeFirestore({
+    "patients/p1": { displayName: "Aino", flagLevel: "amber", flagReasons: ["drift reason."] },
+    "patients/p1/flags/drift": flag("drift", "amber", 2),
+    "patients/p1/flags/hidden": flag("hidden", "red", 3, { sharedWithClinician: false }),
+  });
+  const visible = [docs.get("patients/p1/flags/drift")];
+  const reviewed = reviewOf(docs.get("patients/p1"), visible);
+  const result = await clearFlags(fs, db, { patientId: "p1", flagIds: ["drift"], reviewed, nowMillis: 99 });
+  assert.deepEqual(result, { flagLevel: "green", flagReasons: [] });
+  assert.equal(docs.get("patients/p1/flags/hidden").clearedAtMillis, null);
 });

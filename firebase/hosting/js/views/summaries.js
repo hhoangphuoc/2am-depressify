@@ -6,7 +6,8 @@
 // Suggestion, the previous Outcome, Voice cues worded as observations and at most three short
 // quotes. There is no transcript or audio to show: js/lib/summaries.js picks out only those fields.
 // Each block listens to `summaries` only, and stops in destroy().
-import { collection, onSnapshot } from "https://www.gstatic.com/firebasejs/13.3.0/firebase-firestore.js";
+import { onSnapshot } from "https://www.gstatic.com/firebasejs/13.3.0/firebase-firestore.js";
+import { patientQuery } from "../queries.js";
 import { COLLECTIONS } from "../lib/contract.js";
 import { selectSummary, sortSummaries, summaryView, summaryWhen } from "../lib/summaries.js";
 
@@ -51,7 +52,7 @@ function el(tag, attrs = {}, text) {
  */
 function listenSummaries(db, patientId, onChange) {
   return onSnapshot(
-    collection(db, COLLECTIONS.patients, patientId, COLLECTIONS.summaries),
+    patientQuery(db, patientId, COLLECTIONS.summaries),
     (snapshot) => onChange(sortSummaries(snapshot.docs.map((d) => ({ id: d.id, ...d.data() }))), false),
     // Withdrawn sharing is shown by the page; anything else is said here.
     (error) => onChange([], error?.code !== "permission-denied"),

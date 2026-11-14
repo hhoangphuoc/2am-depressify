@@ -2,7 +2,10 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
   SHARING_COPY,
+  STAMPED_COLLECTIONS,
+  clinicianCollectionFilters,
   clinicianListFilters,
+  patientCollectionQuery,
   sharingMessage,
   sharingStateFromError,
   sharingStateFromSnapshot,
@@ -51,4 +54,25 @@ test("each state has vetted copy, and the withdrawn copy is calm and never shows
   assert.equal(sharingMessage({ status: "withdrawn" }), SHARING_COPY.withdrawn);
   assert.equal(sharingMessage({ status: "error" }), SHARING_COPY.error);
   assert.doesNotMatch(SHARING_COPY.withdrawn, /error|denied|permission|failed/i);
+});
+
+test("every stamped collection is read only where the Patient was sharing", () => {
+  assert.deepEqual([...STAMPED_COLLECTIONS], ["daily", "checkIns", "summaries", "suggestions", "flags", "digests"]);
+  for (const name of STAMPED_COLLECTIONS) {
+    assert.deepEqual(clinicianCollectionFilters(name), [["sharedWithClinician", "==", true]], name);
+  }
+  for (const name of ["consents", "visits"]) assert.deepEqual(clinicianCollectionFilters(name), [], name);
+});
+
+test("a Patient collection query carries the sharing filter, then the caller's constraints", () => {
+  const fs = {
+    collection: (_db, ...path) => ({ path: path.join("/") }),
+    where: (field, op, value) => ({ where: [field, op, value] }),
+    query: (ref, ...constraints) => ({ ref, constraints }),
+  };
+  assert.deepEqual(patientCollectionQuery(fs, {}, "p1", "digests", { orderBy: "isoWeek" }), {
+    ref: { path: "patients/p1/digests" },
+    constraints: [{ where: ["sharedWithClinician", "==", true] }, { orderBy: "isoWeek" }],
+  });
+  assert.deepEqual(patientCollectionQuery(fs, {}, "p1", "visits"), { ref: { path: "patients/p1/visits" }, constraints: [] });
 });
