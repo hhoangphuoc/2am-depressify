@@ -57,6 +57,7 @@ class CompanionTools(
     private val scope: CoroutineScope,
     private val location: PatientLocation = PatientLocation.Sample,
 ) {
+    private var suggestionSeq = 0
     suspend fun dispatch(name: String, args: JsonObject): JsonObject = try {
         when (name) {
             "get_patient_context" -> patientContext()
@@ -140,7 +141,9 @@ class CompanionTools(
         if (kind == null || details.isNullOrBlank()) return error("invalid_args")
         val patient = patients.get(patientId) ?: return error("backend_failed")
         val now = nowMillis()
-        val suggestion = Suggestion(id = "s" + now, kind = kind, details = details.trim(), suggestedAtMillis = now, sharedWithClinician = patient.sharingStamp())
+        val seq = ++suggestionSeq
+        val suggestionId = if (seq == 1) "s$now" else "s$now-$seq"
+        val suggestion = Suggestion(id = suggestionId, kind = kind, details = details.trim(), suggestedAtMillis = now, sharedWithClinician = patient.sharingStamp())
         // On screen first: the card does not wait for the write.
         effects.offer(suggestion)
         checkIns.saveSuggestion(patientId, suggestion)

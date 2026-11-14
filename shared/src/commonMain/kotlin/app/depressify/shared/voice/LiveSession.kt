@@ -25,7 +25,42 @@ enum class Speaker(val label: String) { Companion("Companion"), You("You") }
 
 enum class Reply { Accept, Smaller, Decline }
 
+enum class SuggestionVote { Up, Down }
+
 data class TranscriptLine(val speaker: Speaker, val text: String)
+
+/** One activity recommendation card in the Voice Check-in horizontal stack (newest at index 0). */
+data class SessionSuggestion(
+    val id: String,
+    val kind: SuggestionKind,
+    val kicker: String = kind.defaultKicker(),
+    val title: String = kind.defaultCardTitle(),
+    val detail: String = kind.detail,
+    val accepted: Boolean = false,
+    val vote: SuggestionVote? = null,
+    val actionUrl: String? = null,
+    val actionLabel: String? = null,
+    /** Opens the in-app listening session for this Check-in's generated music. */
+    val opensListening: Boolean = false,
+)
+
+fun SuggestionKind.defaultKicker(): String = when (this) {
+    SuggestionKind.Walk -> "Outdoors · ~10 min"
+    SuggestionKind.Music -> "Listen · 10–15 min"
+    SuggestionKind.Read -> "Read · At your pace"
+    SuggestionKind.Game -> "Play · Gentle focus"
+    SuggestionKind.Window -> "Smallest step · 1 min"
+    SuggestionKind.Call -> "Connect · Your choice"
+}
+
+fun SuggestionKind.defaultCardTitle(): String = when (this) {
+    SuggestionKind.Walk -> "Quiet walk by Töölönlahti"
+    SuggestionKind.Music -> "Put on one calm, familiar album"
+    SuggestionKind.Read -> "Read two pages with warm tea"
+    SuggestionKind.Game -> "15 min of a cozy puzzle or game"
+    SuggestionKind.Window -> "One minute by an open window"
+    SuggestionKind.Call -> "A short call to someone close"
+}
 
 data class LiveEvent(
     val state: LiveState,
@@ -36,6 +71,7 @@ data class LiveEvent(
     val millis: Long? = null,
     val outcome: Outcome? = null,
     val offer: SuggestionKind? = null,
+    val stackedOffers: List<SuggestionKind> = emptyList(),
     val wrap: Boolean = false,
     val waitForPatient: Boolean = false,
 ) {
@@ -55,8 +91,18 @@ data class LiveSnapshot(
     val offerDetails: String? = null,
     /** What tool calls have put on screen, oldest first. */
     val cards: List<ToolCard> = emptyList(),
+    /** Session activity suggestions, newest first (index 0 = top of horizontal stack). */
+    val suggestions: List<SessionSuggestion> = emptyList(),
 ) {
     val shownState: LiveState get() = if (muted || !connected) LiveState.Paused else event.state
+
+    /** Latest utterance from the AI Companion; stays visible as an anchor while listening to the Patient. */
+    val companionLine: TranscriptLine?
+        get() = if (event.speaker == Speaker.Companion && event.text != null) {
+            TranscriptLine(Speaker.Companion, event.text)
+        } else {
+            transcript.lastOrNull { it.speaker == Speaker.Companion }
+        }
 }
 
 /** The contract a real Gemini Live client will implement; the prototype plays a script. */
@@ -73,6 +119,8 @@ interface LiveSession {
     /** Suppresses Companion speech while generated music is playing. */
     fun setCompanionAudioPaused(paused: Boolean) {}
     fun respond(reply: Reply)
+    fun selectSuggestion(suggestionId: String) { respond(Reply.Accept) }
+    fun voteSuggestion(suggestionId: String, vote: SuggestionVote?) {}
     fun setConnected(connected: Boolean)
     fun stop()
 
@@ -89,7 +137,9 @@ interface LiveSession {
 
 object LiveScript {
     val steps = listOf("Last time", "Your day", "One idea", "Wrap up")
-    private const val tool = "Checking tomorrow’s weather and places nearby"
+    private const val tool = "Checking tomorrow’s weather and gentle ideas"
+
+    private val initialStack = listOf(SuggestionKind.Walk, SuggestionKind.Music, SuggestionKind.Read)
 
     val returning = listOf(
         LiveEvent(LiveState.Connecting, 0, millis = 1200),
@@ -100,7 +150,14 @@ object LiveScript {
         LiveEvent(LiveState.Speaking, 1, Speaker.Companion, "Thank you. How has today been so far?"),
         LiveEvent(LiveState.Listening, 1, Speaker.You, "Tired. I slept badly and stayed in most of the morning."),
         LiveEvent(LiveState.Thinking, 2, tool = tool, millis = 1900),
-        LiveEvent(LiveState.Speaking, 2, Speaker.Companion, "Tomorrow looks dry around eleven, and Töölönlahti is about nine minutes away. Would a short walk there feel right?", offer = SuggestionKind.Walk),
+        LiveEvent(
+            LiveState.Speaking,
+            2,
+            Speaker.Companion,
+            "Tomorrow looks dry around eleven, and Töölönlahti is nine minutes away—would a quiet walk feel right, or something gentle indoors?",
+            offer = SuggestionKind.Walk,
+            stackedOffers = initialStack,
+        ),
         LiveEvent(LiveState.Listening, 2, waitForPatient = true),
     )
 
@@ -109,17 +166,39 @@ object LiveScript {
         LiveEvent(LiveState.Speaking, 1, Speaker.Companion, "Hi, I’m your AI Companion. I’m not a clinician. How are you feeling today?"),
         LiveEvent(LiveState.Listening, 1, Speaker.You, "Okay, I guess. A bit flat."),
         LiveEvent(LiveState.Thinking, 2, tool = tool, millis = 1900),
-        LiveEvent(LiveState.Speaking, 2, Speaker.Companion, "Thanks for telling me. Tomorrow looks dry around eleven. Would a short walk feel right?", offer = SuggestionKind.Walk),
+        LiveEvent(
+            LiveState.Speaking,
+            2,
+            Speaker.Companion,
+            "Thanks for telling me. Tomorrow looks dry around eleven—would a short walk feel right, or something calm at home?",
+            offer = SuggestionKind.Walk,
+            stackedOffers = initialStack,
+        ),
         LiveEvent(LiveState.Listening, 2, waitForPatient = true),
     )
 
-    fun reply(reply: Reply): List<LiveEvent> = when (reply) {
+    fun reply(reply: Reply, smallerCount: Int = 0): List<LiveEvent> = when (reply) {
         Reply.Accept -> listOf(
-            LiveEvent(LiveState.Speaking, 2, Speaker.Companion, "Good. I can add it to your calendar for eleven, if you like."),
+            LiveEvent(LiveState.Speaking, 2, Speaker.Companion, "Good. We’ll keep it gentle and unhurried."),
             LiveEvent(LiveState.Speaking, 3, Speaker.Companion, "Before we finish, three quick ratings. You can skip any of them.", wrap = true),
         )
-        Reply.Smaller -> listOf(
-            LiveEvent(LiveState.Speaking, 2, Speaker.Companion, "Of course. How about one minute by a window, whenever it suits you?", offer = SuggestionKind.Window),
+        Reply.Smaller -> if (smallerCount == 0) listOf(
+            LiveEvent(
+                LiveState.Speaking,
+                2,
+                Speaker.Companion,
+                "Of course. Fifteen unhurried minutes with a cozy puzzle or game can give busy thoughts somewhere soft to land.",
+                offer = SuggestionKind.Game,
+            ),
+            LiveEvent(LiveState.Listening, 2, waitForPatient = true),
+        ) else listOf(
+            LiveEvent(
+                LiveState.Speaking,
+                2,
+                Speaker.Companion,
+                "Let’s make it tiny: standing by an open window for one quiet minute, whenever it suits you.",
+                offer = SuggestionKind.Window,
+            ),
             LiveEvent(LiveState.Listening, 2, waitForPatient = true),
         )
         Reply.Decline -> listOf(LiveEvent(LiveState.Speaking, 3, Speaker.Companion, "That’s okay. Rest counts too. Shall we wrap up?", wrap = true))
@@ -132,10 +211,14 @@ class ScriptedLiveSession(private val scope: CoroutineScope) : LiveSession {
     override val snapshot: StateFlow<LiveSnapshot> = state.asStateFlow()
     private var queue = mutableListOf<LiveEvent>()
     private var index = 0
+    private var smallerCount = 0
+    private var nextSuggestionSeq = 1
     private var job: Job? = null
 
     override fun start(returning: Boolean, typed: Boolean) {
         queue = (if (returning) LiveScript.returning else LiveScript.firstTime).toMutableList()
+        smallerCount = 0
+        nextSuggestionSeq = 1
         state.value = LiveSnapshot()
         enter(0)
         play()
@@ -157,10 +240,40 @@ class ScriptedLiveSession(private val scope: CoroutineScope) : LiveSession {
         play()
     }
 
+    override fun selectSuggestion(suggestionId: String) {
+        state.update { s ->
+            val target = s.suggestions.firstOrNull { it.id == suggestionId } ?: return@update s
+            s.copy(
+                offer = target.kind,
+                offerDetails = target.detail,
+                accepted = true,
+                suggestions = s.suggestions.map { it.copy(accepted = it.id == suggestionId) },
+            )
+        }
+        respond(Reply.Accept)
+    }
+
+    override fun voteSuggestion(suggestionId: String, vote: SuggestionVote?) {
+        state.update { s ->
+            s.copy(suggestions = s.suggestions.map { if (it.id == suggestionId) it.copy(vote = vote) else it })
+        }
+    }
+
     override fun respond(reply: Reply) {
         val spoken = when (reply) { Reply.Accept -> "That works for me."; Reply.Smaller -> "Something smaller, please."; Reply.Decline -> "Not now." }
-        state.update { it.copy(transcript = it.transcript + TranscriptLine(Speaker.You, spoken), accepted = reply == Reply.Accept || it.accepted) }
-        queue = (queue.take(index + 1) + LiveScript.reply(reply)).toMutableList()
+        val stepSmaller = smallerCount
+        if (reply == Reply.Smaller) smallerCount++
+        state.update { s ->
+            val updatedSuggestions = if (reply == Reply.Accept && s.suggestions.none { it.accepted }) {
+                s.suggestions.mapIndexed { idx, item -> item.copy(accepted = idx == 0) }
+            } else s.suggestions
+            s.copy(
+                transcript = s.transcript + TranscriptLine(Speaker.You, spoken),
+                accepted = reply == Reply.Accept || s.accepted,
+                suggestions = updatedSuggestions,
+            )
+        }
+        queue = (queue.take(index + 1) + LiveScript.reply(reply, stepSmaller)).toMutableList()
         enter(index + 1)
         play()
     }
@@ -188,11 +301,26 @@ class ScriptedLiveSession(private val scope: CoroutineScope) : LiveSession {
         index = i
         val e = queue[i]
         state.update { s ->
+            val incomingKinds = when {
+                e.stackedOffers.isNotEmpty() -> e.stackedOffers
+                e.offer != null -> listOf(e.offer)
+                else -> emptyList()
+            }
+            val prepended = incomingKinds.map { kind ->
+                SessionSuggestion(
+                    id = "script-${nextSuggestionSeq++}",
+                    kind = kind,
+                    actionUrl = if (kind == SuggestionKind.Walk) "https://www.google.com/maps/search/?api=1&query=T%C3%B6%C3%B6l%C3%B6nlahti%20Helsinki" else null,
+                    actionLabel = if (kind == SuggestionKind.Walk) "Open in Google Maps" else null,
+                )
+            }
             s.copy(
                 event = e,
                 transcript = if (e.text != null && e.speaker != null) s.transcript + TranscriptLine(e.speaker, e.text) else s.transcript,
                 outcome = e.outcome ?: s.outcome,
                 offer = e.offer ?: s.offer,
+                accepted = if (prepended.isNotEmpty()) false else s.accepted,
+                suggestions = if (prepended.isNotEmpty()) prepended.map { it.copy(accepted = false) } + s.suggestions.map { it.copy(accepted = false) } else s.suggestions,
                 wrapped = s.wrapped || e.wrap,
             )
         }

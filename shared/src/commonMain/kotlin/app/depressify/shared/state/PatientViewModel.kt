@@ -19,6 +19,7 @@ import app.depressify.shared.voice.LiveSession
 import app.depressify.shared.voice.Reply
 import app.depressify.shared.voice.ScriptedLiveSession
 import app.depressify.shared.voice.Speaker
+import app.depressify.shared.voice.SuggestionVote
 import app.depressify.shared.voice.TranscriptLine
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
@@ -291,6 +292,10 @@ class PatientViewModel(
             }
         } else live.respond(reply)
     }
+
+    fun selectSuggestion(id: String) = live.selectSuggestion(id)
+
+    fun voteSuggestion(id: String, vote: SuggestionVote?) = live.voteSuggestion(id, vote)
 
     fun finishCheckIn() {
         live.stop()

@@ -59,6 +59,8 @@ class GeminiLiveSession(
     private var patient: String? = null
     private var checkInId: String? = null
     private val offered = mutableListOf<Suggestion>()
+    private var acceptedSuggestionId: String? = null
+    private var toolSuggestionSeq = 1
     private var crisis = false
 
     /** The speaker whose words are still arriving; their next piece joins the same line. */
@@ -77,6 +79,8 @@ class GeminiLiveSession(
             patient = id
             checkInId = null
             offered.clear()
+            acceptedSuggestionId = null
+            toolSuggestionSeq = 1
             crisis = false
             state.value = LiveSnapshot(event = LiveEvent(LiveState.Connecting, if (returning) 0 else 1), muted = typed)
             connect(id)
@@ -149,11 +153,75 @@ class GeminiLiveSession(
     private fun lost() = state.update { it.copy(connected = false) }
 
     private val effects = object : ToolEffects {
-        override fun show(card: ToolCard) = state.update { it.copy(cards = it.cards.filterNot { c -> c::class == card::class } + card) }
+        override fun show(card: ToolCard) = state.update { s ->
+            val nextCards = s.cards.filterNot { c -> c::class == card::class } + card
+            val nextSuggestions = when (card) {
+                // Generated music plays in the in-app listening session; the card updates in place when the clip arrives.
+                is ToolCard.Music -> {
+                    val top = s.suggestions.firstOrNull()
+                    when {
+                        s.suggestions.any { it.opensListening } -> s.suggestions
+                        top != null && top.kind == SuggestionKind.Music -> listOf(top.copy(opensListening = true, actionLabel = "Open listening session")) + s.suggestions.drop(1)
+                        else ->
+                        listOf(
+                            SessionSuggestion(
+                                id = "tool-music-${toolSuggestionSeq++}",
+                                kind = SuggestionKind.Music,
+                                title = card.mood.replaceFirstChar { it.uppercase() },
+                                detail = SuggestionKind.Music.detail,
+                                actionLabel = "Open listening session",
+                                opensListening = true,
+                            )
+                        ) + s.suggestions
+                    }
+                }
+                is ToolCard.Places -> {
+                    val top = s.suggestions.firstOrNull()
+                    if (top != null && top.kind == SuggestionKind.Walk && top.actionUrl == null) {
+                        listOf(top.copy(actionUrl = card.url, actionLabel = "Open in Google Maps")) + s.suggestions.drop(1)
+                    } else {
+                        listOf(
+                            SessionSuggestion(
+                                id = "tool-place-${toolSuggestionSeq++}",
+                                kind = SuggestionKind.Walk,
+                                title = card.query.replaceFirstChar { it.uppercase() },
+                                detail = SuggestionKind.Walk.detail,
+                                actionUrl = card.url,
+                                actionLabel = "Open in Google Maps",
+                            )
+                        ) + s.suggestions
+                    }
+                }
+                is ToolCard.Weather -> s.suggestions
+            }
+            s.copy(cards = nextCards, suggestions = nextSuggestions)
+        }
+
         override fun offer(suggestion: Suggestion) {
             offered += suggestion
-            state.update { it.copy(offer = suggestion.kind.forScreen(), offerDetails = suggestion.details, accepted = false) }
+            acceptedSuggestionId = null
+            val uiKind = suggestion.kind.forScreen(suggestion.details)
+            state.update { s ->
+                val pendingTool = s.suggestions.firstOrNull()?.takeIf { it.id.startsWith("tool-") && it.kind == uiKind }
+                val item = SessionSuggestion(
+                    id = suggestion.id,
+                    kind = uiKind,
+                    title = uiKind.defaultCardTitle(),
+                    detail = suggestion.details.ifBlank { uiKind.detail },
+                    actionUrl = pendingTool?.actionUrl,
+                    actionLabel = pendingTool?.actionLabel,
+                    opensListening = pendingTool?.opensListening == true,
+                )
+                val remaining = (if (pendingTool != null) s.suggestions.drop(1) else s.suggestions).map { it.copy(accepted = false) }
+                s.copy(
+                    offer = uiKind,
+                    offerDetails = suggestion.details,
+                    accepted = false,
+                    suggestions = listOf(item) + remaining,
+                )
+            }
         }
+
         override fun wrapUp() = state.update { it.copy(wrapped = true) }
         override fun crisis() { crisis = true; onCrisis() }
     }
@@ -165,8 +233,12 @@ class GeminiLiveSession(
         val snap = state.value
         val turns = snap.transcript.map { DraftTurn(fromPatient = it.speaker == Speaker.You, text = it.text) } +
             listOfNotNull(ratingsLine?.let { DraftTurn(fromPatient = true, text = it) })
-        // Only the last Suggestion can have been agreed to; earlier ones were replaced by a smaller one.
-        val suggestions = offered.mapIndexed { i, s -> if (i == offered.lastIndex && snap.accepted) s.copy(status = SuggestionStatus.accepted) else s }
+        val chosenId = acceptedSuggestionId
+        val hasExactChosen = chosenId != null && offered.any { it.id == chosenId }
+        val suggestions = offered.mapIndexed { i, s ->
+            val isChosen = if (hasExactChosen) s.id == chosenId else i == offered.lastIndex
+            if (snap.accepted && isChosen) s.copy(status = SuggestionStatus.accepted) else s
+        }
         return checkIns.finishCheckIn(id, checkIn, CheckInDraft(turns, suggestions, crisis))
     }
 
@@ -177,9 +249,40 @@ class GeminiLiveSession(
         outgoing?.trySend(LiveProtocol.textMessage(text))
     }
 
+    override fun selectSuggestion(suggestionId: String) {
+        if (scripted) return fallback.selectSuggestion(suggestionId)
+        val before = state.value
+        val index = before.suggestions.indexOfFirst { it.id == suggestionId }
+        val chosen = before.suggestions.getOrNull(index) ?: return respond(Reply.Accept)
+        acceptedSuggestionId = suggestionId
+        state.update { s ->
+            s.copy(
+                offer = chosen.kind,
+                offerDetails = chosen.detail,
+                accepted = true,
+                suggestions = s.suggestions.map { it.copy(accepted = it.id == suggestionId) },
+            )
+        }
+        sendText(if (index <= 0) "That works for me." else "That works for me: ${chosen.detail}")
+    }
+
+    override fun voteSuggestion(suggestionId: String, vote: SuggestionVote?) {
+        if (scripted) return fallback.voteSuggestion(suggestionId, vote)
+        state.update { s -> s.copy(suggestions = s.suggestions.map { if (it.id == suggestionId) it.copy(vote = vote) else it }) }
+    }
+
     override fun respond(reply: Reply) {
         if (scripted) return fallback.respond(reply)
-        if (reply == Reply.Accept) state.update { it.copy(accepted = true) }
+        if (reply == Reply.Accept) {
+            state.update { s ->
+                val chosenId = acceptedSuggestionId ?: s.suggestions.firstOrNull()?.id
+                acceptedSuggestionId = chosenId
+                s.copy(
+                    accepted = true,
+                    suggestions = s.suggestions.map { it.copy(accepted = it.id == chosenId) },
+                )
+            }
+        }
         sendText(when (reply) { Reply.Accept -> "That works for me."; Reply.Smaller -> "Something smaller, please."; Reply.Decline -> "Not now." })
     }
 
@@ -218,10 +321,19 @@ class GeminiLiveSession(
     }
 }
 
-/** The screen has four Suggestion cards; the contract has seven kinds. */
-private fun ContractKind.forScreen(): SuggestionKind = when (this) {
-    ContractKind.music -> SuggestionKind.Music
-    ContractKind.social_call -> SuggestionKind.Call
-    ContractKind.breathing -> SuggestionKind.Window
-    ContractKind.walk, ContractKind.nature, ContractKind.daylight, ContractKind.class_activity -> SuggestionKind.Walk
+/** Maps the seven contract kinds onto the six Patient screen Suggestion cards. */
+private fun ContractKind.forScreen(details: String = ""): SuggestionKind {
+    val d = details.lowercase()
+    return when (this) {
+        ContractKind.music -> SuggestionKind.Music
+        ContractKind.social_call -> SuggestionKind.Call
+        ContractKind.breathing -> SuggestionKind.Window
+        ContractKind.daylight -> if ("window" in d) SuggestionKind.Window else SuggestionKind.Walk
+        ContractKind.class_activity -> when {
+            listOf("read", "book", "page", "story", "poem").any { it in d } -> SuggestionKind.Read
+            listOf("game", "puzzle", "play", "tangram", "crossword").any { it in d } -> SuggestionKind.Game
+            else -> SuggestionKind.Walk
+        }
+        ContractKind.walk, ContractKind.nature -> SuggestionKind.Walk
+    }
 }

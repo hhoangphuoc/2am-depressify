@@ -1,5 +1,10 @@
 package app.depressify.shared.screens
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
@@ -10,9 +15,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.*
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.zIndex
 import app.depressify.shared.state.*
 import app.depressify.shared.ui.*
 import app.depressify.shared.ui.theme.Theme
@@ -90,65 +97,173 @@ fun CheckInScreen(vm: PatientViewModel, s: PatientState) {
 @Composable
 private fun VoiceCheckInScreen(vm: PatientViewModel, s: PatientState, snap: LiveSnapshot, playback: MusicPlayback, onOpenMusic: () -> Unit) {
     val c = Theme.colors
+    val density = LocalDensity.current
     val state = snap.shownState
-    val line = snap.event.speaker?.let { sp -> snap.event.text?.let { TranscriptLine(sp, it) } }
-    val compact = snap.offer != null || snap.cards.isNotEmpty()
     val isLive = vm.live.isLive
-    Page(
-        top = { TopBar("Check-in", onBack = { vm.showSheet(Sheet.Leave) }, trailing = { TextLink("Finish", vm::finishCheckIn, Modifier.padding(end = 12.dp)) }) },
-        bottom = { LiveControls(muted = snap.muted, onType = { playback.pause(); vm.setTyped(true) }, onMic = { val muted = !snap.muted; playback.pause(); vm.live.setMuted(muted) }, onEnd = vm::finishCheckIn) },
-    ) {
-        if (!snap.connected) {
-            Notice("What you’ve said so far is kept.", title = "Connection lost") {
-                SecondaryButton("Try again", { vm.live.setConnected(true) })
-                TextLink("Finish with what we have", vm::finishCheckIn)
-            }
+    val companionLine = if (!snap.connected) null else snap.companionLine
+
+    var sheetOpen by rememberSaveable { mutableStateOf(false) }
+    var activeCardIndex by rememberSaveable { mutableIntStateOf(0) }
+    var lastSeenNewestId by rememberSaveable { mutableStateOf<String?>(null) }
+    var wasWrapped by rememberSaveable { mutableStateOf(false) }
+    var sheetOpenFraction by remember { mutableFloatStateOf(0f) }
+
+    val newestId = snap.suggestions.firstOrNull()?.id
+    LaunchedEffect(newestId) {
+        if (newestId != null && newestId != lastSeenNewestId) {
+            lastSeenNewestId = newestId
+            activeCardIndex = 0
+            sheetOpen = true
+        } else if (newestId == null) {
+            lastSeenNewestId = null
+            sheetOpen = false
         }
-        Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(if (compact) 6.dp else 12.dp)) {
-            Orb(state, if (compact) 88.dp else 164.dp, onInterrupt = vm.live::interrupt)
-            val label = when {
-                !snap.connected -> "Not connected"
-                state == LiveState.Thinking -> snap.event.tool ?: state.label
-                state == LiveState.Speaking -> "Speaking · tap to interrupt"
-                else -> state.label
-            }
-            Txt(label, DepressifyType.meta, c.muted, Modifier.semantics { liveRegion = LiveRegionMode.Polite }, align = TextAlign.Center)
+    }
+
+    LaunchedEffect(snap.wrapped) {
+        if (snap.wrapped && !wasWrapped) {
+            sheetOpen = false
         }
-        LiveCaption(
-            line = if (snap.muted || !snap.connected) null else line,
-            placeholder = when {
-                !snap.connected -> ""
-                snap.muted -> "Paused. Tap the microphone to go on, or type."
-                state == LiveState.Connecting || state == LiveState.Thinking -> ""
-                else -> "Listening. Speak whenever you’re ready."
-            },
-            compact = compact,
-        )
-        val outcome = snap.outcome
-        if (outcome is Outcome.Tried && !compact) {
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
-                Icon(PhosphorIcons.check, 16.dp, c.ok)
-                Spacer(Modifier.width(8.dp))
-                Txt("Noted: walk tried" + (outcome.feeling?.let { " · felt $it of 5" } ?: ""), DepressifyType.meta, c.ok)
-            }
-        }
-        snap.offer?.let { kind ->
-            if (kind != SuggestionKind.Music || snap.cards.none { it is ToolCard.Music })
-            SuggestionCard(kind, accepted = snap.accepted, booked = s.booking != null, showFinish = false, detail = snap.offerDetails,
-                onAccept = { playback.pause(); vm.reply(Reply.Accept) }, onSmaller = { playback.pause(); vm.reply(Reply.Smaller) }, onDecline = { playback.pause(); vm.reply(Reply.Decline) },
-                onBook = { vm.showSheet(Sheet.Booking) }, onFinish = vm::finishCheckIn)
-        }
-        // What the Companion's tool calls found or opened, newest first.
-        SessionToolCards(snap.cards, playback, onOpenMusic, musicActions = { MusicOfferActions(vm, s, snap, playback) })
-        if (snap.wrapped) PrimaryButton(if (s.consents[SignalId.Ratings] == true) "Continue to ratings" else "Finish Check-in", vm::finishCheckIn)
-        if (snap.transcript.isNotEmpty()) {
-            Disclosure("Conversation · ${snap.transcript.size} messages") {
-                snap.transcript.forEach { t ->
-                    Column { Txt(t.speaker.label, DepressifyType.small, c.muted); Txt(t.text, DepressifyType.meta.copy(fontSize = DepressifyType.body.fontSize)) }
+        wasWrapped = snap.wrapped
+    }
+
+    Box(Modifier.fillMaxSize().background(c.ground)) {
+        Column(
+            Modifier
+                .fillMaxSize()
+                .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Top + WindowInsetsSides.Horizontal)),
+        ) {
+            TopBar(
+                title = null,
+                onBack = { vm.showSheet(Sheet.Leave) },
+                center = { if (!isLive) CheckSteps(snap.event.step) },
+                trailing = { Spacer(Modifier.width(48.dp)) },
+            )
+
+            if (!snap.connected) {
+                Box(Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 8.dp), contentAlignment = Alignment.Center) {
+                    Box(Modifier.widthIn(max = 560.dp).fillMaxWidth()) {
+                        Notice("What you’ve said so far is kept.", title = "Connection lost") {
+                            SecondaryButton("Try again", { vm.live.setConnected(true) })
+                            TextLink("Finish with what we have", vm::finishCheckIn)
+                        }
+                    }
                 }
             }
+
+            // Minimal main canvas: only the Voice Check-in Orb and real-time AI Companion transcription.
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxWidth()
+                    .padding(horizontal = 28.dp),
+                contentAlignment = Alignment.Center,
+            ) {
+                val liftPx = with(density) { (-92).dp.toPx() } * sheetOpenFraction
+                Column(
+                    modifier = Modifier
+                        .widthIn(max = 520.dp)
+                        .fillMaxWidth()
+                        .graphicsLayer { translationY = liftPx },
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(18.dp),
+                ) {
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(10.dp),
+                    ) {
+                        Orb(
+                            state = state,
+                            size = 188.dp,
+                            onInterrupt = vm.live::interrupt,
+                            modifier = Modifier.graphicsLayer {
+                                val orbScale = 1f - 0.08f * sheetOpenFraction
+                                scaleX = orbScale
+                                scaleY = orbScale
+                            },
+                        )
+                        val label = when {
+                            !snap.connected -> "Not connected"
+                            state == LiveState.Thinking -> snap.event.tool ?: state.label
+                            state == LiveState.Speaking -> "Speaking · tap to interrupt"
+                            else -> state.label
+                        }
+                        Txt(
+                            text = label,
+                            style = DepressifyType.meta,
+                            color = c.muted,
+                            modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
+                            align = TextAlign.Center,
+                        )
+                    }
+
+                    LiveCaption(
+                        line = companionLine,
+                        placeholder = when {
+                            !snap.connected -> ""
+                            snap.muted && companionLine == null -> "Paused. Tap the microphone to go on, or type."
+                            state == LiveState.Connecting || state == LiveState.Thinking -> ""
+                            else -> "Listening. Speak whenever you’re ready."
+                        },
+                        compact = false,
+                        showSpeakerLabel = false,
+                    )
+                }
+            }
+
+            Column(
+                modifier = Modifier
+                    .widthIn(max = 560.dp)
+                    .fillMaxWidth()
+                    .align(Alignment.CenterHorizontally)
+                    .padding(horizontal = 24.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                AnimatedVisibility(
+                    visible = snap.suggestions.isNotEmpty() && !sheetOpen,
+                    enter = fadeIn() + slideInVertically { it / 2 },
+                    exit = fadeOut() + slideOutVertically { it / 2 },
+                ) {
+                    SuggestionsReopenPill(
+                        suggestions = snap.suggestions,
+                        onClick = { sheetOpen = true },
+                        modifier = Modifier.padding(bottom = 4.dp),
+                    )
+                }
+                if (snap.wrapped) {
+                    PrimaryButton(
+                        text = if (s.consents[SignalId.Ratings] == true) "Continue to ratings" else "Finish Check-in",
+                        onClick = vm::finishCheckIn,
+                    )
+                }
+            }
+
+            LiveControls(
+                muted = snap.muted,
+                onType = { playback.pause(); vm.setTyped(true) },
+                onMic = { val muted = !snap.muted; playback.pause(); vm.live.setMuted(muted) },
+                onEnd = vm::finishCheckIn,
+            )
         }
-        if (!isLive || snap.cards.any { it is ToolCard.Places }) MapsNotice { vm.showSheet(Sheet.MapsSources) }
+
+        SuggestionsBottomModal(
+            open = sheetOpen && snap.suggestions.isNotEmpty(),
+            suggestions = snap.suggestions,
+            activeIndex = activeCardIndex,
+            onActiveIndexChange = { activeCardIndex = it },
+            booked = s.booking != null,
+            showMapsAttribution = !isLive || snap.cards.any { it is ToolCard.Places } || snap.suggestions.any { it.kind == SuggestionKind.Walk },
+            onDismiss = { sheetOpen = false },
+            onSelect = { chosen -> playback.pause(); vm.selectSuggestion(chosen.id) },
+            onSmaller = { playback.pause(); vm.reply(Reply.Smaller) },
+            onVote = { target, vote -> vm.voteSuggestion(target.id, vote) },
+            onBook = { vm.showSheet(Sheet.Booking) },
+            onMapsSources = { vm.showSheet(Sheet.MapsSources) },
+            onOpenFractionChange = { sheetOpenFraction = it },
+            onOpenMusic = onOpenMusic,
+            modifier = Modifier.zIndex(2f),
+        )
     }
 }
 
@@ -268,17 +383,17 @@ fun CheckSteps(step: Int) {
 
 /** The provider already streams words; show them immediately, without a second typewriter delay. */
 @Composable
-fun LiveCaption(line: TranscriptLine?, placeholder: String, compact: Boolean) {
+fun LiveCaption(line: TranscriptLine?, placeholder: String, compact: Boolean, showSpeakerLabel: Boolean = true) {
     val c = Theme.colors
     Column(
-        Modifier.fillMaxWidth().heightIn(min = if (compact) 0.dp else 116.dp)
+        Modifier.fillMaxWidth().heightIn(min = if (compact) 0.dp else 96.dp)
             .clearAndSetSemantics { liveRegion = LiveRegionMode.Polite; contentDescription = line?.let { it.speaker.label + ": " + it.text } ?: placeholder },
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {
         if (line != null) {
-            Txt(line.speaker.label.uppercase(), DepressifyType.label, c.muted)
-            BasicText(line.text, style = (if (compact) DepressifyType.body else DepressifyType.bodyLarge).copy(color = c.ink, textAlign = TextAlign.Center))
+            if (showSpeakerLabel) Txt(line.speaker.label.uppercase(), DepressifyType.label, c.muted)
+            BasicText(line.text, style = (if (compact) DepressifyType.titleSmall.copy(fontWeight = null) else DepressifyType.caption).copy(color = c.ink, textAlign = TextAlign.Center))
         } else if (placeholder.isNotEmpty()) {
             Txt(placeholder, DepressifyType.body.copy(fontSize = DepressifyType.titleSmall.fontSize), c.muted, align = TextAlign.Center)
         }

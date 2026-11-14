@@ -250,4 +250,68 @@ class GeminiLiveSessionTest {
         assertEquals(SuggestionStatus.accepted, draft.suggestions.single().status)
         assertFalse(draft.crisis)
     }
+
+    @Test
+    fun suggestionsStackNewestFirstMapReadAndGameAndAllowSelectingAnyCard() = runTest {
+        val client = FakeLiveClient(listOf(
+            ServerEvent.OutputText("Would reading or a puzzle feel gentle?"),
+            ServerEvent.TurnComplete,
+            ServerEvent.InputText("Maybe."),
+            call("record_suggestion", "kind" to JsonPrimitive("class_activity"), "details" to JsonPrimitive("Read two pages of a book with tea")),
+            call("record_suggestion", "kind" to JsonPrimitive("class_activity"), "details" to JsonPrimitive("Fifteen minutes of a cozy puzzle game")),
+            call("record_suggestion", "kind" to JsonPrimitive("music"), "details" to JsonPrimitive("One calm album")),
+            call("suggest_music", "query" to JsonPrimitive("nordic ambient")),
+        ))
+        val live = session(client)
+        live.start(returning = true)
+
+        val snap = live.snapshot.value
+        // Companion caption stays anchored on the AI's response even after Patient input.
+        assertEquals(TranscriptLine(Speaker.Companion, "Would reading or a puzzle feel gentle?"), snap.companionLine)
+        // Newest suggestion is at index 0; generated music opens the in-app listening session from the top Music card.
+        assertEquals(listOf(SuggestionKind.Music, SuggestionKind.Game, SuggestionKind.Read), snap.suggestions.map { it.kind })
+        assertTrue(snap.suggestions.first().opensListening)
+        assertEquals(1, snap.suggestions.count { it.opensListening })
+
+        val readCard = snap.suggestions.last()
+        live.voteSuggestion(readCard.id, SuggestionVote.Up)
+        assertEquals(SuggestionVote.Up, live.snapshot.value.suggestions.last().vote)
+
+        // Selecting an older card in the horizontal stack marks that exact card accepted.
+        live.selectSuggestion(readCard.id)
+        assertEquals(SuggestionKind.Read, live.snapshot.value.offer)
+        assertEquals(listOf(false, false, true), live.snapshot.value.suggestions.map { it.accepted })
+        live.stop()
+
+        live.finish(ratingsLine = null)
+        val statuses = gateway.finished.single().second.suggestions.map { it.details to it.status }
+        assertEquals(
+            listOf(
+                "Read two pages of a book with tea" to SuggestionStatus.accepted,
+                "Fifteen minutes of a cozy puzzle game" to SuggestionStatus.proposed,
+                "One calm album" to SuggestionStatus.proposed,
+            ),
+            statuses,
+        )
+    }
+
+    @Test
+    fun scriptedSessionSeedsHorizontalStackNewestFirstAndPrependsSmallerIdeas() = runTest {
+        val scripted = ScriptedLiveSession(this)
+        scripted.start(returning = false)
+        testScheduler.advanceUntilIdle()
+
+        assertEquals(listOf(SuggestionKind.Walk, SuggestionKind.Music, SuggestionKind.Read), scripted.snapshot.value.suggestions.map { it.kind })
+
+        scripted.respond(Reply.Smaller)
+        testScheduler.advanceUntilIdle()
+        assertEquals(SuggestionKind.Game, scripted.snapshot.value.suggestions.first().kind)
+        assertEquals(4, scripted.snapshot.value.suggestions.size)
+
+        scripted.respond(Reply.Smaller)
+        testScheduler.advanceUntilIdle()
+        assertEquals(SuggestionKind.Window, scripted.snapshot.value.suggestions.first().kind)
+        assertEquals(5, scripted.snapshot.value.suggestions.size)
+        scripted.stop()
+    }
 }
