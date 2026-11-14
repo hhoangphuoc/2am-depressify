@@ -184,6 +184,7 @@
             "felt",
             "objectiveChange",
             "outcomeScore",
+            "outcomeCheckInId",
             "sharedWithClinician"
         ],
         "Flag": [

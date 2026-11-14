@@ -230,7 +230,8 @@ export interface Summary {
 
 /**
  * `patients/{id}/suggestions/{suggestionId}`. The app changes only `status` and `booked`; the Outcome
- * (`tried`, `felt`, `objectiveChange`, `outcomeScore`) is written by functions only.
+ * (`tried`, `felt`, `objectiveChange`, `outcomeScore`, `outcomeCheckInId`) is written by functions
+ * only, by Finish Check-in (#21; src/outcomes.ts).
  */
 export interface Suggestion {
   id: string;
@@ -239,12 +240,19 @@ export interface Suggestion {
   suggestedAtMillis: number;
   status: SuggestionStatus;
   booked: boolean;
-  /** Null until the Patient answers; false means "not this time". */
+  /** True or false once the Patient answers; false means "not this time". Null while open, and for "prefer not to say". */
   tried: boolean | null;
-  /** 1 to 5. */
+  /** How trying it felt, 1 to 5, or null. Only when tried. */
   felt: number | null;
+  /** The oriented steps comparison with Baseline on the day the Suggestion was made, or null. */
   objectiveChange: number | null;
+  /** Null until the Patient answers, and for "prefer not to say"; -0.1 for not tried; otherwise in -1..1. */
   outcomeScore: number | null;
+  /**
+   * The Check-in whose answer recorded the Outcome. Null while the Outcome is open: together with
+   * `tried` it tells open (null, null), "prefer not to say" (set, null), not tried and tried apart.
+   */
+  outcomeCheckInId: string | null;
   /** Whether the Patient was sharing when this Suggestion was created. Never changes. */
   sharedWithClinician: boolean;
 }

@@ -10,8 +10,9 @@ import { patientIdOf } from "./intake";
 import { TEXT_MODEL } from "./models";
 import { decisionFlagWrites, triedValue, type DecisionFlagWrites, type Judgment } from "./decisions";
 import type { StoredFlag } from "./flags";
+import { outcomeWrite, type OutcomeFields, type OutcomePlan, type StoredSuggestion } from "./outcomes";
 import { checkInStamp, sharingStamp } from "./sharing";
-import { SUGGESTION_KINDS, SUGGESTION_STATUSES, type CheckIn, type PatientDoc, type Summary, type SuggestionKind, type SuggestionStatus, type VoiceCue } from "./types";
+import { SUGGESTION_KINDS, SUGGESTION_STATUSES, type CheckIn, type DailyDoc, type PatientDoc, type Summary, type SuggestionKind, type SuggestionStatus, type VoiceCue } from "./types";
 
 // ---------------------------------------------------------------------------------------------
 // Limits
@@ -74,7 +75,10 @@ export interface FinishCheckInRequest {
   draft: CheckInDraft;
   /** Today's Signals against Baseline, as words ("Sleep was shorter than usual."). */
   todayLines: string[];
-  /** The previous Suggestion the Companion asked about, if any. */
+  /**
+   * The previous Suggestion the Companion asked about, if any. Finish Check-in finds the Outcome's
+   * target itself (`outcomeTarget`) and writes the Outcome only when this is absent or names it.
+   */
   lastSuggestionId: string | null;
 }
 
@@ -218,9 +222,10 @@ export const SUMMARY_SCHEMA: Record<string, unknown> = {
     previousOutcome: { type: ["string", "null"], description: "What the Patient said about the previous Suggestion, or null if it did not come up." },
     previousTried: { type: ["boolean", "null"], description: "Whether the Patient tried the previous Suggestion; null if not discussed." },
     previousFelt: { type: ["integer", "null"], minimum: 1, maximum: 5, description: "How trying it felt, 1-5, if the Patient said; otherwise null." },
+    previousPreferNotToSay: { type: "boolean", description: "True only if the Patient chose not to say whether they tried the previous Suggestion." },
     quotes: { type: "array", items: { type: "string" }, maxItems: MAX_QUOTES, description: "Up to three short verbatim quotes of the Patient's own words, showing any concern they voiced." },
   },
-  required: ["mood", "energy", "sleepQuality", "sleepLine", "themes", "suggestion", "previousOutcome", "previousTried", "previousFelt", "quotes"],
+  required: ["mood", "energy", "sleepQuality", "sleepLine", "themes", "suggestion", "previousOutcome", "previousTried", "previousFelt", "previousPreferNotToSay", "quotes"],
   additionalProperties: false,
 };
 
@@ -288,10 +293,12 @@ export interface ModelSummary {
   themes: string[];
   suggestion: string | null;
   previousOutcome: string | null;
-  /** For #21 (the Outcome on the previous Suggestion). Not written by #14. */
+  /** For the Outcome on the previous Suggestion (#21, `resolveOutcome`). */
   previousTried: boolean | null;
-  /** For #21. 1 to 5 or null. */
+  /** For the Outcome. 1 to 5 or null. */
   previousFelt: number | null;
+  /** For the Outcome: the Patient chose not to say. Not a schema field in the #6 spike; false when missing. */
+  previousPreferNotToSay: boolean;
   /** Not yet checked against the transcript; see `summaryContent`. */
   quotes: string[];
 }
@@ -338,6 +345,7 @@ export function parseModelSummary(raw: string | null): ModelSummary | null {
     previousOutcome: lineOrNull(json.previousOutcome, MAX_SUMMARY_LINE_CHARS),
     previousTried: typeof json.previousTried === "boolean" ? json.previousTried : null,
     previousFelt: ratingOrNull(json.previousFelt),
+    previousPreferNotToSay: json.previousPreferNotToSay === true,
     // Cut later, after the check that each quote is the Patient's own words.
     quotes: strings(json.quotes, MAX_QUOTES, Number.MAX_SAFE_INTEGER),
   };
@@ -423,6 +431,12 @@ export interface FinishCurrent {
   summary: Partial<Summary> | undefined;
   /** The Patient's stored flags of the Decisions kinds (`DECISION_FLAG_KINDS`), open or cleared. */
   flags?: readonly StoredFlag[];
+  /**
+   * For the Outcome (#21): the target as the transaction finds it now (`outcomeTarget`), and the
+   * daily records of its day and the 14 before it (`outcomeDailyRange`), or none when the target
+   * is not the planned one.
+   */
+  outcome?: { target: StoredSuggestion | undefined; daily: readonly Partial<DailyDoc>[] };
 }
 
 export interface FinishWrites {
@@ -434,6 +448,8 @@ export interface FinishWrites {
   patient: Pick<PatientDoc, "lastCheckInAtMillis" | "lastSeenAtMillis"> & Partial<Pick<PatientDoc, "flagLevel" | "flagReasons">>;
   /** Flags to create (`flags/{id}`), from the Decisions routing (#20). */
   flags: DecisionFlagWrites["flags"];
+  /** The Outcome fields to set on `suggestions/{id}` (#21), or null. Nothing else on the Suggestion changes. */
+  suggestion: { id: string; fields: OutcomeFields } | null;
 }
 
 /** No review: nothing raised, nothing assessed, "tried" unknown. */
@@ -459,6 +475,9 @@ function later(existing: number | null | undefined, nowMillis: number): number {
  * The Decisions `judgment` (#20) adds the Check-in's `assessment` and `previousTried`, the flags to
  * create and the Patient's raised level (`decisionFlagWrites`). A retry whose review gave no result
  * (a failure, or nothing to review) keeps the assessment and `previousTried` an earlier attempt saved.
+ *
+ * The Outcome `plan` (#21) adds the Outcome on the previous Suggestion (`outcomeWrite`): once per
+ * Suggestion, so a retry leaves the Outcome its first attempt recorded.
  */
 export function finishWrites(
   current: FinishCurrent,
@@ -466,6 +485,7 @@ export function finishWrites(
   content: FinishContent,
   nowMillis: number,
   judgment: Judgment = NOT_REVIEWED,
+  plan: OutcomePlan | null = null,
 ): FinishWrites {
   const existing = current.summary;
   // A retry that could not use the model (a lost reply, then a model error) must not wipe the
@@ -514,6 +534,7 @@ export function finishWrites(
       ...(raised.attention ?? {}),
     },
     flags: raised.flags,
+    suggestion: outcomeWrite(current.outcome?.target, plan, current.outcome?.daily ?? [], checkInId),
   };
 }
 

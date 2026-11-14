@@ -25,7 +25,7 @@ const samples: Record<string, object> = {
   } satisfies types.Summary,
   Suggestion: {
     id: "s1", kind: "walk", details: "", suggestedAtMillis: 1, status: "proposed", booked: false, tried: null, felt: null,
-    objectiveChange: null, outcomeScore: null, sharedWithClinician: true,
+    objectiveChange: null, outcomeScore: null, outcomeCheckInId: null, sharedWithClinician: true,
   } satisfies types.Suggestion,
   Flag: { level: "red", kind: "silent", reason: "", raisedAtMillis: 1, clearedAtMillis: null, sharedWithClinician: true } satisfies types.Flag,
   Visit: { date: "2026-11-13", questionnaire: null, score: null } satisfies types.Visit,
@@ -105,5 +105,9 @@ describe("dashboard copy of the data contract", () => {
 
   it("has the Digest fields the Kotlin contract has", () => {
     expect(dashboard.DIGEST_FIELDS).toEqual(contract.documents.Digest);
+  });
+
+  it("has the Suggestion fields the Kotlin contract has", () => {
+    expect(dashboard.SUGGESTION_FIELDS).toEqual(contract.documents.Suggestion);
   });
 });

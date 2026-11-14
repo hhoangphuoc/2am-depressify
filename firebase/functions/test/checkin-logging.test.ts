@@ -3,9 +3,10 @@
 // to the console methods), then runs full Check-ins through the real callable HTTP layer: start,
 // then finish with success, a model failure, malformed output, a write failure, a token failure,
 // refusals and bad requests, and every Decisions path (#20): answered with a crisis, a safety
-// refusal, a timeout and an error, each failing with an error that echoes the input. No captured
-// line may contain the transcript, the Brief or the token, and neither may any error the client
-// receives.
+// refusal, a timeout and an error, each failing with an error that echoes the input, and the
+// Outcome paths (#21): recorded, a retry, and an answer about another Suggestion. No captured line
+// may contain the transcript, the Brief, the token, what the Patient said about the previous
+// Suggestion or its details, and neither may any error the client receives.
 import { createServer, type Server } from "node:http";
 import type { AddressInfo } from "node:net";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
@@ -66,7 +67,9 @@ const OTHER_TOKEN = idToken({ sub: "other-uid", user_id: "other-uid" });
 
 let server: Server;
 let baseUrl = "";
-let scenario: "ok" | "model-fails" | "malformed" | "write-fails" | "token-fails" = "ok";
+let scenario: "ok" | "model-fails" | "malformed" | "write-fails" | "token-fails" | "outcome" = "ok";
+const FEELING_MARKER = "Felt-Marker-3141";
+const DETAILS_MARKER = "Details-Marker-2718";
 let judging: "routine" | "crisis" | "refused" | "timeout" | "error" = "routine";
 let store: import("./fakes").FakeCheckInStore;
 
@@ -85,6 +88,11 @@ beforeAll(async () => {
     textModel: () => {
       if (scenario === "model-fails") return failingTextModel(500);
       if (scenario === "malformed") return new FakeTextModel(`{"themes": ["${TRANSCRIPT_MARKER}"`);
+      if (scenario === "outcome") {
+        return new FakeTextModel(
+          JSON.stringify({ themes: ["Dog walks"], previousOutcome: `Walked and felt ${FEELING_MARKER}`, previousTried: true, previousFelt: 4 }),
+        );
+      }
       return new FakeTextModel(JSON.stringify({ themes: ["Dog walks", "Choir"], quotes: [`FICTIONAL ${TRANSCRIPT_MARKER}`], mood: 4 }));
     },
     decisions: () => {
@@ -252,5 +260,40 @@ describe("no log line and no client error contains the transcript, the Brief or 
     expect(written).not.toContain("sang in the choir");
     expect(written).not.toContain(BRIEF_MARKER);
     expect(written).not.toContain(TOKEN_MARKER);
+  });
+
+  it("through the Outcome (#21): recorded, retried, and an answer about another Suggestion", async () => {
+    const start = captured.length;
+    store.starts.clear(); // the first test used up the hourly cap on starts
+    const suggestion = (id: string, ago: number) =>
+      store.suggestions.set(`${PATIENT_ID}/${id}`, {
+        id, kind: "walk", details: `Walk ${DETAILS_MARKER}`, suggestedAtMillis: Date.now() - ago, status: "accepted", booked: false,
+        tried: null, felt: null, objectiveChange: null, outcomeScore: null, outcomeCheckInId: null, sharedWithClinician: true,
+      });
+    suggestion("s-older", 2 * 86_400_000);
+    suggestion("s-walk", 86_400_000);
+    scenario = "outcome";
+    const data = (checkInId: string, lastSuggestionId?: string) => ({ patientId: PATIENT_ID, checkInId, draft: DRAFT, lastSuggestionId });
+
+    const first = await startOne();
+    const statuses = [
+      (await call("finishCheckIn", data(first, "s-walk"), PATIENT_TOKEN)).status,
+      (await call("finishCheckIn", data(first, "s-walk"), PATIENT_TOKEN)).status, // a retry
+    ];
+    const second = await startOne();
+    statuses.push((await call("finishCheckIn", data(second, "s-elsewhere"), PATIENT_TOKEN)).status); // not the open Outcome
+    expect(statuses).toEqual([200, 200, 200]);
+
+    expect(store.suggestions.get(`${PATIENT_ID}/s-walk`)).toMatchObject({ tried: true, felt: 4, outcomeCheckInId: first });
+    expect(store.suggestions.get(`${PATIENT_ID}/s-older`)).toMatchObject({ outcomeCheckInId: null });
+    const logs = captured.slice(start).join("\n");
+    expect(logs).toContain("finishCheckIn: the last Suggestion is not the open Outcome");
+    for (const secret of [TRANSCRIPT_MARKER, "Pepper", FEELING_MARKER, DETAILS_MARKER, BRIEF_MARKER, TOKEN_MARKER]) {
+      expect(logs).not.toContain(secret);
+    }
+    // The Outcome holds the answer, never the words.
+    const outcomeWrites = JSON.stringify(store.writes.filter((w) => w.path.includes("/suggestions/")));
+    expect(outcomeWrites).not.toContain(FEELING_MARKER);
+    expect(outcomeWrites).not.toContain(TRANSCRIPT_MARKER);
   });
 });

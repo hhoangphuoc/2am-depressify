@@ -5,6 +5,8 @@
 //    Summary, the Check-in's fields, the flags the Decisions answers raise (#20) and the Patient's
 //    times and level in one transaction, a retry overwrites and never duplicates a flag, and the
 //    Patient then reads the Summary through the security rules (which the Admin SDK writes bypass).
+//    The Outcome (#21) lands on the previous accepted Suggestion in the same transaction, with the
+//    day's steps from the daily records, once.
 // 2. When the Functions emulator is running too, the deployed callables are called through the
 //    Firebase JS SDK as the app calls them. Only paths that never reach Gemini are exercised there:
 //    refusals, and a finish of a silent Check-in (which calls neither the text model nor the
@@ -31,7 +33,9 @@ import { genaiTextClient } from "../../src/gemini";
 import { MAX_CHECK_IN_STARTS_PER_HOUR, PATIENT_LIMITS } from "../../src/limits";
 import { fetchLiveTokenClient } from "../../src/live";
 import { REGION } from "../../src/region";
+import { outcomeDay } from "../../src/outcomes";
 import { newPatientDoc, type PatientDoc, type Summary } from "../../src/types";
+import { whatHelps, whatHelpsWindow } from "../../../hosting/js/lib/what-helps.js";
 import { FakeDecisions, FakeLiveTokens, FakeTextModel, decisionsReply, decisionsTimeout } from "../fakes";
 
 const PROJECT_ID = "demo-twoam";
@@ -186,6 +190,52 @@ describe("Check-in handlers with the Admin SDK on the Firestore emulator", () =>
     expect(await count(`patients/${id}/flags`)).toBe(2);
     expect(await docData(`patients/${id}/checkIns/${later}`)).toMatchObject({ assessment: "unavailable", previousTried: null });
     expect(await docData(`patients/${id}`)).toMatchObject({ flagLevel: "red" });
+  });
+
+  it("the Outcome lands on the previous accepted Suggestion in the finish transaction, with the day's steps, once", async () => {
+    const auth = { uid, token: {} };
+    const DAY = 86_400_000;
+    const now = Date.UTC(2026, 10, 14, 17, 0); // 19:00 in Helsinki
+    const madeAt = now - DAY;
+    const suggestionPath = (id: string) => `patients/${uid}/suggestions/${id}`;
+    const open = { kind: "walk", details: "Walk to the library", status: "accepted", booked: false, tried: null, felt: null, objectiveChange: null, outcomeScore: null, outcomeCheckInId: null, sharedWithClinician: true };
+    await adminDb.doc(suggestionPath("s-walk")).set({ ...open, id: "s-walk", suggestedAtMillis: madeAt });
+    await adminDb.doc(suggestionPath("s-declined")).set({ ...open, id: "s-declined", status: "declined", suggestedAtMillis: madeAt + 60_000 });
+    // Five days of 5000 steps before, then 5500 that day with no stored comparison: +2 by the Baseline rule.
+    for (let d = 0; d <= 5; d++) {
+      const date = outcomeDay(madeAt - d * DAY);
+      await adminDb.doc(`patients/${uid}/daily/${date}`).set({
+        date, values: { steps: d === 0 ? 5500 : 5000 }, vsBaseline: { steps: null }, composite: null, demoOverride: false, sharedWithClinician: true,
+      });
+    }
+    const started = await startCheckInHandler({ data: { patientId: uid, brief: BRIEF }, auth }, { store, liveTokens: new FakeLiveTokens(), clock: () => now });
+    const finishOne = (reply: Record<string, unknown>) =>
+      finishCheckInHandler(
+        { data: { patientId: uid, checkInId: started.checkInId, draft: DRAFT }, auth },
+        { store, textModel: new FakeTextModel(JSON.stringify({ ...JSON.parse(MODEL_JSON), ...reply })), decisions: new FakeDecisions(), clock: () => now + 180_000 },
+      );
+
+    await finishOne({ previousTried: true, previousFelt: 4 });
+    const recorded = await docData(suggestionPath("s-walk"));
+    expect(recorded).toMatchObject({ ...open, id: "s-walk", tried: true, felt: 4, objectiveChange: expect.any(Number), outcomeScore: expect.any(Number), outcomeCheckInId: started.checkInId });
+    expect(recorded!.objectiveChange).toBeCloseTo(2, 9);
+    expect(recorded!.outcomeScore).toBeCloseTo(0.65, 9);
+    expect(await docData(suggestionPath("s-declined"))).toMatchObject({ tried: null, outcomeScore: null, outcomeCheckInId: null });
+
+    // A retry hears it differently, and changes nothing.
+    await finishOne({ previousTried: false });
+    expect(await docData(suggestionPath("s-walk"))).toEqual(recorded);
+
+    // The dashboard's "what seems to help" reads the new score.
+    const suggestions = (await adminDb.collection(`patients/${uid}/suggestions`).get()).docs.map((d) => d.data());
+    const helps = whatHelps(suggestions, { ...whatHelpsWindow(outcomeDay(now)), timeZone: "Europe/Helsinki" });
+    expect(helps.rows.map((r) => [r.kind, r.n, r.feelings.better])).toEqual([["walk", 1, 1]]);
+
+    // The phone reads the Outcome but cannot change it.
+    expect((await getDoc(doc(phoneDb, suggestionPath("s-walk")))).data()).toMatchObject({ tried: true, felt: 4 });
+    for (const field of [{ outcomeScore: 1 }, { tried: false }, { outcomeCheckInId: null }]) {
+      await expect(updateDoc(doc(phoneDb, suggestionPath("s-walk")), field)).rejects.toMatchObject({ code: "permission-denied" });
+    }
   });
 
   it("the store records each start, refuses the one past the hourly cap, and no client reads the record", async () => {

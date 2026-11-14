@@ -146,13 +146,16 @@ describe("the structured-output request", () => {
     expect(request.store).toBe(false);
   });
 
-  it("has the recorded response_format shape, with the recorded schema's fields", () => {
+  it("has the recorded response_format shape, with the recorded schema's fields and the one #21 added", () => {
     const recordedFormat = recorded.request.body.response_format;
     expect(request.response_format?.type).toBe(recordedFormat.type);
     expect(request.response_format?.mime_type).toBe(recordedFormat.mime_type);
     const schema = request.response_format!.schema as typeof recordedFormat.schema;
-    expect(Object.keys(schema.properties).sort()).toEqual(Object.keys(recordedFormat.schema.properties).sort());
-    expect([...schema.required].sort()).toEqual([...recordedFormat.schema.required].sort());
+    // #21 adds "prefer not to say", so it is not taken for a topic that never came up.
+    const added = ["previousPreferNotToSay"];
+    expect(Object.keys(schema.properties).sort()).toEqual([...Object.keys(recordedFormat.schema.properties), ...added].sort());
+    expect([...schema.required].sort()).toEqual([...recordedFormat.schema.required, ...added].sort());
+    expect(schema.properties.previousPreferNotToSay.type).toBe("boolean");
     expect(schema.additionalProperties).toBe(false);
     expect(schema.properties.quotes.maxItems).toBe(3);
     // #20: the few quotes are the ones that explain a concern, when there is one.
@@ -203,6 +206,7 @@ describe("parseModelSummary", () => {
       previousOutcome: "Went for twenty minutes on Saturday, liked seeing the water, and felt a bit lighter after.",
       previousTried: true,
       previousFelt: null,
+      previousPreferNotToSay: false,
       quotes: ["I felt a bit lighter after.", "I woke up around four and couldn't get back to sleep.", "Work has been a lot this week, lots of deadlines."],
     });
   });
@@ -235,8 +239,16 @@ describe("parseModelSummary", () => {
       previousOutcome: null,
       previousTried: null,
       previousFelt: null,
+      previousPreferNotToSay: false,
       quotes: ["ok"],
     });
+  });
+
+  it("reads 'prefer not to say' only from a true boolean", () => {
+    expect(parseModelSummary(JSON.stringify({ previousPreferNotToSay: true }))?.previousPreferNotToSay).toBe(true);
+    for (const value of ["true", 1, null, false]) {
+      expect(parseModelSummary(JSON.stringify({ previousPreferNotToSay: value }))?.previousPreferNotToSay).toBe(false);
+    }
   });
 
   it("caps themes at four and quotes at three", () => {
