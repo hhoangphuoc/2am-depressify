@@ -49,6 +49,9 @@ import { createRandom, hashString } from "./random.js";
  *   Defaults to noon on `today`, so the output depends only on the inputs.
  * @property {number} [seed] base seed for the pseudo-random source
  * @property {string} [clinicianEmail]
+ * @property {string} [patientId] the Patient document id, instead of the profile's (the live
+ *   demo Patient's is its auth uid)
+ * @property {string} [displayName] instead of the profile's
  */
 
 /** The placeholder Clinician, for the emulator only. A real project is seeded with --clinician. */
@@ -58,6 +61,11 @@ export const DAILY_RECORDS = 42;
 export const TMS_END_DAYS_AGO = 42;
 export const VISIT_DAYS_AGO = 21;
 export const PROFILE_ORDER = /** @type {const} */ (["steady", "declining", "sparse"]);
+/**
+ * Every document id of a profile with `mockHistory` starts with this, except daily records (keyed
+ * by date), which carry `demoOverride: true` instead. `--reset` finds the mock history by these.
+ */
+export const MOCK_ID_PREFIX = "demo-";
 const NOT_TRIED_OUTCOME = -0.1;
 
 /** @param {number} value @param {number} min @param {number} max */
@@ -180,6 +188,8 @@ export function makePatient(profileKey, options) {
   const nowMillis = options.nowMillis ?? zonedMillis(today, 12, 0);
   const seed = options.seed ?? DEFAULT_SEED;
   const clinicianEmail = options.clinicianEmail ?? DEMO_CLINICIAN_EMAIL;
+  const mock = profile.mockHistory === true;
+  const idPrefix = mock ? MOCK_ID_PREFIX : "";
   const random = createRandom(hashString(`${seed}:${profile.key}`));
   const dateOf = (/** @type {number} */ d) => addDays(today, -d);
   const at = (/** @type {number} */ d, /** @type {number} */ hour, /** @type {number} */ minute) =>
@@ -221,7 +231,7 @@ export function makePatient(profileKey, options) {
       values: day.values,
       vsBaseline: comparisons[i].vsBaseline,
       composite: comparisons[i].composite,
-      demoOverride: false,
+      demoOverride: mock,
       sharedWithClinician: sharedAt(at(day.d, 7, 10)),
     },
   }));
@@ -235,8 +245,11 @@ export function makePatient(profileKey, options) {
   const summaries = [];
   /** @type {Entry<Suggestion>[]} */
   const suggestions = [];
+  /** The day each Suggestion was made, in step with `suggestions`. @type {number[]} */
+  const suggestionDays = [];
   for (let d = DAILY_RECORDS - 1; d >= 1; d--) {
     if (!profile.checksIn(d, random)) continue;
+    const script = profile.script?.[d];
     const date = dateOf(d);
     const ratings = profile.ratings(d, random);
     const low = (ratings.mood ?? 3) <= 2;
@@ -244,11 +257,12 @@ export function makePatient(profileKey, options) {
     const endedAtMillis = startedAtMillis + random.int(150, 330) * 1000;
     const tone = low ? "low" : "well";
     /** @type {VoiceCue[]} */
-    const voiceCues =
-      low || random.chance(0.15)
+    const voiceCues = script
+      ? (script.voiceCues ?? []).map((cue) => ({ ...cue }))
+      : low || random.chance(0.15)
         ? [{ ...random.pick(CUES[tone]), intensity: low ? random.int(2, 4) : random.int(1, 2) }]
         : [];
-    const checkInId = `checkin-${date}`;
+    const checkInId = `${idPrefix}checkin-${date}`;
     checkIns.push({
       id: checkInId,
       data: { id: checkInId, startedAtMillis, endedAtMillis, ...ratings, voiceCues, crisis: false, sharedWithClinician: sharedAt(startedAtMillis) },
@@ -256,28 +270,41 @@ export function makePatient(profileKey, options) {
 
     // Answer the previous Suggestion now, if the Patient accepted it.
     const previous = suggestions.at(-1)?.data ?? null;
-    if (previous && previous.status === "accepted") {
-      const previousDate = previous.id.slice("suggestion-".length);
-      const previousD = DAILY_RECORDS - 1 - days.findIndex((day) => day.date === previousDate);
+    const previousD = suggestionDays.at(-1);
+    /** What the Patient said about it, in a scripted story. @type {string | null} */
+    let previousSaid = null;
+    if (previous && previous.status === "accepted" && previousD !== undefined) {
       const stepsChange = valuesByD.get(previousD)?.vsBaseline.steps ?? null;
-      previous.tried = random.chance(low ? 0.45 : 0.75);
-      previous.felt = previous.tried ? clamp(random.int(3, 5) - (low ? 1 : 0), 1, 5) : null;
-      previous.objectiveChange = oriented("steps", stepsChange);
-      previous.outcomeScore = outcomeScore(previous.tried, previous.felt, previous.objectiveChange);
+      const answer = profile.script ? profile.script[previousD]?.outcome : undefined;
+      if (answer) {
+        previous.tried = answer.tried;
+        previous.felt = answer.tried ? answer.felt : null;
+        previousSaid = answer.said;
+      } else if (!profile.script) {
+        previous.tried = random.chance(low ? 0.45 : 0.75);
+        previous.felt = previous.tried ? clamp(random.int(3, 5) - (low ? 1 : 0), 1, 5) : null;
+      }
+      if (previous.tried !== null) {
+        previous.objectiveChange = oriented("steps", stepsChange);
+        previous.outcomeScore = outcomeScore(previous.tried, previous.felt, previous.objectiveChange);
+      }
     }
 
-    const kind = random.pick(profile.suggestionKinds);
-    const status = random.chance(0.2) ? "declined" : "accepted";
-    const suggestionId = `suggestion-${date}`;
+    const kind = script ? script.suggestion.kind : random.pick(/** @type {readonly SuggestionKind[]} */ (profile.suggestionKinds));
+    const status = script ? script.suggestion.status : random.chance(0.2) ? "declined" : "accepted";
+    const details = script ? script.suggestion.details : SUGGESTION_DETAILS[kind];
+    const suggestionId = `${idPrefix}suggestion-${date}`;
+    suggestionDays.push(d);
     suggestions.push({
       id: suggestionId,
       data: {
         id: suggestionId,
         kind,
-        details: SUGGESTION_DETAILS[kind],
+        details,
         suggestedAtMillis: startedAtMillis + 120_000,
         status,
-        booked: status === "accepted" && (kind === "walk" || kind === "class_activity" || kind === "nature") && random.chance(0.5),
+        // Calendar booking is not built yet (#19), so a scripted story books nothing.
+        booked: !script && status === "accepted" && (kind === "walk" || kind === "class_activity" || kind === "nature") && random.chance(0.5),
         tried: null,
         felt: null,
         objectiveChange: null,
@@ -286,9 +313,9 @@ export function makePatient(profileKey, options) {
       },
     });
 
-    const themeCount = random.int(1, 3);
     /** @type {string[]} */
-    const themes = [];
+    const themes = script ? [...script.themes] : [];
+    const themeCount = script ? themes.length : random.int(1, 3);
     while (themes.length < themeCount) {
       const theme = random.pick(THEMES[tone]);
       if (!themes.includes(theme)) themes.push(theme);
@@ -300,23 +327,28 @@ export function makePatient(profileKey, options) {
         checkInId,
         createdAtMillis: summaryAtMillis,
         ...ratings,
-        sleepLine: sleepLine(valuesByD.get(d)?.values.sleepMinutes ?? null),
+        sleepLine: [sleepLine(valuesByD.get(d)?.values.sleepMinutes ?? null), script?.sleepNote].filter(Boolean).join(" "),
         themes,
         voiceCues,
-        suggestion: status === "accepted" ? SUGGESTION_DETAILS[kind] : null,
-        previousOutcome: previous ? previousOutcomeLine(previous) : null,
-        quotes: low && random.chance(0.6) ? [random.pick(QUOTES)] : [],
+        suggestion: status === "accepted" ? details : null,
+        previousOutcome: previousSaid ?? (previous ? previousOutcomeLine(previous) : null),
+        quotes: script ? [...(script.quotes ?? [])] : low && random.chance(0.6) ? [random.pick(QUOTES)] : [],
         sharedWithClinician: sharedAt(summaryAtMillis),
       },
     });
   }
 
   // Attention flags, raised by the phone's morning daily job on the first morning a rule holds. A
-  // kind with an open flag is not raised again, and none is cleared, so the Patient's level is the
-  // highest of them and the reasons run from the highest level, newest first. Only flags raised
-  // while sharing count toward the level (a flag raised in a sharing pause never does).
+  // kind with an open flag is not raised again. None is cleared, except by a profile's Clinician
+  // follow-ups; the Patient's level is the highest open one and the reasons run from the highest
+  // level, newest first. Only flags raised while sharing count toward the level (a flag raised in a
+  // sharing pause never does).
   /** @type {Entry<Flag>[]} */
   const flags = [];
+  /** @param {Entry<Flag>} f @param {number} millis */
+  const openAt = (f, millis) => f.data.clearedAtMillis === null || f.data.clearedAtMillis > millis;
+  // The Clinician's follow-ups: each clears the first flag of its kind raised before it.
+  const followUps = (profile.followUps ?? []).map((f) => ({ kind: f.kind, at: at(f.at.d, f.at.hour, f.at.minute), used: false }));
   for (let i = 0; i < days.length; i++) {
     const { d, date, values } = days[i];
     const jobAtMillis = at(d, 7, 10);
@@ -332,10 +364,13 @@ export function makePatient(profileKey, options) {
     for (const draft of drafts) {
       // A kind already open with the same stamp is not raised again: a flag the Clinician cannot
       // see never stops one they can.
-      if (flags.some((f) => f.data.kind === draft.kind && f.data.clearedAtMillis === null && f.data.sharedWithClinician === shared)) continue;
+      if (flags.some((f) => f.data.kind === draft.kind && openAt(f, jobAtMillis) && f.data.sharedWithClinician === shared)) continue;
+      const raisedAtMillis = jobAtMillis + random.int(0, 300) * 1000;
+      const followUp = followUps.find((f) => !f.used && f.kind === draft.kind && f.at > raisedAtMillis && f.at <= nowMillis);
+      if (followUp) followUp.used = true;
       flags.push({
-        id: `${draft.kind}-${date}`,
-        data: { ...draft, raisedAtMillis: jobAtMillis + random.int(0, 300) * 1000, clearedAtMillis: null, sharedWithClinician: shared },
+        id: `${idPrefix}${draft.kind}-${date}`,
+        data: { ...draft, raisedAtMillis, clearedAtMillis: followUp?.at ?? null, sharedWithClinician: shared },
       });
     }
   }
@@ -359,14 +394,18 @@ export function makePatient(profileKey, options) {
     },
   }));
 
-  const visitDate = dateOf(VISIT_DAYS_AGO);
   /** @type {Entry<Visit>[]} */
-  const visits = [{ id: `visit-${visitDate}`, data: { date: visitDate, questionnaire: "phq9", score: profile.visitScore } }];
+  const visits = [];
+  if (profile.tmsEndVisitScore !== undefined) {
+    visits.push({ id: `${idPrefix}visit-${tmsEndDate}`, data: { date: tmsEndDate, questionnaire: "phq9", score: profile.tmsEndVisitScore } });
+  }
+  const visitDate = dateOf(VISIT_DAYS_AGO);
+  visits.push({ id: `${idPrefix}visit-${visitDate}`, data: { date: visitDate, questionnaire: "phq9", score: profile.visitScore } });
 
   const lastCheckIn = checkIns.at(-1)?.data ?? null;
   /** @type {PatientDoc} */
   const patient = {
-    displayName: profile.displayName,
+    displayName: options.displayName ?? profile.displayName,
     clinicianEmail,
     intakeHighlights: profile.intakeHighlights,
     tmsEndDate,
@@ -377,12 +416,12 @@ export function makePatient(profileKey, options) {
     lastSeenAtMillis: Math.min(at(profile.lastSeen.d, profile.lastSeen.hour, profile.lastSeen.minute), nowMillis),
     lastCheckInAtMillis: lastCheckIn?.endedAtMillis ?? null,
     healthSource: "synthetic",
-    synthetic: true,
+    synthetic: profile.synthetic ?? true,
     sharingConsent: "granted",
     sharingChangedAtMillis: sharingMillis,
   };
 
-  return { id: profile.id, profile: profile.key, patient, daily, consents, checkIns, summaries, suggestions, flags, visits };
+  return { id: options.patientId ?? profile.id, profile: profile.key, patient, daily, consents, checkIns, summaries, suggestions, flags, visits };
 }
 
 /**

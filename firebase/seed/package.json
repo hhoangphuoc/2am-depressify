@@ -2,12 +2,13 @@
   "name": "twoam-seed",
   "private": true,
   "type": "module",
-  "description": "Creates and resets the three Demo Patients (synthetic data) with the Admin SDK.",
+  "description": "Creates and resets the three Demo Patients (synthetic data), and the live demo Patient's mock history, with the Admin SDK.",
   "engines": {
     "node": ">=22"
   },
   "scripts": {
     "seed": "node seed.js",
+    "seed-live-patient": "node seed-live-patient.js",
     "allow-clinician": "node allow-clinician.js",
     "silence-test": "node silence-test.js",
     "typecheck": "tsc -p tsconfig.json",

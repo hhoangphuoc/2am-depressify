@@ -3,9 +3,11 @@
 import { parseArgs } from "node:util";
 import { isDateKey } from "./dates.js";
 import { DEFAULT_SEED, DEMO_CLINICIAN_EMAIL } from "./generate.js";
+import { LIVE_DEFAULT_DISPLAY_NAME } from "./live-patient.js";
 
 export const DEFAULT_PROJECT = "demo-twoam";
 export const DEFAULT_EMULATOR_HOST = "127.0.0.1:8080";
+export const DEFAULT_AUTH_EMULATOR_HOST = "127.0.0.1:9099";
 
 const TARGET_HELP = `Target:
   default           the Firestore emulator at $FIRESTORE_EMULATOR_HOST, or ${DEFAULT_EMULATOR_HOST},
@@ -45,6 +47,30 @@ is not sharing. The Patient id is the phone's auth uid, also in the dashboard's 
 
 ${TARGET_HELP}`;
 
+export const LIVE_PATIENT_USAGE = `Usage: npm run seed-live-patient -- --email <patient email> [--clinician email]
+         [--display-name name] [--today yyyy-MM-dd] [--seed n] [--reset] [--project id]
+
+Gives one real test account six weeks of invented history, so the Companion and "what seems to
+help" have context: Daily Signals with a drift in the last days, Check-ins with Summaries,
+Suggestions with Outcomes (the latest still open), an amber flag, Visits and Consents. The record is
+not synthetic (only the account and its Clinician can read it) and its health source says
+"synthetic". Finds the account by email, or creates it with a verified email and no password.
+
+${TARGET_HELP} The Auth emulator is used with the Firestore emulator
+                    ($FIREBASE_AUTH_EMULATOR_HOST, or ${DEFAULT_AUTH_EMULATOR_HOST}).
+
+Options:
+  --email <email>        the Patient's account (required). Printed only masked.
+  --clinician <email>    the Clinician, who should be on the clinicians allowlist (a warning if
+                         not). Also CLINICIAN_EMAIL. Required for a real project; the emulator
+                         defaults to ${DEMO_CLINICIAN_EMAIL}.
+  --display-name <name>  default: ${LIVE_DEFAULT_DISPLAY_NAME}
+  --today <date>         the last day of history (default: today in Europe/Helsinki)
+  --seed <n>             pseudo-random seed (default: ${DEFAULT_SEED})
+  --reset                delete this Patient's mock history and write it again. Without it, the
+                         command refuses a Patient who already has mock history. What the app
+                         wrote is never deleted.`;
+
 /**
  * Where to write: a project and, unless it is a real project, the emulator host.
  * @typedef {object} Target
@@ -68,6 +94,20 @@ ${TARGET_HELP}`;
  * @property {string} projectId
  * @property {string | null} emulatorHost null for a real project
  * @property {string} email
+ */
+
+/**
+ * @typedef {object} LivePatientCommand
+ * @property {boolean} help
+ * @property {string} projectId
+ * @property {string | null} emulatorHost null for a real project
+ * @property {string | null} authEmulatorHost null for a real project
+ * @property {string} email the Patient's
+ * @property {string} clinicianEmail
+ * @property {string} displayName
+ * @property {string | undefined} today
+ * @property {number} seed
+ * @property {boolean} reset
  */
 
 /**
@@ -135,30 +175,98 @@ export function parseCommand(argv, env) {
     },
     strict: true,
   });
-  if (values.today !== undefined && !isDateKey(values.today)) {
-    throw new Error(`--today must be a yyyy-MM-dd date, got "${values.today}"`);
-  }
-  const seed = values.seed === undefined ? DEFAULT_SEED : Number(values.seed);
-  if (!Number.isSafeInteger(seed)) throw new Error(`--seed must be an integer, got "${values.seed}"`);
-
+  const today = todayOption(values.today);
+  const seed = seedOption(values.seed);
   const target = resolveTarget(values.project, env);
-  /** @type {string} */
-  let email;
-  if (values.help) {
-    email = DEMO_CLINICIAN_EMAIL; // unused: help prints the usage and exits
-  } else if (values.clinician !== undefined) {
-    email = clinicianEmail(values.clinician, "--clinician", target);
-  } else if (env.CLINICIAN_EMAIL) {
-    email = clinicianEmail(env.CLINICIAN_EMAIL, "CLINICIAN_EMAIL", target);
-  } else if (target.emulatorHost) {
-    email = DEMO_CLINICIAN_EMAIL;
-  } else {
+  // Unused with --help, which prints the usage and exits.
+  const email = values.help ? DEMO_CLINICIAN_EMAIL : seedClinician(values.clinician, env, target);
+  return { help: values.help ?? false, ...target, today, seed, clinicianEmail: email };
+}
+
+/** @param {string | undefined} value */
+function todayOption(value) {
+  if (value !== undefined && !isDateKey(value)) throw new Error(`--today must be a yyyy-MM-dd date, got "${value}"`);
+  return value;
+}
+
+/** @param {string | undefined} value */
+function seedOption(value) {
+  const seed = value === undefined ? DEFAULT_SEED : Number(value);
+  if (!Number.isSafeInteger(seed)) throw new Error(`--seed must be an integer, got "${value}"`);
+  return seed;
+}
+
+/**
+ * The Clinician to seed for: --clinician, else CLINICIAN_EMAIL, else (emulator only) the placeholder.
+ * @param {string | undefined} option
+ * @param {Record<string, string | undefined>} env
+ * @param {Target} target
+ */
+function seedClinician(option, env, target) {
+  if (option !== undefined) return clinicianEmail(option, "--clinician", target);
+  if (env.CLINICIAN_EMAIL) return clinicianEmail(env.CLINICIAN_EMAIL, "CLINICIAN_EMAIL", target);
+  if (target.emulatorHost) return DEMO_CLINICIAN_EMAIL;
+  throw new Error(
+    `Seeding the real project "${target.projectId}" needs the Clinician's email: ` +
+      `pass --clinician <email> or set CLINICIAN_EMAIL. The placeholder ${DEMO_CLINICIAN_EMAIL} is for the emulator only.`,
+  );
+}
+
+/**
+ * The Auth emulator goes with the Firestore emulator; a real project uses real Auth. A mix is
+ * refused: it would create the account in one place and its data in another.
+ * @param {Target} target
+ * @param {Record<string, string | undefined>} env
+ * @returns {string | null}
+ */
+function authTarget(target, env) {
+  const fromEnv = env.FIREBASE_AUTH_EMULATOR_HOST || null;
+  if (target.emulatorHost) return fromEnv ?? DEFAULT_AUTH_EMULATOR_HOST;
+  if (fromEnv) {
     throw new Error(
-      `Seeding the real project "${target.projectId}" needs the Clinician's email: ` +
-        `pass --clinician <email> or set CLINICIAN_EMAIL. The placeholder ${DEMO_CLINICIAN_EMAIL} is for the emulator only.`,
+      `FIREBASE_AUTH_EMULATOR_HOST is set, but Firestore targets the real project "${target.projectId}". ` +
+        "Unset it to use real Auth, or start the Firestore emulator too: the Auth emulator and a real project are never mixed.",
     );
   }
-  return { help: values.help ?? false, ...target, today: values.today, seed, clinicianEmail: email };
+  return null;
+}
+
+/**
+ * @param {string[]} argv arguments after the script name
+ * @param {Record<string, string | undefined>} env
+ * @returns {LivePatientCommand}
+ */
+export function parseLivePatientCommand(argv, env) {
+  const { values } = parseArgs({
+    args: argv,
+    options: {
+      email: { type: "string" },
+      clinician: { type: "string" },
+      "display-name": { type: "string" },
+      today: { type: "string" },
+      seed: { type: "string" },
+      reset: { type: "boolean" },
+      project: { type: "string" },
+      help: { type: "boolean", short: "h" },
+    },
+    strict: true,
+  });
+  const today = todayOption(values.today);
+  const seed = seedOption(values.seed);
+  const target = resolveTarget(values.project, env);
+  const authEmulatorHost = authTarget(target, env);
+  const displayName = (values["display-name"] ?? LIVE_DEFAULT_DISPLAY_NAME).trim();
+  if (displayName === "" || displayName.length > 100) throw new Error("--display-name must be a name of 1 to 100 characters");
+  const common = { ...target, authEmulatorHost, displayName, today, seed, reset: values.reset ?? false };
+  if (values.help) return { help: true, ...common, email: "", clinicianEmail: DEMO_CLINICIAN_EMAIL };
+
+  if (values.email === undefined) throw new Error("--email <patient email> is required: the Patient's account");
+  // Never echo the Patient's email: the output of this command may be shared.
+  const email = values.email.trim().toLowerCase();
+  if (!EMAIL.test(email)) throw new Error("--email must be an email address");
+  const clinician = seedClinician(values.clinician, env, target);
+  if (email === clinician) throw new Error("--email must not be the Clinician's email: the Patient and the Clinician are different accounts");
+  return { help: false, ...common, email, clinicianEmail: clinician };
 }
 
 /**
