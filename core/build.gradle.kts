@@ -1,8 +1,9 @@
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
-// Pure Kotlin rules shared by the app and, later, the Cloud Functions contract. No platform code.
+// Pure Kotlin rules and the Firestore data contract (core/model) shared by the app. No platform code.
 plugins {
     alias(libs.plugins.kotlin.multiplatform)
+    alias(libs.plugins.kotlin.serialization)
 }
 
 kotlin {
@@ -13,8 +14,17 @@ kotlin {
     iosSimulatorArm64()
 
     sourceSets {
+        commonMain.dependencies {
+            api(libs.kotlinx.serialization.json)
+            api(libs.kotlinx.datetime)
+        }
         commonTest.dependencies {
             implementation(libs.kotlin.test)
         }
     }
+}
+
+// The JVM tests export the contract for the TypeScript mirror (see ContractExportTest).
+tasks.named<Test>("jvmTest") {
+    systemProperty("contract.export", rootProject.file("firebase/functions/test/fixtures/contract.json").path)
 }
