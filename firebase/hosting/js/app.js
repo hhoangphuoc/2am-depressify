@@ -1,10 +1,12 @@
-// Clinician dashboard: email and password sign-in and a live Patient list sorted by Attention flag.
+// Clinician dashboard: email and password sign-in and a live Patient list sorted by Attention flag,
+// with the red banner, search and level filter, and alerts for new red flags.
 import {
   onAuthStateChanged,
   signInWithEmailAndPassword,
   signOut,
 } from "https://www.gstatic.com/firebasejs/13.3.0/firebase-auth.js";
 import { collection, onSnapshot, query, where } from "https://www.gstatic.com/firebasejs/13.3.0/firebase-firestore.js";
+import { createAlerts } from "./alerts.js";
 import { initFirebase } from "./firebase.js";
 import { intakeCalls } from "./functions.js";
 import { signInErrorMessage } from "./lib/auth.js";
@@ -23,6 +25,8 @@ const COPY = {
 
 let stopPatients = null;
 let stopPatient = null;
+/** @type {ReturnType<typeof createAlerts> | null} */
+let alerts = null;
 
 function show(id, visible) {
   $(id).hidden = !visible;
@@ -31,7 +35,21 @@ function show(id, visible) {
 function watchPatients(db, email) {
   $("patients-status").textContent = COPY.loading;
   show("patients-table", false);
-  const list = createPatientList(db, { body: $("patients-body"), table: $("patients-table"), status: $("patients-status") });
+  const list = createPatientList(
+    db,
+    {
+      body: $("patients-body"),
+      table: $("patients-table"),
+      status: $("patients-status"),
+      banner: $("attention-banner"),
+      controls: $("list-controls"),
+      search: $("patient-search"),
+      level: $("level-filter"),
+      clearFilters: $("clear-filters"),
+    },
+    // The list keeps listening while a Patient page is open, so a new red flag alerts on any view.
+    { onNewRed: (flags) => alerts?.notify(flags) },
+  );
   // Only Patients who share (issue #29): the rules reject the query without the sharing filter.
   const patients = query(
     collection(db, COLLECTIONS.patients),
@@ -95,6 +113,7 @@ async function main() {
   }
   const { auth, db } = firebase;
   wireSignIn(auth);
+  alerts = createAlerts({ toggle: $("sound-toggle"), note: $("sound-note"), announcer: $("attention-announcer") });
   window.addEventListener("hashchange", () => applyRoute(firebase, Boolean(auth.currentUser?.email)));
   onAuthStateChanged(auth, (user) => {
     show("starting", false);
@@ -103,6 +122,7 @@ async function main() {
     const signedIn = Boolean(user?.email);
     show("sign-in", !signedIn);
     show("account", signedIn);
+    if (!signedIn) show("sound-note", false);
     $("account-email").textContent = signedIn ? user.email : "";
     if (signedIn) stopPatients = watchPatients(db, user.email);
     applyRoute(firebase, signedIn);

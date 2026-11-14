@@ -112,3 +112,65 @@ tbody th { font-size: 1rem; color: var(--ink); }
   tr { padding: 12px 16px; border-bottom: 1px solid var(--hairline); }
   tbody th, td { padding: 4px 0; border: 0; }
 }
+
+/* Attention work queue (#10): the red banner, search and level filter, the sound switch. */
+.banner {
+  margin: 0 0 16px; padding: 16px 20px; display: grid; gap: 8px;
+  background: var(--red-bg); color: var(--red-ink); border-left: 6px solid var(--red-ink); border-radius: 12px;
+}
+.banner h2 { margin: 0; font-size: 1.125rem; }
+.banner p { margin: 0; }
+.banner-about { font-size: 0.875rem; }
+.banner-items { margin: 0; padding: 0; list-style: none; display: grid; gap: 8px; }
+.banner-items li {
+  display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 16px;
+  padding-top: 8px; border-top: 1px solid rgba(122, 31, 24, 0.25);
+}
+.banner-items li p { flex: 1 1 240px; }
+.banner-more { font-size: 0.875rem; }
+.button-link {
+  display: inline-flex; align-items: center; min-height: var(--min-target); padding: 0 20px;
+  border-radius: 999px; background: var(--red-ink); color: var(--surface); font-weight: 600; text-decoration: none;
+}
+.button-link:focus-visible { outline: 3px solid var(--ink); outline-offset: 2px; }
+
+.list-controls { display: flex; flex-wrap: wrap; gap: 8px 16px; margin: 0 0 8px; }
+.field { display: grid; gap: 4px; flex: 1 1 200px; }
+.field label { margin-top: 0; }
+.list-controls .field:last-child { flex: 0 1 200px; }
+select {
+  min-height: var(--min-target); padding: 0 12px; font: inherit; color: var(--ink);
+  border: 1px solid var(--ink-muted); border-radius: 8px; background: var(--surface);
+}
+select:focus-visible { outline: 3px solid var(--ink); outline-offset: 2px; }
+#patients-status:empty { display: none; }
+#clear-filters { margin: 0 0 16px; }
+
+#sound-toggle[aria-checked="true"] { font-weight: 600; }
+.sound-note { margin: 0; padding: 8px 16px; background: var(--amber-bg); color: var(--amber-ink); text-align: center; }
+
+/* Flag detail and the "Clear after follow-up" dialog */
+.attention { margin-bottom: 16px; }
+.attention h4 { margin: 8px 0 0; font-size: 1rem; }
+.attention-level { display: flex; align-items: center; gap: 8px; }
+.flag-list { margin: 0; padding: 0; list-style: none; display: grid; gap: 8px; }
+.flag { display: grid; gap: 4px; padding: 12px 0; border-top: 1px solid var(--hairline); }
+.flag .secondary { justify-self: start; margin-top: 4px; }
+.flag-reason { line-height: 1.5; }
+.flag-meta { font-size: 0.875rem; }
+.flag-history .flag-reason { color: var(--ink-muted); }
+
+.dialog {
+  width: min(520px, calc(100vw - 32px)); max-height: calc(100vh - 32px); overflow: auto;
+  padding: 24px; border: 1px solid var(--hairline); border-radius: 12px;
+  background: var(--surface); color: var(--ink);
+}
+.dialog::backdrop { background: rgba(23, 63, 69, 0.45); }
+.dialog h2 { margin: 0 0 8px; font-size: 1.25rem; }
+.dialog p { margin: 0 0 8px; line-height: 1.5; }
+.dialog .reasons { margin: 0 0 8px; padding-left: 20px; list-style: disc; }
+.flag-box { padding: 12px; margin: 0 0 8px; background: var(--paper); border-radius: 8px; }
+.flag-box p { margin: 0; }
+.after p { margin-bottom: 4px; }
+.notice-changed { border-left-color: var(--amber-ink); background: var(--amber-bg); color: var(--amber-ink); }
+[aria-disabled="true"] { opacity: 0.6; cursor: progress; }

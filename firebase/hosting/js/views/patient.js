@@ -3,6 +3,7 @@
 import { doc, onSnapshot } from "https://www.gstatic.com/firebasejs/13.3.0/firebase-firestore.js";
 import { COLLECTIONS } from "../lib/contract.js";
 import { sharingMessage, sharingStateFromError, sharingStateFromSnapshot } from "../lib/sharing.js";
+import { mountFlagDetail } from "./flags.js";
 import { mountIntake } from "./intake.js";
 
 const COPY = {
@@ -34,9 +35,11 @@ export function showPatient({ root, db, patientId, calls }) {
   const intakeSlot = document.createElement("div");
   intakeSlot.hidden = true;
 
-  root.replaceChildren(back, name, status, intakeSlot);
+  const flagsSlot = document.createElement("div"); // flag detail (#10); moves to the Overview's `overview-flags` slot with #11
+  root.replaceChildren(back, name, status, flagsSlot, intakeSlot);
   name.focus();
 
+  const stopFlags = mountFlagDetail(flagsSlot, { db, patientId });
   const intake = mountIntake(intakeSlot, { patientId, extract: calls.extract, save: calls.save });
 
   /** @param {import("../lib/sharing.js").SharingViewState} state */
@@ -63,6 +66,7 @@ export function showPatient({ root, db, patientId, calls }) {
 
   return () => {
     stop();
+    stopFlags();
     intake.destroy();
     root.replaceChildren();
   };
