@@ -121,6 +121,29 @@ class MusicPlaybackTest {
     }
 
     @Test
+    fun seekingStaysWithinTheClipWithoutChangingPauseOrMicrophoneState() = runTest {
+        val player = Player()
+        var muted = false
+        val playback = MusicPlayback(player, backgroundScope, { muted }, { muted = it }, {})
+        playback.skipBy(15_000)
+        assertEquals(0, player.positionMillis)
+        playback.enterListening()
+        playback.toggle(clip)
+        player.ready()
+        playback.pause()
+        playback.skipBy(15_000)
+        assertEquals(15_000, player.positionMillis)
+        assertEquals(PlaybackStatus.Paused, playback.snapshot.value.status)
+        assertTrue(muted)
+        playback.skipBy(-30_000)
+        assertEquals(0, player.positionMillis)
+        playback.skipBy(90_000)
+        assertEquals(59_999, player.positionMillis)
+        playback.leaveListening()
+        assertFalse(muted)
+    }
+
+    @Test
     fun lateCallbacksCannotRestartACancelledPlayerOrMuteTheConversation() = runTest {
         val player = Player()
         var muted = false
@@ -146,6 +169,7 @@ class MusicPlaybackTest {
         }
         override fun pause() = Unit
         override fun resume() { resumes++ }
+        override fun seekTo(positionMillis: Int) { this.positionMillis = positionMillis }
         override fun stop() = Unit
     }
 }

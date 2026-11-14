@@ -68,7 +68,7 @@ data class TodaySuggestion(
 data class TodaySuggestions(val location: StoredPatientLocation? = null, val suggestions: List<TodaySuggestion> = emptyList())
 
 /** About a minute of generated music, held in memory only and never saved. */
-class MusicClip(val mimeType: String, val bytes: ByteArray)
+class MusicClip(val mimeType: String, val bytes: ByteArray, val artwork: ByteArray? = null)
 
 /** What a Check-in needs from the backend: the Live token, and the Patient's records the Companion's tools read and write. */
 interface CheckInGateway {

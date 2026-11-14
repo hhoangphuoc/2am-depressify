@@ -33,6 +33,7 @@ private class AndroidClipPlayer : ClipPlayer {
 
     override fun pause() { if (prepared) player?.pause() }
     override fun resume() { if (prepared) player?.start() }
+    override fun seekTo(positionMillis: Int) { if (prepared) player?.seekTo(positionMillis) }
 
     override fun stop() {
         prepared = false

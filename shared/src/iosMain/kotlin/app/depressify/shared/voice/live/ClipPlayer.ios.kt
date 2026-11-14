@@ -40,6 +40,7 @@ private class IosClipPlayer : ClipPlayer {
 
     override fun pause() { player?.pause() }
     override fun resume() { player?.play() }
+    override fun seekTo(positionMillis: Int) { player?.currentTime = positionMillis / 1000.0 }
 
     override fun stop() {
         player?.stop()

@@ -12,6 +12,7 @@ interface ClipPlayer {
 
     fun pause()
     fun resume()
+    fun seekTo(positionMillis: Int)
 
     fun stop()
 }

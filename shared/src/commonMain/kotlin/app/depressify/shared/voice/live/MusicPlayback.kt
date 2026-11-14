@@ -54,6 +54,15 @@ class MusicPlayback(
         mute(true)
     }
 
+    fun skipBy(millis: Int) {
+        val current = state.value
+        if (current.status !in listOf(PlaybackStatus.Playing, PlaybackStatus.Paused) || current.durationMillis <= 0) return
+        val target = (current.positionMillis.toLong() + millis).coerceIn(0, (current.durationMillis - 1).toLong()).toInt()
+        runCatching { player.seekTo(target) }
+            .onSuccess { state.value = current.copy(positionMillis = target) }
+            .onFailure { fail() }
+    }
+
     fun toggle(clip: MusicClip) {
         if (state.value.clip === clip && state.value.status == PlaybackStatus.Playing) { pause(); return }
         if (state.value.status == PlaybackStatus.Preparing) { stop(); return }

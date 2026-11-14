@@ -1,9 +1,9 @@
 // Music for a Check-in: the callable behind the Companion's suggest_music tool.
 //
-//   generateMusic  {patientId, mood} -> {mimeType: "audio/mpeg", audioBase64}
+//   generateMusic  {patientId, mood} -> {mimeType: "audio/mpeg", audioBase64, artwork?}
 //
-// It asks Lyria 3.5 for about a minute of calm instrumental music that meets the mood the
-// Companion describes. Only that short description goes to the model, wrapped in fixed wording:
+// It asks Lyria 3.5 for about a minute of calm instrumental music and Nano Banana for optional
+// matching artwork. Only the Companion's short mood description goes to the models, in fixed wording:
 // no name, no Intake and no transcript. Storage is off, and nothing is written or logged. The
 // Gemini key is a function secret (ADR 0002). The request and response shapes are the ones
 // recorded in fixtures/spike/music/lyria-3.5.json.
@@ -13,7 +13,7 @@ import type { CheckInStore } from "./checkInFunctions";
 import { GEMINI_API_KEY } from "./gemini";
 import { patientIdOf } from "./intake";
 import { callerOf, requireAuth, safely, statusOf, type IntakeCall } from "./intakeFunctions";
-import { MUSIC_MODEL } from "./models";
+import { ARTWORK_MODEL, MUSIC_MODEL } from "./models";
 import { assertActsAsPatient } from "./patientCaller";
 
 export const INTERACTIONS_URL = "https://generativelanguage.googleapis.com/v1beta/interactions";
@@ -22,10 +22,12 @@ export const API_REVISION = "2026-05-20";
 export const MOOD_MAX_CHARS = 200;
 /** Generation took about 25 s in the recorded call. */
 const MUSIC_TIMEOUT_MS = 90_000;
+const ARTWORK_MAX_BASE64_CHARS = 4 * 1024 * 1024;
 
 export interface MusicClip {
   mimeType: string;
   audioBase64: string;
+  artwork?: { mimeType: string; imageBase64: string };
 }
 
 export interface MusicClient {
@@ -53,6 +55,38 @@ export function buildMusicRequest(mood: string) {
       "No vocals and no lyrics. Nothing sudden, loud or tense. " +
       "The feeling to meet, in the listener's own terms: " + mood,
   };
+}
+
+export function buildArtworkRequest(mood: string) {
+  return {
+    model: ARTWORK_MODEL,
+    store: false,
+    input: buildMusicRequest(mood).input + "\n\n" +
+      "Create cover artwork matching this musical brief, the same mood and gentle hopeful intent. " +
+      "A simple, natural flat illustration: one subject, a peaceful adult in profile OR a single calm nature subject, adapting to the mood. " +
+      "Use just two or three solid colors: muted teal, sage and warm peach on a mostly empty cream background. " +
+      "Few clean, gently curved shapes. Keep the subject small with generous breathing room. " +
+      "No texture, gradients, shading, patterns, decorative flourishes, detailed scenery, text, logos, photographs or medical claims.",
+    response_format: { type: "image", mime_type: "image/jpeg", aspect_ratio: "1:1", image_size: "1K" },
+  };
+}
+
+/** Only inline, bounded images can travel back in the callable response. */
+function parseArtwork(body: unknown): MusicClip["artwork"] {
+  const response = body as { status?: unknown; steps?: unknown } | null;
+  if (response?.status !== undefined && response.status !== "completed") return undefined;
+  if (!Array.isArray(response?.steps)) return undefined;
+  for (const step of response.steps) {
+    if (step?.type !== "model_output" || (step.status !== undefined && step.status !== "done") || !Array.isArray(step.content)) continue;
+    for (const block of step.content) {
+      if (block?.type !== "image" || !["image/jpeg", "image/png", "image/webp"].includes(block.mime_type)) continue;
+      const data = block.data;
+      if (typeof data !== "string" || data.length === 0 || data.length > ARTWORK_MAX_BASE64_CHARS ||
+          data.length % 4 !== 0 || !/^[A-Za-z0-9+/]+={0,2}$/.test(data)) continue;
+      return { mimeType: block.mime_type, imageBase64: data };
+    }
+  }
+  return undefined;
 }
 
 /** The first audio block of the model's output, or null when there is none. */
@@ -107,8 +141,21 @@ export async function generateMusicHandler(call: IntakeCall, deps: MusicDeps): P
   }
   assertActsAsPatient(patientId, patient, auth);
   let clip: MusicClip | null;
+  let artwork: MusicClip["artwork"];
   try {
-    clip = parseMusic(await deps.music.createInteraction(buildMusicRequest(mood)));
+    const [audio, cover] = await Promise.all([
+      deps.music.createInteraction(buildMusicRequest(mood)),
+      (async () => {
+        try {
+          return parseArtwork(await deps.music.createInteraction(buildArtworkRequest(mood)));
+        } catch {
+          // Artwork is optional; provider errors can contain the prompt or image.
+          return undefined;
+        }
+      })(),
+    ]);
+    clip = parseMusic(audio);
+    artwork = cover;
   } catch (error) {
     // Never log the error or the mood.
     logger.warn("generateMusic: the model call failed", { patientId, status: statusOf(error) });
@@ -119,7 +166,7 @@ export async function generateMusicHandler(call: IntakeCall, deps: MusicDeps): P
     logger.warn("generateMusic: no audio came back", { patientId });
     throw new HttpsError("unavailable", "Could not make the music. Try again.");
   }
-  return clip;
+  return artwork ? { ...clip, artwork } : clip;
 }
 
 /** Builds the callable. Production passes the Admin SDK and Gemini; tests pass fakes. */
