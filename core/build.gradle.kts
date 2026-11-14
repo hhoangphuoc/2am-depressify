@@ -30,4 +30,7 @@ tasks.named<Test>("jvmTest") {
     // The Live messages recorded in the #6 spike, for LiveProtocolFixturesTest.
     systemProperty("spike.live.fixtures", rootProject.file("fixtures/spike/live").path)
     inputs.dir(rootProject.file("fixtures/spike/live"))
+    // The shared Baseline fixture, for BaselineFixtureTest (the seed and dashboard read it too).
+    systemProperty("baseline.fixture", rootProject.file("fixtures/baseline/baseline-cases.json").path)
+    inputs.file(rootProject.file("fixtures/baseline/baseline-cases.json"))
 }
