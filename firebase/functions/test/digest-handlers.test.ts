@@ -33,11 +33,12 @@ function summary(date: string, theme: string): Summary {
     suggestion: null,
     previousOutcome: null,
     quotes: [],
+    sharedWithClinician: true,
   };
 }
 
 function day(date: string): DailyDoc {
-  return { date, values: { steps: 3000 }, vsBaseline: { steps: -1.1 }, composite: -1.1, demoOverride: false };
+  return { date, values: { steps: 3000 }, vsBaseline: { steps: -1.1 }, composite: -1.1, demoOverride: false, sharedWithClinician: true };
 }
 
 const W46_SUMMARIES = [summary("2026-11-10", "work stress"), summary("2026-11-12", "missing friends")];
@@ -78,6 +79,7 @@ describe("generateDigest (Generate now)", () => {
       summaryCount: 2,
       text: MODEL_TEXT,
       generatedAtMillis: SATURDAY_NOON,
+      sharedWithClinician: true,
     };
     expect(result).toEqual({ digest: expected });
     expect(s.writes).toEqual([{ patientId: "p1", digest: expected }]);
@@ -102,6 +104,32 @@ describe("generateDigest (Generate now)", () => {
     expect(digest.text).toMatch(/no Check-ins/i);
     expect(digest.text).not.toContain("invented");
     expect(s.writes).toHaveLength(1);
+  });
+
+  it("a week that spans a time without sharing draws only on what was saved while sharing", async () => {
+    const offPeriod = { ...summary("2026-11-11", "said while not sharing"), sharedWithClinician: false };
+    const s = new FakeDigestStore({ p1: { patient: sharing("Back"), summaries: [summary("2026-11-12", "back again"), offPeriod], days: W46_DAYS } });
+    const model = new FakeTextModel(MODEL_TEXT);
+    const { digest } = await generateDigestHandler(
+      { data: { patientId: "p1" }, auth: clinician },
+      { store: s, textModel: model, nowMillis: () => SATURDAY_NOON },
+    );
+    expect(digest.summaryCount).toBe(1);
+    expect(digest.sharedWithClinician).toBe(true);
+    expect(model.requests[0]!.input).toContain("back again");
+    expect(model.requests[0]!.input).not.toContain("said while not sharing");
+  });
+
+  it("a week whose only Check-ins were saved while not sharing reads as a week with no Check-ins", async () => {
+    const offPeriod = { ...summary("2026-11-11", "said while not sharing"), sharedWithClinician: false };
+    const s = new FakeDigestStore({ p1: { patient: sharing("Back"), summaries: [offPeriod], days: W46_DAYS } });
+    const model = new FakeTextModel("invented");
+    const { digest } = await generateDigestHandler(
+      { data: { patientId: "p1" }, auth: clinician },
+      { store: s, textModel: model, nowMillis: () => SATURDAY_NOON },
+    );
+    expect(model.requests).toHaveLength(0);
+    expect(digest.summaryCount).toBe(0);
   });
 
   it("regenerating overwrites the same week", async () => {
@@ -183,6 +211,7 @@ describe("weeklyDigest (Mondays 07:00 Helsinki)", () => {
       summaryCount: 2,
       text: MODEL_TEXT,
       generatedAtMillis: MONDAY_0700,
+      sharedWithClinician: true,
     });
     expect(s.digests.get("quiet")!.get("2026-W46")!.text).toMatch(/no Check-ins/i);
     // The model was called once, for the Patient with Check-ins, and never for a non-sharing one.

@@ -81,6 +81,7 @@ beforeAll(async () => {
     suggestion: SUGGESTION,
     previousOutcome: SUGGESTION,
     quotes: [QUOTE],
+    sharedWithClinician: true,
   };
   const patient = { ...newPatientDoc("Logging patient", "clinician@example.com"), sharingConsent: "granted" as const };
   const store = () => {

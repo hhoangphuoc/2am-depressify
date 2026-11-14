@@ -8,7 +8,9 @@
 //                   Covers the current ISO week from Monday to today and overwrites that week.
 //
 // A week with Check-ins is written by the text model with storage off, from that week's Summaries
-// and daily Signals only. A week with no Check-ins gets fixed copy and the model is not called, so
+// and daily Signals only, and only those saved while the Patient was sharing (stamped
+// `sharedWithClinician`): the Clinician never reads what was saved while sharing was off, so neither
+// does their Digest. Each Digest is stamped with `sharingStamp` like every other shared document. A week with no Check-ins gets fixed copy and the model is not called, so
 // nothing can be invented.
 //
 // Patients who are not sharing (`isSharingActive`, issue #29) get no Digest: it is written for the
@@ -36,7 +38,7 @@ import {
 import { GEMINI_API_KEY, type TextModelClient } from "./gemini";
 import { patientIdOf } from "./intake";
 import { callerOf, requireAuth, safely, statusOf, type IntakeCall } from "./intakeFunctions";
-import { isSharingActive } from "./sharing";
+import { isSharingActive, sharingStamp } from "./sharing";
 import { COLLECTIONS, type DailyDoc, type Digest, type PatientDoc, type Summary } from "./types";
 
 /** Mondays at 07:00. */
@@ -107,9 +109,16 @@ class DigestFailure extends Error {
 
 /**
  * Reads the period's Summaries and Signals, writes the Digest and returns it. Throws a
- * DigestFailure (never an error that could carry the data) when a step fails.
+ * DigestFailure (never an error that could carry the data) when a step fails. `patient` gives the
+ * Digest its sharing stamp; callers write Digests only for sharing Patients, so it is true.
  */
-export async function writeDigestFor(patientId: string, period: DigestPeriod, deps: DigestDeps, nowMillis: number): Promise<Digest> {
+export async function writeDigestFor(
+  patientId: string,
+  patient: Partial<Pick<PatientDoc, "sharingConsent">>,
+  period: DigestPeriod,
+  deps: DigestDeps,
+  nowMillis: number,
+): Promise<Digest> {
   let summaries: Summary[];
   let days: DailyDoc[];
   try {
@@ -143,6 +152,7 @@ export async function writeDigestFor(patientId: string, period: DigestPeriod, de
     summaryCount: week.summaries.length,
     text,
     generatedAtMillis: nowMillis,
+    sharedWithClinician: sharingStamp(patient),
   };
   try {
     await deps.store.writeDigest(patientId, digest);
@@ -175,7 +185,7 @@ export async function generateDigestHandler(
   const now = deps.nowMillis();
   const period = onDemandPeriod(now);
   try {
-    return { digest: await writeDigestFor(patientId, period, deps, now) };
+    return { digest: await writeDigestFor(patientId, patient, period, deps, now) };
   } catch (error) {
     const failure = error instanceof DigestFailure ? error : new DigestFailure("write");
     logger.warn("generateDigest: failed", { patientId, isoWeek: period.isoWeek, stage: failure.stage, status: failure.status });
@@ -205,7 +215,7 @@ export async function weeklyDigestHandler(nowMillis: number, deps: DigestDeps): 
       continue;
     }
     try {
-      const digest = await writeDigestFor(id, period, deps, nowMillis);
+      const digest = await writeDigestFor(id, patient, period, deps, nowMillis);
       result.written += 1;
       if (digest.summaryCount === 0) result.noCheckIns += 1;
     } catch (error) {

@@ -198,17 +198,19 @@ function summary(date: string, overrides: Partial<Summary> = {}): Summary {
     suggestion: "A 10-minute walk after lunch",
     previousOutcome: null,
     quotes: [],
+    sharedWithClinician: true,
     ...overrides,
   };
 }
 
-function day(date: string, sleepMinutes: number | null): DailyDoc {
+function day(date: string, sleepMinutes: number | null, sharedWithClinician = true): DailyDoc {
   return {
     date,
     values: { sleepMinutes, steps: 4200, meanHeartRate: null },
     vsBaseline: { sleepMinutes: -1.4, steps: null },
     composite: -0.8,
     demoOverride: false,
+    sharedWithClinician,
   };
 }
 
@@ -232,6 +234,18 @@ describe("weekData", () => {
     // 00:30 Helsinki on Monday 16 November is still Sunday in UTC: outside W46.
     const earlyMonday = summary("2026-11-16", { createdAtMillis: Date.parse("2026-11-15T22:30:00Z") });
     expect(weekData(W46, [lateSunday, earlyMonday], []).summaries).toEqual([lateSunday]);
+  });
+
+  it("leaves out what was saved while the Patient was not sharing: the Digest is for the Clinician", () => {
+    const shared = summary("2026-11-10");
+    const offPeriod = summary("2026-11-11", { themes: ["said while not sharing"], sharedWithClinician: false });
+    const data = weekData(W46, [shared, offPeriod], [day("2026-11-10", 400), day("2026-11-11", 300, false)]);
+    expect(data.summaries).toEqual([shared]);
+    expect(data.days.map((d) => d.date)).toEqual(["2026-11-10"]);
+    const request = buildDigestRequest(W46, [shared, offPeriod], [day("2026-11-11", 300, false)]);
+    expect(request.input).not.toContain("said while not sharing");
+    expect(request.input).toContain("This week has 1 Summary");
+    expect(request.input).toContain("signals for 0 days");
   });
 });
 

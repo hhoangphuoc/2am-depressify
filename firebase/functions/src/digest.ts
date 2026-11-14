@@ -153,14 +153,18 @@ export function onDemandPeriod(nowMillis: number): DigestPeriod {
 // The week's data
 // ---------------------------------------------------------------------------------------------
 
-/** The Summaries (by their Helsinki date) and daily Signal records inside the period, oldest first. */
+/**
+ * The Summaries (by their Helsinki date) and daily Signal records inside the period, oldest first,
+ * that the Clinician may see: only those stamped `sharedWithClinician`. A Digest is written for the
+ * Clinician, so a week that spans a time without sharing draws only on what was saved while sharing.
+ */
 export function weekData(p: DigestPeriod, summaries: Summary[], days: DailyDoc[]): { summaries: Summary[]; days: DailyDoc[] } {
   const inside = (date: string) => date >= p.weekStart && date <= p.weekEnd;
   return {
     summaries: summaries
-      .filter((s) => inside(dateInZone(s.createdAtMillis)))
+      .filter((s) => s.sharedWithClinician === true && inside(dateInZone(s.createdAtMillis)))
       .sort((a, b) => a.createdAtMillis - b.createdAtMillis),
-    days: days.filter((d) => inside(d.date)).sort((a, b) => a.date.localeCompare(b.date)),
+    days: days.filter((d) => d.sharedWithClinician === true && inside(d.date)).sort((a, b) => a.date.localeCompare(b.date)),
   };
 }
 
