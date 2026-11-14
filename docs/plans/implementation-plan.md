@@ -201,6 +201,8 @@ With two developers, Dev 2 takes the Firebase track after the core logic, and Ta
 
 ### Task 5: Nudge rules
 
+> As built (#27, PR #68): `NudgeDecision.decide(NudgeInput): NudgeOutcome` in `NudgeRules.kt`, tested by `NudgeDecisionTest`, with `NudgeReason` `RoughNights`, `FreeHourGoodWeather`, `NoCheckInByEvening` and a `NoNudgeReason` when none goes out. Every reason posts the same text, `NudgeNotification.Invitation`. See [implementation-status.md](../implementation-status.md). The interfaces below are the original plan.
+
 **Files:**
 - Create: `core/src/commonMain/kotlin/app/depressify/core/nudge/NudgeRules.kt`
 - Test: `.../core/nudge/NudgeRulesTest.kt`
@@ -636,7 +638,7 @@ With two developers, Dev 2 takes the Firebase track after the core logic, and Ta
   - `object DailyPipeline { fun run(history: List<Day>, today: Day, last24h: Pair<Double?, Double?>, recentMoods: List<Int?>, openFlags: List<Flag>, nudge: NudgeInput, crisisActive: Boolean): DailyResult }`
   - `data class DailyResult(val doc: DailyDoc, val newFlags: List<FlagDraft>, val nudge: NudgeReason?, val level: FlagLevel, val reasons: List<String>)`
   - `class DailyJob`: builds today and yesterday, runs the pipeline, writes the daily document, new flags and the heartbeat, fills `objectiveChange` and `outcomeScore` on yesterday's answered Suggestions, and posts a Nudge through `Notifier`.
-  - `interface Notifier { fun nudge(reason: NudgeReason) }`. Tapping the notification opens the Check-in. The wording per reason is gentle and never mentions a flag.
+  - `interface Notifier { fun nudge(reason: NudgeReason) }`. Tapping the notification opens the Check-in. Every reason posts the same gentle text, `NudgeNotification.Invitation`, which never mentions a reason or a flag.
   - `DailyWorker`: WorkManager periodic work every 6 hours, plus `runNow()`.
 - The phone never lowers a level that a function or the Clinician set: it only raises, and only the Clinician clears.
 

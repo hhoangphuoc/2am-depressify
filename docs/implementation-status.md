@@ -1,6 +1,6 @@
 # Implementation status
 
-Status as of 14 November 2026. Covers issues #7, #8, #9, #10, #11, #12, #13, #23 and #29, the backend part of #22 (the red flag email), the silence check (#28), the backend half of the #6 spikes ([spike-results.md](spike-results.md)), the backend part of #14 (Start and Finish Check-in, and the Live protocol parsing in `core`), the backend part of #20 (the Attention flag from a Check-in, through the Decisions API), the backend part of #21 (Outcomes and learning what helps), the pure `core` pipeline of the daily job (#26), and the review decisions that followed. Terms follow [GLOSSARY.md](../GLOSSARY.md).
+Status as of 14 November 2026. Covers issues #7, #8, #9, #10, #11, #12, #13, #23 and #29, the backend part of #22 (the red flag email), the silence check (#28), the backend half of the #6 spikes ([spike-results.md](spike-results.md)), the backend part of #14 (Start and Finish Check-in, and the Live protocol parsing in `core`), the backend part of #20 (the Attention flag from a Check-in, through the Decisions API), the backend part of #21 (Outcomes and learning what helps), the pure `core` pipeline of the daily job (#26), the Nudge rules and quiet hours in `core` (#27), and the review decisions that followed. Terms follow [GLOSSARY.md](../GLOSSARY.md).
 
 ## Work on top of `main` (open PRs)
 
@@ -15,6 +15,7 @@ Kept up to date as PRs are opened and merged. Each PR also updates its own rows 
 | — | `feat/21-outcomes` → `feat/20-checkin-flags` (on #62) | #21, backend: the Outcome in Finish Check-in, the Outcome score, ranking what helps (TypeScript and `core`) | This branch; PR to be opened. Tested (functions 435, core 58, shared 16, seed 103, dashboard 309, emulators 97 + 16). Not deployed. |
 | #61 | (teammate) | #18, places part: `find_places` returns real nearby places | Open; not part of this branch |
 | #69 | `feat/26-daily-job-rules` (from `main`) | #26, `core` only: the daily job's pure pipeline (daily record, Baseline, sign of life, Signal flag rules, write plan) | Tested (core 124, seed 105, dashboard 310); the app's background work, debug action and device check are still to do |
+| #68 | `feat/27-nudge-rules` → `feat/26-daily-job-rules` (stacked on #69) | #27, `core` part: Nudge rules, Nudge text, quiet hours, and the `core` purity check | Open; tested (core 161) |
 
 **Deployed on `junction26hel-7400`:**
 - Rules and indexes.
@@ -130,7 +131,7 @@ The callables are reached through the Firebase SDK (`httpsCallable` in `europe-n
 
 ### Live protocol parsing (`core`, #14)
 
-`app.depressify.core.live.LiveProtocol`, pure common Kotlin (no platform imports; the purity check covers it):
+`app.depressify.core.live.LiveProtocol`, pure common Kotlin (no platform imports; the purity check, `checkCommonPurity` in `core/build.gradle.kts`, runs before `:core:jvmTest`):
 - `parse(frame: ByteArray | String | JsonObject): List<LiveEvent>`: one server frame (binary UTF-8 JSON) to events, in the order the phone must act on them. `LiveEvent` is `SetupComplete`, `AudioOut(pcm, sampleRate)`, `ModelText`, `InputText`, `OutputText`, `Interrupted`, `GenerationComplete`, `TurnComplete`, `ToolCall(id, name, args)`, `ToolCallCancellation`, `VoiceActivity(started)`, `Usage` and `GoAway`. Empty, unknown, malformed and `sessionResumptionUpdate` messages give no events; it never throws; bad base64 audio is skipped.
 - Builders: `setupMessage`, `textMessage` (`realtimeInput.text`, the verified typed path), `clientContentMessage`, `audioMessage` (16 kHz PCM16 base64), `audioStreamEndMessage`, `toolResponseMessage`.
 - `LiveProtocolFixturesTest` (JVM) parses every server message in `fixtures/spike/live/messages/` and the whole recorded session, and checks the builders against the recorded client messages; `LiveProtocolTest` (common) covers several parts in one message, an unknown message, a tool call and an interruption.
@@ -168,6 +169,37 @@ Write plan, mirroring `raisedAttention` and `hasOpenFlag` in the functions:
 **The app wires up (not built):** the periodic work about every six hours (WorkManager on Android; a background task on iOS) and the "Run daily job now" debug action; reading the Signals and Consents, the previous 16 daily records, today's record, the recent Check-ins, the flags and the Patient record; writing the daily record (set), the new flags (create), and `lastSeenAtMillis` plus the level and reasons in one transaction; and the S24+ check. Pause the job during the silence test, or the sign of life overwrites the 25-hours-ago value.
 
 **Decided deviation:** #26 asks the job to fill `objectiveChange` and `outcomeScore` on yesterday's Suggestions. The review made the Outcome fields function-only, so Finish Check-in writes them (#21, PR #65). The job does not touch Suggestions.
+
+### Nudge rules and quiet hours (`core`, #27)
+
+**Built** in `app.depressify.core.nudge`, pure common Kotlin with tests. Nothing in the data contract changed.
+
+- **`NudgeDecision.decide(NudgeInput): NudgeOutcome`**: `None(NoNudgeReason)` or `Nudge(NudgeReason)`.
+  - Inputs: `now` and the Patient's `timeZone`, `nudgesEnabled`, `lastNudgeAt`, `quietHours`, `recentDays` (daily records with their stored `vsBaseline`), `lastCheckInAt`, `calendar` (`Busy`, `Free`, `Unknown`), `weather` (`Good`, `Bad`, `Unknown`).
+  - No Nudge, in this order: Nudges off; one already sent today (local date); inside quiet hours (overnight windows included; invalid quiet hours count as the default); calendar busy.
+  - Otherwise the first that applies:
+    1. `RoughNights`: the newest record not dated in the future and the record for the day before, both no older than 1 day (`STALE_AFTER_DAYS`) and both with oriented sleep (`SignalBaseline.oriented`, #26) at or below −1, and time at home or late-night screen time above +1 on either day.
+    2. `FreeHourGoodWeather`: `Free` and `Good`.
+    3. `NoCheckInByEvening`: 17:00 or later with no Check-in today.
+  - Unknown calendar or weather never counts as free or good. A missing night never counts. Stale or future-dated records are never evidence.
+- **`NudgeThresholds`**: every threshold and time, all starting values. Sleep −1, "more than usual" above +1, 17:00, a 60-minute window, records stale after 1 day.
+- **`CalendarAvailability.forWindow(busy, now)`**: turns free/busy intervals into `Busy` or `Free` for the next hour. No reading gives `Unknown`.
+- **`NudgeNotification.Invitation`**: the interface design's copy, "A moment for you?" / "Your Check-in is here when you want it.", the same for every reason, so no reason can leak into it.
+- **`QuietHoursRules`**, on top of `QuietHours` / `LocalMinutes` in `Schedule.kt`:
+  - `QuietHours.Default` is 21:00 to 09:00. `validate` accepts overnight ranges and rejects identical endpoints and times off the hour.
+  - `fromContract` / `toContract` map to and from `ContractQuietHours`, the Patient record's whole-hour `quietHoursStart` / `quietHoursEnd`. A broken stored record reads as the default.
+  - `display` shows the time zone: `21:00–09:00 (Europe/Helsinki)`.
+- **Kept on the phone, not in Firestore:** the last Nudge time and the Nudge on/off choice. Nudges are local notifications decided on the phone, so nothing else reads them. A reinstall forgets them, which allows at most one extra Nudge that day.
+- **The app team wires up:**
+  - Calling `decide` after each daily job run (once today's daily record is built), **and hourly from 17:00 until quiet hours start**. The daily job runs about every six hours, so on its own it can miss the 17:00–21:00 window entirely (runs at 09:00, 15:00 and 21:00), or lose the evening to one busy calendar reading. `decide` is pure and cheap, and `AlreadySentToday` keeps it to one Nudge a day.
+  - Recording `lastNudgeAt` when it posts.
+  - The calendar and weather reads.
+  - The notification, its channel, the permission (denied gives `nudgesEnabled = false`), and the tap into a ready-to-start Check-in without the microphone.
+  - The quiet-hours screen through `QuietHoursRules`, and its Compose UI tests.
+  - The S24+ check.
+- **Open:**
+  - The quiet-hours screen steps by 30 minutes, but the Patient record stores whole hours. Either the stepper moves by an hour, or the contract moves to minutes.
+  - "Busy" is any busy time in the next hour (the free hour needs the same window), so it also holds back the evening invitation: a meeting at 17:45 delays it to the first hourly check after the meeting. The alternative is "busy now" for suppression.
 
 ### Seed (`firebase/seed`)
 
@@ -245,7 +277,7 @@ Results on `feat/21-outcomes` (on #62), all from local runs on 14 November 2026:
 
 | Suite | Command | Result |
 |---|---|---|
-| Kotlin `core` (contract, `CoreRulesTest`, `LiveProtocolTest`, `LiveProtocolFixturesTest`, `SuggestionRankerTest`, `OutcomeFixtureTest`, and on `feat/26-daily-job-rules` the daily pipeline, `BaselineFixtureTest` and `SignalRulesFixtureTest`) | `./gradlew :core:jvmTest` | 58 pass; 124 on `feat/26-daily-job-rules`; the exported contract gains the Suggestion's `outcomeCheckInId` |
+| Kotlin `core` (contract, `CoreRulesTest`, `LiveProtocolTest`, `LiveProtocolFixturesTest`, `SuggestionRankerTest`, `OutcomeFixtureTest`, and on `feat/26-daily-job-rules` the daily pipeline, `BaselineFixtureTest` and `SignalRulesFixtureTest`; on `feat/27-nudge-rules` also the Nudge and quiet-hours tests) | `./gradlew :core:jvmTest` | 58 pass; 124 on `feat/26-daily-job-rules`; 161 on `feat/27-nudge-rules` (37 more for #27); the exported contract gains the Suggestion's `outcomeCheckInId` |
 | Kotlin `shared` (session and view model wiring, with fakes) | `./gradlew :shared:testAndroidHostTest` | 16 pass |
 | Android build | `./gradlew :androidApp:assembleDebug` | APK builds |
 | iOS build | `xcodegen generate`, then `xcodebuild` for the arm64 simulator | Not rerun on this branch (built on #14's branch) |
