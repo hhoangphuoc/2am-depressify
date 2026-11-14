@@ -95,6 +95,7 @@ iosApp/Depressify/Secrets.plist
 # --- Firebase tooling ---
 firebase/functions/lib/
 firebase/functions/.secret.local
+**/.secret.local
 .firebase/
 firebase-debug.log*
 firestore-debug.log*
