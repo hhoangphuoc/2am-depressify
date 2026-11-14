@@ -2,6 +2,34 @@
 
 Status as of 14 November 2026. Covers issues #7, #8, #9, #10, #11, #12, #13, #23 and #29, the backend part of #22 (the red flag email), the silence check (#28), the backend half of the #6 spikes, the backend part of #14 (Start and Finish Check-in, and the Live protocol parsing in `core`), the review decisions that followed, and the backend half of the #6 spikes ([spike-results.md](spike-results.md)). Terms follow [GLOSSARY.md](../GLOSSARY.md).
 
+## Work on top of this branch (open PRs)
+
+Kept up to date as PRs are opened and merged. Each PR also updates its own rows further down this file. Last updated 14 November 2026.
+
+| PR | Branch | Issue | State |
+|---|---|---|---|
+| #49 | `codex/backend-integration` → `main` | Integration of the backend with the Patient UI | Base for everything below |
+| #50 | `feat/22-red-flag-alert-on-49` | #22, backend: `redFlagAlert` email on a red flag | Open; tested (functions 166, emulators 82) |
+| #52 | `feat/6-spike-results-on-49` | #6, backend half: spike results and fixtures | Open |
+| #53 | `fix/digest-scheduler-region-on-49` | `weeklyDigest` in `europe-west1` (Cloud Scheduler has no `europe-north1`), plus the live deployment record | Open. **Merge before deploying functions from #49.** |
+| #54 | `feat/28-silence-check-on-49` (on #50) | #28: `silenceCheck`, hourly | Open; tested (functions 206, emulators 86 + 16) |
+| #55 | `docs/session-handoff-on-49` | Session handoff, and this overview | Open |
+| #56 | `docs/cloud-setup-on-49` | Firebase and Google Cloud setup record | Open |
+| #57 | `feat/14-typed-checkin-on-49` (on #50, merges #52) | #14, backend: `startCheckIn`, `finishCheckIn`, and `LiveProtocol` in `core` | Open; tested (functions 249, core 39, emulators 87 + 14). Not deployed. |
+| — | — | #20 (Decisions into flags), then #21 (Outcomes) | Next, after #14 |
+| — | — | #18 (Map tool) | Waits on enabling `mapstools.googleapis.com` and the #17 tool catalog |
+
+The stacked PRs #34–#45 are superseded by #49 and can be closed once it lands. `integrate/ui-main` is kept as a reference only; it also wired the ratings and Voice cue Consents into the app, which #49 doesn't yet.
+
+**Deployed on `junction26hel-7400`:**
+- Rules and indexes.
+- `extractIntake`, `saveIntake`, `generateDigest` and `health` in `europe-north1`.
+- `weeklyDigest` in `europe-west1`.
+
+**Not deployed:** `redFlagAlert`, `silenceCheck`, the Check-in functions, Hosting and the Trigger Email extension.
+
+The full setup is recorded in [context/firebase-and-google-cloud-setup.md](context/firebase-and-google-cloud-setup.md) (PR #56).
+
 ## How this branch was put together
 
 The backend was built on a stack of branches (PRs #34 to #45, tip `chore/real-project-config`) that started before the Compose Multiplatform Patient UI landed on `main`. This branch starts from `main` and keeps its Patient UI. From the stack it takes the service and API integration only:
