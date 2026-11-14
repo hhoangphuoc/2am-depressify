@@ -2,10 +2,10 @@
 // Clinician has turned sound on. Sound is off until an explicit click; the first load never plays
 // it (js/lib/banner.js decides what is new). The chime is generated with WebAudio, so there is no
 // audio file. If the browser blocks playback, the banner is untouched and a note says how to allow it.
+// The switch is the design's checkbox under the Patient list ("Sound for red flags").
 import { readSoundPreference, shouldChime, writeSoundPreference } from "./lib/sound-pref.js";
 
 const COPY = {
-  label: "Sound for red flags",
   unsupported: "This browser cannot play the sound.",
   notSaved: "Sound is on for this visit only; the browser would not remember the choice.",
   blocked: "The browser blocked the sound. Click anywhere on the page to allow it.",
@@ -28,7 +28,8 @@ function audioContextClass() {
 }
 
 /**
- * @param {{ toggle: HTMLButtonElement, note: HTMLElement, announcer: HTMLElement }} elements
+ * @param {{ toggle: HTMLInputElement, note: HTMLElement, announcer: HTMLElement }} elements
+ *   `toggle` is a checkbox (role="switch"); its checked state is the sound setting
  */
 export function createAlerts({ toggle, note, announcer }) {
   let enabled = readSoundPreference(storage());
@@ -36,13 +37,7 @@ export function createAlerts({ toggle, note, announcer }) {
   let context = null;
 
   function draw() {
-    // A switch: the name stays the same and aria-checked carries the state; the visible state is
-    // hidden from screen readers so it is not read twice.
-    toggle.setAttribute("aria-checked", String(enabled));
-    const state = document.createElement("span");
-    state.setAttribute("aria-hidden", "true");
-    state.textContent = enabled ? ": on" : ": off";
-    toggle.replaceChildren(COPY.label, state);
+    toggle.checked = enabled;
   }
 
   function setNote(text) {
@@ -107,6 +102,7 @@ export function createAlerts({ toggle, note, announcer }) {
     }
     if (!audioContextClass()) {
       setNote(COPY.unsupported);
+      draw();
       return;
     }
     enabled = true;
@@ -125,7 +121,7 @@ export function createAlerts({ toggle, note, announcer }) {
     });
   }
 
-  toggle.addEventListener("click", onToggle);
+  toggle.addEventListener("change", onToggle);
   document.addEventListener("pointerdown", unlockOnGesture, true);
   document.addEventListener("keydown", unlockOnGesture, true);
   draw();
@@ -144,7 +140,7 @@ export function createAlerts({ toggle, note, announcer }) {
       if (shouldChime({ enabled, newFlags })) play();
     },
     destroy() {
-      toggle.removeEventListener("click", onToggle);
+      toggle.removeEventListener("change", onToggle);
       document.removeEventListener("pointerdown", unlockOnGesture, true);
       document.removeEventListener("keydown", unlockOnGesture, true);
       context?.close().catch(() => {});

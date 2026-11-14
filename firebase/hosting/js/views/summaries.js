@@ -1,25 +1,28 @@
-// Summary blocks of the Patient page (see the slot contract in views/patient.js):
-//   mountSummaries      slot `summaries-body`: every Summary, newest first, and the selected one in full
-//   mountLatestSummary  slot `overview-latest-summary`: the newest Summary on the Overview
+// Summary blocks of the Patient page (see the slot contract in views/patient.js), laid out as the
+// design (`SummariesView` and the Overview's "Latest Summary" in design/clinician/src/App.jsx):
+//   mountSummaries      slot `summaries-body`: the Summaries, newest first, as a list beside the
+//                       selected one in full
+//   mountLatestSummary  slot `overview-latest-summary`: the newest Summary, compact, with
+//                       "Read Summary", which opens it in the Summaries tab
 //
 // A Summary is the same one the Patient reads (ADR 0005): ratings, the sleep line, themes, the
 // Suggestion, the previous Outcome, Voice cues worded as observations and at most three short
 // quotes. There is no transcript or audio to show: js/lib/summaries.js picks out only those fields.
 // Each block listens to `summaries` only, and stops in destroy().
-import { onSnapshot } from "https://www.gstatic.com/firebasejs/13.3.0/firebase-firestore.js";
-import { patientQuery } from "../queries.js";
-import { COLLECTIONS } from "../lib/contract.js";
 import { selectSummary, sortSummaries, summaryView, summaryWhen } from "../lib/summaries.js";
 
 const COPY = {
-  heading: "All Summaries",
+  heading: "Check-in Summaries",
   about: "The same Summaries the Patient reads, newest first. Each was written by AI when the Check-in ended. No transcript or audio is kept.",
   latest: "Latest Summary",
-  list: "Summaries, newest first",
+  generated: "generated",
+  list: "Choose a Summary",
   loading: "Loading Summaries…",
   failed: "Could not load the Summaries. Reload the page to try again.",
   none: "No Summaries yet. One appears here when the Patient finishes a Check-in.",
-  all: "All Summaries",
+  read: "Read Summary",
+  badge: "Generated Summary",
+  byAi: "Written by AI when the Check-in ended",
   ratings: "Ratings (the Patient's own, 1 to 5)",
   sleep: "Sleep",
   themes: "Themes",
@@ -28,10 +31,12 @@ const COPY = {
   noSuggestion: "No Suggestion this time.",
   previous: "Previous Outcome",
   noPrevious: "Nothing reported about the previous Suggestion.",
-  cues: "Voice cues (observations)",
+  cues: "Voice cues",
+  cuesNote: " · observations",
   noCues: "None noted.",
   quotes: "In the Patient's words",
-  noQuotes: "No quotes.",
+  footer: "The Patient sees this same Summary. Voice cues are observations.",
+  noText: "This Summary has ratings only.",
 };
 
 let counter = 0;
@@ -45,31 +50,49 @@ function el(tag, attrs = {}, text) {
 }
 
 /**
- * Listens to the Patient's Summaries and calls `onChange(sorted | null, failed)`; null while loading.
- * @param {import("firebase/firestore").Firestore} db
- * @param {string} patientId
- * @param {(sorted: object[], failed: boolean) => void} onChange
+ * The Summaries from the page's one subscription (`view.docs.summaries`), sorted once per change.
+ * Returns a function that takes the page's view and gives `{ sorted, failed, changed }`: `sorted`
+ * is null while loading; a failed read (not a withdrawal, which the page shows) is empty with
+ * `failed`.
  */
-function listenSummaries(db, patientId, onChange) {
-  return onSnapshot(
-    patientQuery(db, patientId, COLLECTIONS.summaries),
-    (snapshot) => onChange(sortSummaries(snapshot.docs.map((d) => ({ id: d.id, ...d.data() }))), false),
-    // Withdrawn sharing is shown by the page; anything else is said here.
-    (error) => onChange([], error?.code !== "permission-denied"),
-  );
+function summariesFromView() {
+  /** @type {object[] | null | undefined} */
+  let docs;
+  /** @type {object[] | null} */
+  let sorted = null;
+  return (/** @type {any} */ view) => {
+    const next = view.docs?.summaries;
+    const failed = view.errors?.summaries === "error";
+    const changed = next !== docs;
+    if (changed) {
+      docs = next;
+      sorted = next ? sortSummaries(next.map((/** @type {any} */ d) => ({ ...d }))) : failed ? [] : null;
+    }
+    return { sorted, failed, changed };
+  };
 }
+
+/** The Summary's stored sentences joined, adding no words (as `designSummaries` does). @param {import("../lib/summaries.js").SummaryView} s */
+const proseOf = (s) => [s.sleepLine, s.previousOutcome, s.suggestion].filter(Boolean).join(" ");
+
+/** "13 Nov, 09:15" → ["13 Nov", "09:15"]. @param {string} when */
+const splitWhen = (when) => {
+  const at = when.lastIndexOf(", ");
+  return at < 0 ? [when, ""] : [when.slice(0, at), when.slice(at + 2)];
+};
 
 /**
  * One Summary in full.
  * @param {import("../lib/summaries.js").SummaryView} summary
- * @param {{ today: string, timeZone: string, level: number, idPrefix: string }} options
+ * @param {{ today: string, timeZone: string, idPrefix: string }} options
  */
-function summaryDetail(summary, { today, timeZone, level, idPrefix }) {
-  const h = `h${level}`;
+function summaryDetail(summary, { today, timeZone, idPrefix }) {
   const article = el("article", { class: "summary-detail", "aria-labelledby": `${idPrefix}-title` });
-  article.append(el(h, { id: `${idPrefix}-title` }, `Check-in on ${summaryWhen(summary.createdAtMillis, { today, timeZone })}`));
+  const top = el("div", { class: "between" });
+  top.append(el("h3", { id: `${idPrefix}-title` }, summaryWhen(summary.createdAtMillis, { today, timeZone })), el("span", { class: "generated" }, COPY.badge));
+  article.append(top, el("p", { class: "small muted" }, COPY.byAi));
 
-  const ratings = el("dl", { class: "summary-ratings", "aria-label": COPY.ratings });
+  const ratings = el("dl", { class: "rating-list", "aria-label": COPY.ratings });
   for (const { name, text } of summary.ratings) {
     const pair = el("div");
     pair.append(el("dt", {}, name), el("dd", {}, text));
@@ -77,25 +100,33 @@ function summaryDetail(summary, { today, timeZone, level, idPrefix }) {
   }
   article.append(ratings);
 
-  /** @param {string} title @param {Node} body */
-  const part = (title, body) => {
-    const wrap = el("div", { class: "summary-part" });
-    wrap.append(el("p", { class: "summary-label" }, title), body);
-    article.append(wrap);
+  const fields = el("dl", { class: "summary-fields" });
+  /** @param {string | Node} title @param {Node | string} body @param {boolean} [muted] */
+  const part = (title, body, muted = false) => {
+    const wrap = el("div");
+    const dt = el("dt");
+    dt.append(title);
+    const dd = el("dd", muted ? { class: "muted" } : {});
+    dd.append(body);
+    wrap.append(dt, dd);
+    fields.append(wrap);
   };
-  /** @param {string[]} items @param {string} empty @param {string} [cls] */
-  const list = (items, empty, cls = "") => {
-    if (!items.length) return el("p", { class: "muted" }, empty);
-    const ul = el("ul", { class: `summary-list ${cls}`.trim() });
+  /** @param {string[]} items @param {string} [cls] */
+  const list = (items, cls = "") => {
+    const ul = el("ul", { class: `summary-items ${cls}`.trim() });
     for (const item of items) ul.append(el("li", {}, item));
     return ul;
   };
 
-  if (summary.sleepLine) part(COPY.sleep, el("p", {}, summary.sleepLine));
-  part(COPY.themes, list(summary.themes, COPY.noThemes, "themes"));
-  part(COPY.suggestion, el("p", summary.suggestion ? {} : { class: "muted" }, summary.suggestion ?? COPY.noSuggestion));
-  part(COPY.previous, el("p", summary.previousOutcome ? {} : { class: "muted" }, summary.previousOutcome ?? COPY.noPrevious));
-  part(COPY.cues, list(summary.voiceCues, COPY.noCues));
+  if (summary.sleepLine) part(COPY.sleep, summary.sleepLine);
+  if (summary.themes.length) part(COPY.themes, list(summary.themes, "themes"));
+  else part(COPY.themes, COPY.noThemes, true);
+  const cueTitle = el("span");
+  cueTitle.append(COPY.cues, el("span", { class: "muted" }, COPY.cuesNote));
+  if (summary.voiceCues.length) part(cueTitle, list(summary.voiceCues));
+  else part(cueTitle, COPY.noCues, true);
+  part(COPY.suggestion, summary.suggestion ?? COPY.noSuggestion, !summary.suggestion);
+  part(COPY.previous, summary.previousOutcome ?? COPY.noPrevious, !summary.previousOutcome);
   if (summary.quotes.length) {
     const quotes = el("div", { class: "summary-quotes" });
     for (const quote of summary.quotes) {
@@ -104,31 +135,32 @@ function summaryDetail(summary, { today, timeZone, level, idPrefix }) {
       quotes.append(q);
     }
     part(COPY.quotes, quotes);
-  } else {
-    part(COPY.quotes, el("p", { class: "muted" }, COPY.noQuotes));
   }
+  article.append(fields, el("p", { class: "small muted summary-footer" }, COPY.footer));
   return article;
 }
 
 /**
  * Every Summary, newest first; choosing one shows it in full beside the list (below it on a phone).
  * @param {HTMLElement} container
- * @param {{ db: import("firebase/firestore").Firestore, patientId: string }} ctx
+ * @param {{ page?: { on: (type: string, fn: (detail: any) => void) => () => void } }} ctx
  */
-export function mountSummaries(container, { db, patientId }) {
+export function mountSummaries(container, { page }) {
   const id = `summaries-${++counter}`;
-  const block = el("section", { class: "panel summaries", "aria-labelledby": `${id}-heading` });
+  const block = el("section", { class: "content-section summaries", "aria-labelledby": `${id}-heading` });
+  const heading = el("div", { class: "section-heading" });
+  const headingText = el("div");
+  headingText.append(el("h2", { id: `${id}-heading` }, COPY.heading), el("p", { class: "small muted" }, COPY.about));
+  heading.append(headingText);
   const status = el("p", { class: "muted", role: "status" });
-  const layout = el("div", { class: "summaries-layout" });
-  const listWrap = el("div", { class: "summary-index", role: "region", tabindex: "0", "aria-label": COPY.list });
-  const list = el("ul", { class: "summary-buttons" });
-  listWrap.append(list);
+  const layout = el("div", { class: "summary-browser" });
+  const list = el("div", { class: "summary-list", role: "group", "aria-label": COPY.list });
   const detail = el("div", { class: "summary-pane", "aria-live": "polite" });
-  layout.append(listWrap, detail);
-  block.append(el("h4", { id: `${id}-heading` }, COPY.heading), el("p", { class: "muted" }, COPY.about), status, layout);
+  layout.append(list, detail);
+  block.append(heading, status, layout);
   container.replaceChildren(block);
 
-  /** @type {object | null} */
+  /** @type {any} */
   let view = null;
   /** @type {object[] | null} */
   let sorted = null;
@@ -139,12 +171,14 @@ export function mountSummaries(container, { db, patientId }) {
   /** What the last drawing was made from; a Patient record change that alters none of it redraws nothing. */
   let drawnFrom = "";
 
-  const stop = listenSummaries(db, patientId, (next, error) => {
-    sorted = next;
-    failed = error;
-    dataVersion++;
-    render();
-  });
+  const fromView = summariesFromView();
+  const stopSelect =
+    page?.on("select-summary", (summaryId) => {
+      selectedId = summaryId;
+      render();
+      detail.querySelector("h3")?.setAttribute("tabindex", "-1");
+      /** @type {HTMLElement | null} */ (detail.querySelector("h3"))?.focus();
+    }) ?? (() => {});
 
   function render() {
     if (!view) return;
@@ -163,64 +197,66 @@ export function mountSummaries(container, { db, patientId }) {
     list.replaceChildren(
       ...sorted.map((raw) => {
         const s = summaryView(raw);
-        const item = el("li");
-        const button = el("button", { type: "button", class: "summary-button", "data-id": s.id, "aria-pressed": String(raw === selected) });
-        button.append(el("span", { class: "summary-button-when" }, summaryWhen(s.createdAtMillis, view)), el("span", { class: "summary-button-mood" }, `Mood ${s.ratings[0].text}`));
+        const [day, time] = splitWhen(summaryWhen(s.createdAtMillis, view));
+        const button = el("button", { type: "button", "data-id": s.id, "aria-pressed": String(raw === selected) });
+        button.append(el("strong", {}, day), el("span", {}, `${time ? `${time} · ` : ""}Mood ${s.ratings[0].text}`));
         button.addEventListener("click", () => {
           selectedId = s.id;
           render();
         });
-        item.append(button);
-        return item;
+        return button;
       }),
     );
     if (focused) /** @type {HTMLElement | null} */ (list.querySelector(`[data-id="${CSS.escape(focused)}"]`))?.focus();
-    detail.replaceChildren(selected ? summaryDetail(summaryView(selected), { ...view, level: 5, idPrefix: `${id}-detail` }) : el("span"));
+    detail.replaceChildren(selected ? summaryDetail(summaryView(selected), { ...view, idPrefix: `${id}-detail` }) : el("span"));
   }
 
   return {
     update(next) {
       view = next;
+      const read = fromView(next);
+      if (read.changed || read.failed !== failed) dataVersion++;
+      sorted = read.sorted;
+      failed = read.failed;
       render();
     },
     destroy() {
-      stop();
+      stopSelect();
       block.remove();
     },
   };
 }
 
 /**
- * The newest Summary, on the Overview.
+ * The newest Summary, compact, on the Overview.
  * @param {HTMLElement} container
- * @param {{ db: import("firebase/firestore").Firestore, patientId: string }} ctx
+ * @param {{ page?: { showTab: (id: string) => void, emit: (type: string, detail?: unknown) => void } }} ctx
  */
-export function mountLatestSummary(container, { db, patientId }) {
+export function mountLatestSummary(container, { page }) {
   const id = `latest-summary-${++counter}`;
-  const block = el("section", { class: "panel latest-summary", "aria-labelledby": `${id}-heading` });
+  const block = el("section", { class: "content-section latest-summary", "aria-labelledby": `${id}-heading` });
+  const when = el("p", { class: "small muted" });
   const status = el("p", { class: "muted", role: "status" });
-  const body = el("div");
-  const all = el("button", { type: "button", class: "link all-summaries" }, COPY.all);
-  all.addEventListener("click", () => {
-    // Move to the Summaries section, as the page's section menu does.
-    const section = document.getElementById("section-summaries");
-    section?.scrollIntoView({ block: "start" });
-    section?.querySelector("h3")?.focus({ preventScroll: true });
-  });
-  block.append(el("h4", { id: `${id}-heading` }, COPY.latest), status, body, all);
+  const text = el("p", { class: "summary-text" });
+  const ratings = el("p", { class: "small muted" });
+  const read = el("button", { type: "button", class: "text-button" }, COPY.read);
+  block.append(el("h2", { id: `${id}-heading` }, COPY.latest), when, status, text, ratings, read);
   container.replaceChildren(block);
 
-  /** @type {object | null} */
+  /** @type {any} */
   let view = null;
-  /** @type {object[] | null} */
+  /** @type {any[] | null} */
   let sorted = null;
   let failed = false;
 
-  const stop = listenSummaries(db, patientId, (next, error) => {
-    sorted = next;
-    failed = error;
-    render();
+  read.addEventListener("click", () => {
+    const latest = sorted?.[0];
+    if (!latest) return;
+    page?.showTab("summaries");
+    page?.emit("select-summary", summaryView(latest).id);
   });
+
+  const fromView = summariesFromView();
 
   function render() {
     if (!view) return;
@@ -230,17 +266,23 @@ export function mountLatestSummary(container, { db, patientId }) {
     }
     const latest = sorted[0];
     status.textContent = failed ? COPY.failed : latest ? "" : COPY.none;
-    all.hidden = !latest;
-    body.replaceChildren(...(latest ? [summaryDetail(summaryView(latest), { ...view, level: 5, idPrefix: `${id}-detail` })] : []));
+    for (const node of [when, text, ratings, read]) node.hidden = !latest;
+    if (!latest) return;
+    const s = summaryView(latest);
+    when.textContent = `${summaryWhen(s.createdAtMillis, view)} · ${COPY.generated}`;
+    text.textContent = proseOf(s) || COPY.noText;
+    ratings.textContent = s.ratings.map((r) => `${r.name} ${r.text}`).join(" · ");
   }
 
   return {
     update(next) {
       view = next;
+      const read = fromView(next);
+      sorted = read.sorted;
+      failed = read.failed;
       render();
     },
     destroy() {
-      stop();
       block.remove();
     },
   };

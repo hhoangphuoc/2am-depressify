@@ -1,28 +1,24 @@
-// "What seems to help" (slot `overview-what-helps`; see the slot contract in views/patient.js): each
+// "What seems to help" (slot `overview-what-helps`; see the slot contract in views/patient.js), laid
+// out as the design's `WhatHelps` rows (design/clinician/src/App.jsx): each
 // kind of Suggestion the Patient answered about in the last 28 days, how many times, and how they
 // said it felt. Kinds are ordered by their Outcomes, then by count; the Outcome score itself is
-// never shown, and there is no effectiveness percentage. The arithmetic is in js/lib/what-helps.js.
+// never shown, and there is no effectiveness percentage or mean feeling (the design's "Felt x/5 on
+// average" is left out: docs/design/dashboard-backend-sync.md, Conflicts 4). The arithmetic is in js/lib/what-helps.js.
 // Listens to `suggestions` only, and stops in destroy().
-import { onSnapshot } from "https://www.gstatic.com/firebasejs/13.3.0/firebase-firestore.js";
-import { patientQuery } from "../queries.js";
-import { COLLECTIONS } from "../lib/contract.js";
 import { shortDate } from "../lib/dates.js";
 import { feelingText, whatHelps, whatHelpsWindow } from "../lib/what-helps.js";
 
 const COPY = {
   heading: "What seems to help",
+  sub: "Patient reported Outcomes",
   about: (days, start, end) =>
-    `Kinds of Suggestion the Patient answered about in the last ${days} days (${start} to ${end}), with how they said it ` +
-    "felt afterwards. Kinds with better reported Outcomes come first, then the ones answered about more often. These " +
-    "are counts of the Patient's own answers, not a measure of the Patient.",
+    `Kinds of Suggestion the Patient answered about in the last ${days} days (${start} to ${end}), with how they said it felt afterwards. Kinds with better reported Outcomes come first.`,
   loading: "Loading Suggestions…",
   failed: "Could not load the Suggestions. Reload the page to try again.",
   none: "No answered Suggestions in this window yet.",
   waiting: (n) => `${n} more ${n === 1 ? "Suggestion is" : "Suggestions are"} waiting for the Patient's answer and not counted.`,
-  caption: "Suggestions answered about, by kind",
-  kind: "Kind of Suggestion",
-  count: "Times answered",
-  feeling: "Reported feeling",
+  count: (n) => `${n} reported ${n === 1 ? "Outcome" : "Outcomes"}`,
+  association: "These reports show an association, not an effect caused by the activity, and are not a measure of the Patient.",
 };
 
 let counter = 0;
@@ -37,16 +33,16 @@ function el(tag, attrs = {}, text) {
 
 /**
  * @param {HTMLElement} container
- * @param {{ db: import("firebase/firestore").Firestore, patientId: string }} ctx
+ * The Suggestions come from the page's one subscription (`view.docs.suggestions`).
  */
-export function mountWhatHelps(container, { db, patientId }) {
+export function mountWhatHelps(container) {
   const id = `what-helps-${++counter}`;
-  const block = el("section", { class: "panel what-helps", "aria-labelledby": `${id}-heading` });
-  const about = el("p", { class: "muted" });
+  const block = el("section", { class: "content-section helps", "aria-labelledby": `${id}-heading` });
+  const about = el("p", { class: "small muted" });
   const status = el("p", { class: "muted", role: "status" });
-  const tableWrap = el("div");
-  const waiting = el("p", { class: "muted hint" });
-  block.append(el("h4", { id: `${id}-heading` }, COPY.heading), about, status, tableWrap, waiting);
+  const rowsWrap = el("ul", { class: "help-rows" });
+  const waiting = el("p", { class: "small muted" });
+  block.append(el("h2", { id: `${id}-heading` }, COPY.heading), el("p", { class: "small muted" }, COPY.sub), status, rowsWrap, waiting, about, el("p", { class: "small muted" }, COPY.association));
   container.replaceChildren(block);
 
   /** @type {object | null} */
@@ -55,20 +51,6 @@ export function mountWhatHelps(container, { db, patientId }) {
   let suggestions = null;
   let failed = false;
 
-  const stop = onSnapshot(
-    patientQuery(db, patientId, COLLECTIONS.suggestions),
-    (snapshot) => {
-      suggestions = snapshot.docs.map((d) => d.data());
-      failed = false;
-      render();
-    },
-    (error) => {
-      suggestions = [];
-      // Withdrawn sharing is shown by the page; anything else is said here.
-      failed = error?.code !== "permission-denied";
-      render();
-    },
-  );
 
   function render() {
     if (!view) return;
@@ -81,40 +63,30 @@ export function mountWhatHelps(container, { db, patientId }) {
     }
     const { rows, waiting: open } = whatHelps(suggestions, { ...window, timeZone });
     status.textContent = failed ? COPY.failed : rows.length ? "" : COPY.none;
+    status.hidden = status.textContent === "";
     waiting.textContent = open ? COPY.waiting(open) : "";
-    if (!rows.length) {
-      tableWrap.replaceChildren();
-      return;
-    }
-    const table = el("table", { class: "what-helps-table" });
-    table.append(el("caption", { class: "visually-hidden" }, COPY.caption));
-    const head = el("thead");
-    const headRow = el("tr");
-    const headings = [COPY.kind, COPY.count, COPY.feeling];
-    for (const text of headings) headRow.append(el("th", { scope: "col" }, text));
-    head.append(headRow);
-    const body = el("tbody");
-    for (const row of rows) {
-      const tr = el("tr");
-      tr.append(el("th", { scope: "row" }, row.label));
-      const count = el("td", {}, String(row.n));
-      count.dataset.label = headings[1];
-      const feeling = el("td", {}, feelingText(row.feelings));
-      feeling.dataset.label = headings[2];
-      tr.append(count, feeling);
-      body.append(tr);
-    }
-    table.append(head, body);
-    tableWrap.replaceChildren(table);
+    waiting.hidden = !open;
+    rowsWrap.replaceChildren(
+      ...rows.map((row) => {
+        const item = el("li", { class: "help-row" });
+        const right = el("span", {}, COPY.count(row.n));
+        right.append(el("small", {}, feelingText(row.feelings)));
+        item.append(el("span", {}, row.label), right);
+        return item;
+      }),
+    );
+    rowsWrap.hidden = rows.length === 0;
   }
 
   return {
     update(next) {
       view = next;
+      // Withdrawn sharing is shown by the page; any other failed read is said here.
+      failed = next.errors?.suggestions === "error";
+      suggestions = next.docs?.suggestions ?? (failed ? [] : null);
       render();
     },
     destroy() {
-      stop();
       block.remove();
     },
   };

@@ -1,92 +1,100 @@
-// The Patient page (`#/patient/{id}`): the Patient's name, an in-page section menu, and four
-// sections, in this order: Overview, Summaries, Signals, Intake and Visits. At phone width the
-// sections and the blocks inside them stack.
+// The Patient page (`#/patient/{id}`), laid out as the design prototype (design/clinician): a back
+// link, the header (name, week since TMS, Record a Visit), the Attention band, and four sections as
+// tabs: Overview, Summaries, Signals, Intake & Visits. The Overview puts the Phase timeline in two
+// thirds of the width and the latest Summary, what seems to help and the Digest in a one-third
+// column; at phone width everything is one column.
 //
 // ─── Slot contract ──────────────────────────────────────────────────────────────────────────────
 // This file creates every section and an empty <div class="slot" id="slot-NAME"> for each block, in
 // page order, and mounts the modules listed in SLOT_MOUNTS into them. A block module exports
 //
-//     mountSomething(container, ctx) → { update(view), destroy() }
+//     mountSomething(container, ctx) → { update(view), destroy(), ...actions }
 //
-//   container  the slot's <div>. The module owns everything inside it and nothing outside.
-//   ctx        fixed for the page: { db, patientId, calls }
-//                db         Firestore (js/firebase.js); write through the Firestore JS SDK, within
-//                           the rules (firebase/firestore.rules)
+//   container  the slot's <div>. The module owns everything inside it and nothing outside, except
+//              its own modal dialogs (views/dialog.js), which it removes in destroy().
+//   ctx        fixed for the page: { data, patientId, calls, page }
+//                data       the design data layer, `designData({ db, app })` (js/data/design-data.js).
+//                           Blocks write only through its actions (`recordVisit`, `setTmsEndDate`,
+//                           `clearAttention`), which check the input and map errors to safe copy.
 //                patientId  the Patient's document id
-//                calls      the callables (js/functions.js); today { extract, save } for the Intake
-//   view       passed to update() on every change of the Patient record or the Visits, and once
-//              right after mounting:
+//                calls      the callables (js/functions.js): { extract, save, generateDigest }
+//                page       { showTab(id), on(type, fn), emit(type, detail) }: switch tabs and pass
+//                           small requests between blocks (for example "read this Summary")
+//   view       passed to update() on every change of the Patient's data, and once right after
+//              mounting:
 //                patient    the live PatientDoc (js/lib/contract.js)
 //                visits     the Visits, newest first, each { id, date, questionnaire, score }
 //                phases     phases(patient.tmsEndDate, visits, today) from js/lib/timeline.js.
-//                           Select a Phase with phaseOf(date, phases) or inPhase(date, phase).
 //                today      yyyy-MM-dd in the browser's time zone
 //                timeZone   the browser's time zone, for giving a millisecond time its date
+//                state      the PatientState from `data.subscribePatient` (js/lib/design-live.js):
+//                           the design's patient object, `raw` for clearing, `fromCache`
+//                docs       each collection's documents as stored ({ id, ...data }), or null while
+//                           loading or after an error; an array keeps its identity until that
+//                           collection changes, so a block can tell what changed
+//                errors     collections whose read failed: "denied" (withdrawal; the page shows it)
+//                           or "error" (say so in the block)
 //
-// Read a Patient's collections with `patientQuery` (js/queries.js): in the stamped collections the
-// Clinician may read only what was saved while the Patient was sharing, and the rules reject a
-// query without that filter.
+// The page opens ONE subscription (`data.subscribePatient` with every section) and feeds every
+// block from it; a block opens no listener of its own. The data layer keeps the sharing filters the
+// rules require: in the stamped collections the Clinician reads only what was saved while sharing.
 //
 // Blocks are mounted only while the Patient shares their progress (#29). When sharing is withdrawn
-// the page destroys every block, so each must stop its own listeners in destroy(), and shows only
-// the withdrawn message. A block that listens to a collection should also treat a permission-denied
-// error as "nothing to show", because withdrawal can reach its listener first.
+// the page destroys every block and shows only the withdrawn message, and focus moves to it. The
+// data layer checks again in the background, so a Patient who shares again comes back.
 //
-// Slots (filled ✔ here; ◻ left empty for the ticket named):
+// Slots:
+//   (above the tabs)
+//     attention                  level word, reasons, history, Clear     views/flags.js (#10)
 //   Overview
-//     ✔ overview-attention       level word and reasons, first          views/overview.js
-//     ✔ overview-flags           flag detail and Clear after follow-up  views/flags.js (#10)
-//     ✔ overview-timeline        Phase timeline, mood and Questionnaire views/overview.js
-//     ✔ overview-latest-summary  the latest Summary                     views/summaries.js
-//     ✔ overview-what-helps      what seems to help                     views/what-helps.js
-//     ✔ overview-digest          the latest Digest, "Generate now"      views/digest.js (#23)
+//     overview-timeline          Phase strip, Mood and Questionnaire lanes views/overview.js
+//     overview-latest-summary    the latest Summary                       views/summaries.js
+//     overview-what-helps        what seems to help                       views/what-helps.js
+//     overview-digest            the latest Digest, compact               views/digest.js (#23)
 //   Summaries
-//     ✔ summaries-digest         this week's Digest                     views/digest.js (#23)
-//     ✔ summaries-body           Summaries, newest first, one in full   views/summaries.js
+//     summaries-body             Summaries, newest first, one in full     views/summaries.js
+//     summaries-digest           this week's Digest                       views/digest.js (#23)
 //   Signals
-//     ✔ signals-body             Signal trends for a Phase              views/signals.js
-//   Intake and Visits
-//     ✔ intake                   the Intake highlights                  views/intake.js
-//     ✔ visits                   TMS end date, Record a Visit, Visits   views/visits.js
-//
-// To fill a slot: import the mount function and add one line to SLOT_MOUNTS. An empty slot shows
-// nothing. Section headings are <h3>; a block's own heading is <h4>.
-import { doc, onSnapshot } from "https://www.gstatic.com/firebasejs/13.3.0/firebase-firestore.js";
-import { COLLECTIONS } from "../lib/contract.js";
+//     signals-body               Signal trends for a Phase                views/signals.js
+//   Intake & Visits
+//     intake                     the Intake highlights                    views/intake.js
+//     visits                     Visits, TMS end date, Record a Visit     views/visits.js
 import { dateInZone } from "../lib/dates.js";
-import { sharingMessage, sharingStateFromError, sharingStateFromSnapshot } from "../lib/sharing.js";
-import { patientQuery } from "../queries.js";
+import { DESIGN_COPY } from "../lib/design-model.js";
+import { patientMeta } from "../lib/design-view.js";
+import { sharingMessage } from "../lib/sharing.js";
 import { phases } from "../lib/timeline.js";
 import { sortVisits } from "../lib/visit.js";
 import { mountDigest } from "./digest.js";
 import { mountFlagDetail } from "./flags.js";
 import { mountIntake } from "./intake.js";
-import { mountAttention, mountTimeline } from "./overview.js";
+import { mountTimeline } from "./overview.js";
 import { mountSignals } from "./signals.js";
 import { mountLatestSummary, mountSummaries } from "./summaries.js";
+import { blankState } from "./ui.js";
 import { mountVisits } from "./visits.js";
 import { mountWhatHelps } from "./what-helps.js";
 
 const COPY = {
-  back: "← All Patients",
+  back: "← Patients",
   loading: "Loading…",
   unnamed: "Unnamed patient",
-  menu: "Sections of this Patient's page",
+  tabs: "Patient sections",
+  record: "Record a Visit",
+  support: "Summaries and reported Outcomes",
+  withdrawnTitle: "Sharing withdrawn",
+  errorTitle: "This Patient cannot be shown",
 };
 
-/** The sections, in page order, and the slots in each. */
+/** The sections (tabs), in page order, and the slots in each. */
 export const SECTIONS = Object.freeze([
-  {
-    id: "overview",
-    title: "Overview",
-    slots: ["overview-attention", "overview-flags", "overview-timeline", "overview-latest-summary", "overview-what-helps", "overview-digest"],
-  },
-  { id: "summaries", title: "Summaries", slots: ["summaries-digest", "summaries-body"] },
+  { id: "overview", title: "Overview", slots: ["overview-timeline", "overview-latest-summary", "overview-what-helps", "overview-digest"] },
+  { id: "summaries", title: "Summaries", slots: ["summaries-body", "summaries-digest"] },
   { id: "signals", title: "Signals", slots: ["signals-body"] },
-  { id: "intake-visits", title: "Intake and Visits", slots: ["intake", "visits"] },
+  { id: "intake-visits", title: "Intake & Visits", slots: ["intake", "visits"] },
 ]);
 
-/** The Intake section as a block: it only needs the saved highlights from the record. */
+/** The Intake as a block: it only needs the saved highlights from the record. */
 function mountIntakeBlock(container, { patientId, calls }) {
   const intake = mountIntake(container, { patientId, extract: calls.extract, save: calls.save });
   return {
@@ -95,45 +103,44 @@ function mountIntakeBlock(container, { patientId, calls }) {
   };
 }
 
-/** Flag detail (#10) listens to the Patient and flags itself; it needs no view updates. */
-function mountFlagsBlock(container, { db, patientId }) {
-  const stop = mountFlagDetail(container, { db, patientId });
-  return { update() {}, destroy: stop };
+/** The Attention band (#10): the page's PatientState, and clearing through `data.clearAttention`. */
+function mountFlagsBlock(container, { data, patientId }) {
+  return mountFlagDetail(container, { data, patientId });
 }
 
 /**
- * The Digest (#23) shows in Overview and in Summaries. Both copies share one in-flight
+ * The Digest (#23) shows in Overview (compact) and in Summaries. Both copies share one in-flight
  * "Generate now" per page, so it cannot run twice at once from either button.
  */
 const digestCallsByCtx = new WeakMap();
-function mountDigestBlock(container, ctx) {
-  if (!digestCallsByCtx.has(ctx)) {
-    let inFlight = null;
-    digestCallsByCtx.set(ctx, {
-      generateDigest: (patientId) =>
-        (inFlight ??= ctx.calls.generateDigest(patientId).finally(() => {
-          inFlight = null;
-        })),
-    });
-  }
-  const { destroy } = mountDigest(container, { db: ctx.db, patientId: ctx.patientId, calls: digestCallsByCtx.get(ctx) });
-  return { update() {}, destroy };
-}
+/** @param {{ compact: boolean }} options */
+const mountDigestBlock = ({ compact }) =>
+  function (container, ctx) {
+    if (!digestCallsByCtx.has(ctx)) {
+      let inFlight = null;
+      digestCallsByCtx.set(ctx, {
+        generateDigest: (patientId) =>
+          (inFlight ??= ctx.calls.generateDigest(patientId).finally(() => {
+            inFlight = null;
+          })),
+      });
+    }
+    return mountDigest(container, { patientId: ctx.patientId, calls: digestCallsByCtx.get(ctx), compact });
+  };
 
 /**
  * Which module fills which slot. One line per block.
  * @type {{ slot: string, mount: (container: HTMLElement, ctx: object) => { update: (view: object) => void, destroy: () => void } }[]}
  */
 const SLOT_MOUNTS = [
-  { slot: "overview-attention", mount: mountAttention },
-  { slot: "overview-flags", mount: mountFlagsBlock },
+  { slot: "attention", mount: mountFlagsBlock },
   { slot: "overview-timeline", mount: mountTimeline },
   { slot: "overview-latest-summary", mount: mountLatestSummary },
   { slot: "overview-what-helps", mount: mountWhatHelps },
+  { slot: "overview-digest", mount: mountDigestBlock({ compact: true }) },
   { slot: "summaries-body", mount: mountSummaries },
+  { slot: "summaries-digest", mount: mountDigestBlock({ compact: false }) },
   { slot: "signals-body", mount: mountSignals },
-  { slot: "overview-digest", mount: mountDigestBlock },
-  { slot: "summaries-digest", mount: mountDigestBlock },
   { slot: "intake", mount: mountIntakeBlock },
   { slot: "visits", mount: mountVisits },
 ];
@@ -146,71 +153,119 @@ function el(tag, attrs = {}, text) {
   return node;
 }
 
-/** The in-page menu: buttons that move to a section and focus its heading (the hash is the route). */
-function sectionMenu(sectionEls) {
-  const nav = el("nav", { class: "section-menu", "aria-label": COPY.menu });
-  const list = el("ul");
-  for (const { id, title } of SECTIONS) {
-    const button = el("button", { type: "button", class: "link", "aria-controls": `section-${id}` }, title);
-    button.addEventListener("click", () => {
-      const heading = sectionEls[id].querySelector("h3");
-      sectionEls[id].scrollIntoView({ block: "start" });
-      heading?.focus({ preventScroll: true });
-    });
-    const item = el("li");
-    item.append(button);
-    list.append(item);
+/** @param {string} slot */
+const slotDiv = (slot) => el("div", { class: "slot", id: `slot-${slot}`, "data-slot": slot });
+
+/** The tab the page opened on last, kept for this browser tab only. */
+const TAB_KEY = "twoam.dashboard.patientTab";
+function rememberedTab() {
+  try {
+    const value = window.sessionStorage.getItem(TAB_KEY);
+    return SECTIONS.some((s) => s.id === value) ? /** @type {string} */ (value) : "overview";
+  } catch {
+    return "overview";
   }
-  nav.append(list);
-  return nav;
 }
 
 /**
  * Shows one Patient in `root` and keeps it live. Returns a function that stops listening.
- * @param {{ root: HTMLElement, db: import("firebase/firestore").Firestore, patientId: string, calls: { extract: Function, save: Function } }} options
+ * @param {{ root: HTMLElement, data: ReturnType<typeof import("../data/design-data.js").designData>, patientId: string, calls: Record<string, Function> }} options
  * @returns {() => void}
  */
-export function showPatient({ root, db, patientId, calls }) {
-  const back = el("a", { href: "#/", class: "back" }, COPY.back);
-  const name = el("h2", { id: "patient-name", tabindex: "-1" }, COPY.loading);
-  const status = el("p", { class: "muted", "aria-live": "polite" });
+export function showPatient({ root, data, patientId, calls }) {
+  const back = el("a", { href: "#/", class: "back-button text-button" }, COPY.back);
+  const name = el("h1", { id: "patient-name", tabindex: "-1" }, COPY.loading);
+  const meta = el("p", { class: "muted", id: "patient-meta" });
+  const recordButton = el("button", { type: "button", class: "primary" }, COPY.record);
+  recordButton.hidden = true;
+  const titleBlock = el("div");
+  titleBlock.append(name, meta);
+  const header = el("header", { class: "page-heading patient-heading" });
+  header.append(titleBlock, recordButton);
+  // Announces the withdrawn and error states; focus moves to its heading when the content goes.
+  const status = el("div", { class: "patient-status", role: "status", "aria-live": "polite" });
 
   /** @type {Record<string, HTMLElement>} */
-  const sectionEls = {};
+  const slotEls = { attention: slotDiv("attention") };
   /** @type {Record<string, HTMLElement>} */
-  const slotEls = {};
+  const panels = {};
+  /** @type {Record<string, HTMLButtonElement>} */
+  const tabButtons = {};
+  const tabs = el("nav", { class: "patient-tabs", "aria-label": COPY.tabs });
   const body = el("div", { class: "patient-sections" });
-  body.hidden = true;
   for (const { id, title, slots } of SECTIONS) {
-    const section = el("section", { id: `section-${id}`, class: "patient-section", "aria-labelledby": `section-${id}-heading` });
-    section.append(el("h3", { id: `section-${id}-heading`, tabindex: "-1" }, title));
-    const grid = el("div", { class: `section-body section-body-${id}` });
-    for (const slot of slots) {
-      slotEls[slot] = el("div", { class: "slot", id: `slot-${slot}`, "data-slot": slot });
-      grid.append(slotEls[slot]);
+    for (const slot of slots) slotEls[slot] = slotDiv(slot);
+    const panel = el("div", { id: `section-${id}`, class: `patient-panel panel-${id}`, role: "region", "aria-label": title });
+    if (id === "overview") {
+      const layout = el("div", { class: "overview-layout" });
+      const support = el("aside", { class: "overview-support", "aria-label": COPY.support });
+      support.append(slotEls["overview-latest-summary"], slotEls["overview-what-helps"], slotEls["overview-digest"]);
+      layout.append(slotEls["overview-timeline"], support);
+      panel.append(layout);
+    } else {
+      for (const slot of slots) panel.append(slotEls[slot]);
     }
-    section.append(grid);
-    sectionEls[id] = section;
-    body.append(section);
+    panels[id] = panel;
+    body.append(panel);
+    const button = /** @type {HTMLButtonElement} */ (el("button", { type: "button", "aria-controls": panel.id }, title));
+    button.addEventListener("click", () => showTab(id));
+    tabButtons[id] = button;
+    tabs.append(button);
   }
-  const menu = sectionMenu(sectionEls);
-  menu.hidden = true;
+  const content = el("div", { class: "patient-content" });
+  content.append(slotEls.attention, tabs, body);
+  content.hidden = true;
 
-  root.replaceChildren(back, name, status, menu, body);
-  name.focus();
+  root.replaceChildren(back, header, status, content);
+  window.scrollTo(0, 0);
+  name.focus({ preventScroll: true });
 
-  const ctx = { db, patientId, calls };
+  /** @param {string} id */
+  function showTab(id) {
+    for (const section of SECTIONS) {
+      const active = section.id === id;
+      panels[section.id].hidden = !active;
+      if (active) tabButtons[section.id].setAttribute("aria-current", "page");
+      else tabButtons[section.id].removeAttribute("aria-current");
+    }
+    recordButton.classList.toggle("primary", id === "overview" || id === "signals");
+    try {
+      window.sessionStorage.setItem(TAB_KEY, id);
+    } catch {
+      // Not remembered: the page opens on Overview next time.
+    }
+    // Charts measure their width once their tab is shown.
+    window.dispatchEvent(new Event("resize"));
+  }
+  showTab(rememberedTab());
+
+  const bus = new EventTarget();
+  const page = {
+    showTab,
+    /** @param {string} type @param {(detail: any) => void} fn */
+    on: (type, fn) => {
+      const listener = (/** @type {Event} */ e) => fn(/** @type {CustomEvent} */ (e).detail);
+      bus.addEventListener(type, listener);
+      return () => bus.removeEventListener(type, listener);
+    },
+    /** @param {string} type @param {unknown} [detail] */
+    emit: (type, detail) => bus.dispatchEvent(new CustomEvent(type, { detail })),
+  };
+  recordButton.addEventListener("click", () => page.emit("record-visit"));
+
+  const ctx = { data, patientId, calls, page };
   /** @type {{ update: Function, destroy: Function }[] | null} */
   let blocks = null;
-  /** @type {object | null} */
-  let patient = null;
-  /** @type {object[]} */
-  let visits = [];
+  /** @type {import("../lib/design-live.js").PatientState | null} */
+  let state = null;
+  const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
 
   function view() {
-    const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
     const today = dateInZone(Date.now(), timeZone);
-    return { patient, visits, phases: phases(patient?.tmsEndDate, visits, today), today, timeZone };
+    const current = /** @type {import("../lib/design-live.js").PatientState} */ (state);
+    const patient = /** @type {any} */ (current.raw?.patient);
+    const visits = sortVisits(/** @type {any[]} */ (current.docs.visits ?? []));
+    return { patient, visits, phases: phases(patient?.tmsEndDate, visits, today), today, timeZone, state: current, docs: current.docs, errors: current.errors };
   }
 
   function mountBlocks() {
@@ -224,55 +279,55 @@ export function showPatient({ root, db, patientId, calls }) {
   }
 
   function refresh() {
-    if (!blocks || !patient) return;
+    if (!blocks || state?.status !== "ok") return;
     const current = view();
+    meta.replaceChildren(
+      ...patientMeta(current.patient, current.today).flatMap((part, i) => (i ? [el("span", { class: "meta-separator", "aria-hidden": "true" }, "·"), part] : [part])),
+    );
     for (const block of blocks) block.update(current);
   }
 
-  /** @param {import("../lib/sharing.js").SharingViewState} state */
-  const render = (state) => {
-    if (state.status !== "ok") {
-      // Withdrawn sharing (#29) or an error: show the state, never the Patient's data.
-      patient = null;
+  /** @param {import("../lib/design-live.js").PatientState} next */
+  const render = (next) => {
+    const previous = state?.status;
+    state = next;
+    if (next.status === "loading") return;
+    if (next.status !== "ok") {
+      // Withdrawn sharing (#29) or an error: show the state, never the Patient's data. The data
+      // layer checks again in the background; the same state again changes nothing here.
+      if (previous === next.status) return;
+      const active = document.activeElement;
+      const focusInPage = active === document.body || active === null || (root.contains(active) && active !== name);
       destroyBlocks();
-      name.textContent = COPY.unnamed;
-      status.textContent = sharingMessage(state);
-      body.hidden = true;
-      menu.hidden = true;
+      name.textContent = next.status === "withdrawn" ? DESIGN_COPY.withdrawnName : COPY.unnamed;
+      meta.textContent = "";
+      recordButton.hidden = true;
+      content.hidden = true;
+      const blank = blankState(next.status === "withdrawn" ? COPY.withdrawnTitle : COPY.errorTitle, /** @type {string} */ (sharingMessage(next)));
+      const heading = /** @type {HTMLElement} */ (blank.querySelector("h2"));
+      heading.tabIndex = -1;
+      status.replaceChildren(blank);
+      document.title = "Depressify · Clinician workspace";
+      // The content the Clinician was in is gone: take focus to what replaced it. Focus elsewhere
+      // (the sidebar, the page heading) stays where it is.
+      if (focusInPage) heading.focus({ preventScroll: true });
       return;
     }
-    patient = state.patient;
-    name.textContent = state.patient.displayName || COPY.unnamed;
-    status.textContent = "";
-    body.hidden = false;
-    menu.hidden = false;
+    const patient = /** @type {any} */ (next.raw?.patient);
+    name.textContent = patient?.displayName || COPY.unnamed;
+    document.title = `${name.textContent} · Depressify · Clinician workspace`;
+    status.replaceChildren();
+    content.hidden = false;
+    recordButton.hidden = false;
     if (!blocks) mountBlocks();
     refresh();
   };
 
-  const stopPatient = onSnapshot(
-    doc(db, COLLECTIONS.patients, patientId),
-    (snapshot) => render(sharingStateFromSnapshot({ exists: snapshot.exists(), data: snapshot.data() })),
-    // The rules deny the read once the Patient stops sharing: that is the withdrawn state, not an error.
-    (error) => render(sharingStateFromError(error)),
-  );
-
-  const stopVisits = onSnapshot(
-    patientQuery(db, patientId, COLLECTIONS.visits),
-    (snapshot) => {
-      visits = sortVisits(snapshot.docs.map((d) => ({ id: d.id, ...d.data() })));
-      refresh();
-    },
-    // Withdrawal reaches the record's listener too, which shows the withdrawn state.
-    () => {
-      visits = [];
-      refresh();
-    },
-  );
+  // One subscription for the whole page: the record and every collection the blocks show.
+  const stopPatient = data.subscribePatient(patientId, { sections: "all", clock: () => ({ nowMillis: Date.now(), timeZone }) }, render);
 
   return () => {
     stopPatient();
-    stopVisits();
     destroyBlocks();
     root.replaceChildren();
   };

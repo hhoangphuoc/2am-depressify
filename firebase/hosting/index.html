@@ -3,72 +3,111 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>2am · Patients</title>
+    <title>Depressify · Clinician workspace</title>
     <link rel="stylesheet" href="styles.css" />
     <script type="module" src="js/app.js"></script>
   </head>
   <body>
-    <header class="bar">
-      <h1>Patients</h1>
-      <div id="account" hidden>
-        <button id="sound-toggle" type="button" class="link" role="switch" aria-checked="false">Sound for red flags<span aria-hidden="true">: off</span></button>
-        <span id="account-email"></span>
-        <button id="sign-out" type="button" class="link">Sign out</button>
-      </div>
-    </header>
-
-    <p id="sound-note" class="sound-note" role="status" hidden></p>
+    <!-- Shown only when the page talks to the local emulators: everything there is invented. -->
+    <div id="env-disclosure" class="demo-disclosure" hidden>Local emulators · Demo Patients and their data are invented.</div>
     <!-- New red flags are announced here on any view. -->
     <p id="attention-announcer" class="visually-hidden" aria-live="assertive"></p>
 
-    <main>
-      <p id="starting" class="muted">Loading…</p>
+    <p id="starting" class="starting muted" role="status">Loading…</p>
 
-      <form id="sign-in" class="card" hidden novalidate>
-        <h2>Clinician sign-in</h2>
-        <label for="email">Email</label>
-        <input id="email" name="email" type="email" autocomplete="username" required />
-        <label for="password">Password</label>
-        <input id="password" name="password" type="password" autocomplete="current-password" required />
-        <p id="sign-in-error" class="error" role="alert" aria-live="assertive"></p>
-        <button type="submit" class="primary">Sign in</button>
-      </form>
+    <div id="signin-view" class="signin-wrap" hidden>
+      <section class="signin" aria-labelledby="signin-heading">
+        <span class="wordmark">Depressify</span>
+        <p class="muted">Clinician workspace</p>
+        <h1 id="signin-heading">Welcome back</h1>
+        <form id="sign-in" novalidate>
+          <label for="email">Email</label>
+          <input id="email" name="email" type="email" autocomplete="username" required aria-describedby="sign-in-error" />
+          <label for="password">Password</label>
+          <input id="password" name="password" type="password" autocomplete="current-password" required aria-describedby="sign-in-error" />
+          <p id="sign-in-error" class="error-text" role="alert" aria-live="assertive" hidden></p>
+          <button type="submit" class="primary full-width">Sign in</button>
+        </form>
+      </section>
+    </div>
 
-      <section id="patients" hidden aria-labelledby="patients-heading">
-        <h2 id="patients-heading" class="visually-hidden">Patient list</h2>
-        <section id="attention-banner" class="banner" aria-labelledby="banner-heading" hidden></section>
-        <div id="list-controls" class="list-controls" role="search" hidden>
-          <div class="field">
-            <label for="patient-search">Search by name</label>
-            <input id="patient-search" type="search" autocomplete="off" spellcheck="false" />
-          </div>
-          <div class="field">
-            <label for="level-filter">Attention</label>
-            <select id="level-filter">
-              <option value="all">All levels</option>
-              <option value="red">Red</option>
-              <option value="amber">Amber</option>
-              <option value="green">Green</option>
-            </select>
+    <div id="workspace" class="workspace" hidden>
+      <a class="skip-link" href="#workspace-main">Skip to main content</a>
+      <aside class="sidebar">
+        <div>
+          <a class="brand-button" href="#/" aria-label="Depressify Patients"><span class="wordmark">Depressify</span></a>
+          <p class="workspace-label">Clinician workspace</p>
+          <nav aria-label="Workspace">
+            <a id="nav-patients" class="nav-item active" href="#/" aria-current="page">Patients <span id="nav-count"></span></a>
+          </nav>
+        </div>
+        <div class="account">
+          <span id="account-avatar" class="account-avatar" aria-hidden="true"></span>
+          <div>
+            <span id="account-email"></span>
+            <button id="sign-out" type="button" class="text-button">Sign out</button>
           </div>
         </div>
-        <p id="patients-status" class="muted" aria-live="polite"></p>
-        <button id="clear-filters" type="button" class="secondary" hidden>Clear search and filter</button>
-        <table id="patients-table" hidden>
-          <thead>
-            <tr>
-              <th scope="col">Patient</th>
-              <th scope="col">Attention flag</th>
-              <th scope="col">Reasons</th>
-              <th scope="col">Latest Check-in</th>
-              <th scope="col">Data</th>
-            </tr>
-          </thead>
-          <tbody id="patients-body"></tbody>
-        </table>
-      </section>
+      </aside>
 
-      <section id="patient" hidden aria-labelledby="patient-name"></section>
-    </main>
+      <div class="workspace-body">
+        <main id="workspace-main" class="main-content">
+          <div class="workspace-meta"><span id="meta-date"></span><span id="meta-time"></span></div>
+          <p id="sound-note" class="notice sound-note" role="status" hidden></p>
+
+          <section id="patients" aria-labelledby="patients-heading" hidden>
+            <header class="page-heading">
+              <div>
+                <h1 id="patients-heading" tabindex="-1">Patients</h1>
+                <p class="muted">A little context for your next conversation.</p>
+              </div>
+              <span id="freshness" class="freshness" role="status"></span>
+            </header>
+            <div id="offline-notice" class="notice stale" role="status" hidden>
+              <strong>Offline · showing saved data</strong>
+              <span>Changes need a connection. The list updates when the connection is back.</span>
+            </div>
+            <div id="attention-banner" class="banners" hidden></div>
+            <div id="list-controls" class="list-tools" role="search" hidden>
+              <label class="search-label" for="patient-search">
+                <span class="visually-hidden">Search Patients by name</span>
+                <input id="patient-search" type="search" autocomplete="off" spellcheck="false" placeholder="Search Patients" />
+              </label>
+              <div id="level-filter" class="filter-group" role="group" aria-label="Filter by Attention flag"></div>
+            </div>
+            <div id="patients-state"></div>
+            <div id="patients-table-wrap" class="patient-table-wrap" hidden>
+              <table id="patients-table" class="patient-table">
+                <caption class="visually-hidden">Patients, red first, then amber and green</caption>
+                <thead>
+                  <tr>
+                    <th scope="col">Patient</th>
+                    <th scope="col">Attention</th>
+                    <th scope="col" class="desktop-column">Sleep · 14 days</th>
+                    <th scope="col" class="desktop-column">Last Check-in</th>
+                    <th scope="col" class="desktop-column">Phone last seen</th>
+                    <th scope="col"><span class="visually-hidden">Open</span></th>
+                  </tr>
+                </thead>
+                <tbody id="patients-body"></tbody>
+              </table>
+            </div>
+            <div class="list-footer">
+              <span id="patients-status" class="small muted" aria-live="polite"></span>
+              <label class="checkbox-label sound-control" for="sound-toggle">
+                <input id="sound-toggle" type="checkbox" role="switch" />
+                Sound for red flags <span class="small muted">(plays a test when enabled)</span>
+              </label>
+            </div>
+          </section>
+
+          <section id="patient" hidden></section>
+        </main>
+        <footer class="page-footer workspace-footer">
+          <p class="small muted">Depressify · Clinician workspace</p>
+          <p class="small muted">Attention is a work queue for follow-up, not a judgement about the Patient.</p>
+        </footer>
+      </div>
+    </div>
   </body>
 </html>

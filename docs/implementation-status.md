@@ -20,6 +20,7 @@ Kept up to date as PRs are opened and merged. Each PR also updates its own rows 
 | #69 | `feat/26-daily-job-rules` → `main` | #26, pure logic: the daily job as one pure pipeline in `core` | **Merged** |
 | #70 | `feat/live-demo-patient` → `main` | Live demo Patient: `npm run seed-live-patient` gives one real Patient account six weeks of seeded history | **Merged.** **Run on `junction26hel-7400` on 14 November 2026** for the team's test Gmail account: account created (verified, no password), 42 daily, 24 Check-ins and Summaries, 24 Suggestions, 3 flags (level amber), 2 Visits, 12 Consents. Seeded before the Intake label: `--reset` once to add it. |
 | #74 | `feat/dashboard-backend-sync` → `main` | Dashboard design ↔ backend sync: the design adapter, live data helpers, `Digest.sourceCheckInIds`, two indexes | Open; see [design/dashboard-backend-sync.md](design/dashboard-backend-sync.md). Tested on top of the latest `main` (with #67), after the review fixes: hosting 395, functions 498, seed 158, `core` 161 (`contract.json` stable), emulators 110 (1 skipped) + 37. |
+| #78 | `feat/dashboard-design-ui` → `feat/dashboard-backend-sync` (stacked on #74) | Dashboard UI restyled to the design system of `design/clinician`: sidebar workspace, roster, Patient page tabs, dialogs, chart lanes | Open. See [Dashboard UI restyled to the design system](#dashboard-ui-restyled-to-the-design-system). Tested after merging #74 (with `main` and #67) and the review fixes: hosting 416, functions 498, seed 158, emulators 110 (1 skipped) + 37. Smoke-checked in Chrome against the emulators. |
 
 **Deployed on `junction26hel-7400`:**
 - Rules and indexes.
@@ -289,15 +290,49 @@ Differences that remain between `main`'s Patient UI and the contract, for the ne
 ## Frontend
 
 - **Patient app:** `main`'s Compose Multiplatform screens, with sign-in and the sharing Consent wired as described above.
-- **Clinician dashboard** (`firebase/hosting`, plain JS with the Firebase JS SDK), from the stack:
-  - Sign-in, a live Patient list sorted by Attention flag, search and a level filter.
-  - The red-flag banner with an optional sound, flag detail, and the "Clear after follow-up" dialog.
-  - The Patient page in four sections: Overview, Summaries, Signals, and Intake and Visits.
+- **Clinician dashboard** (`firebase/hosting`, plain JS with the Firebase JS SDK), from the stack, laid out and styled as the `design/clinician` prototype on `feat/dashboard-design-ui` (below):
+  - Sign-in, a live Patient list sorted by Attention flag, search and level filters with counts.
+  - The red-flag banner with an optional sound, the Attention band with history, and the "Clear after follow-up" dialog.
+  - The Patient page in four tabs: Overview, Summaries, Signals, and Intake & Visits.
 - `design/clinician` on `main` is a separate design prototype. It is not connected to Firebase, but `firebase/hosting/js/lib/design-model.js` and `design-live.js` give it live data in its own shapes (see [Dashboard backend sync](#dashboard-backend-sync)).
 
 Useful when the dashboard design is merged:
 - `firebase/hosting/js/lib/*` holds pure helpers (sorting, Phases, Baseline, series, what helps, clearing) with tests that don't depend on the UI.
 - Dashboard queries go through `patientCollectionQuery` in `js/lib/sharing.js`, which adds the sharing-stamp filter the rules require.
+
+## Dashboard UI restyled to the design system
+
+Branch `feat/dashboard-design-ui` (open, stacked on #74). The real dashboard (`firebase/hosting`) now looks and is laid out like the design prototype in `design/clinician`. It is still plain ES modules and the Firebase SDK from the gstatic CDN, with no build step (ADR 0008).
+
+**What changed:**
+- **Design system.** `styles.css` is rewritten from the prototype's `styles.css`. The tokens are CSS custom properties: palette, Attention level colours, chart colours, type sizes, spacing, gutters, radii, the 3 px focus ring and the 44 px target. The components follow: the 220 px sidebar, cards and bands, buttons, the red banner, tables, dialogs, forms and chart lanes. Below 1000 px the sidebar folds into a top bar; on phones the layout is one column with 24 px gutters. Reduced motion is respected.
+- **Roster.** The sidebar workspace has the date and time line, connection freshness ("Live · updated 14:19", or "Saved view" offline) and one red banner per Patient with a red flag, with "Review Patient". Search and filter buttons show counts. The table has an avatar, the name and first reason, the level word, a 14-day sleep sparkline with the Patient's own Baseline, the last Check-in and when the phone was last seen. Under it are the count line and the "Sound for red flags" checkbox. The data comes from `subscribeRoster` and `rosterView` (the design data layer); the old per-Patient flag listeners in `list.js` are gone.
+- **Patient page.** The header has the name, the week since TMS and **Record a Visit**. Then come the Attention band (level word, each reason with source and time, "View history", "Clear after follow-up") and four tabs. Overview has the timeline in two thirds and the latest Summary, what seems to help and a compact Digest in one third. Summaries has a list beside the detail, and the Digest. Signals has two-column trend cards. Intake & Visits has the highlights list, a Visits table and the TMS end date. Recording a Visit, the TMS end date, the Intake and clearing a flag happen in native modal dialogs.
+- **Charts.** The Phase timeline is now one SVG lane per series: the weekly Mood rating, then PHQ-9 and PHQ-2. The lanes have separate scales on the same dates, with an HTML Phase strip above them and dashed Visit lines. Signal trends are 176 px tall, with the Baseline band, the dashed Baseline and hatched columns for missing days. Both keep their HTML data tables.
+- **Data.** Everything reads and writes through the design data layer (`designData`). The roster uses `subscribeRoster` and `rosterFor` (on `rosterView`). The Patient page opens one `data.subscribePatient` with every section and feeds every block from it (`view.state`, `view.docs`, `view.errors`); no block opens a listener of its own. Recording or editing a Visit, the TMS end date and clearing a flag go through `data.recordVisit`, `data.setTmsEndDate` and `data.clearAttention` (the transaction, with "review again" when a reason arrives and the confirmation checkbox), so there is one write path and one error-copy mapping. Every query keeps the sharing filter.
+- **New pure code.** `js/lib/design-view.js` (the workspace line, connection text, the Patient meta line, the sparkline, the Phase strip, the lane ticks, the Attention band, chart redraws and the roster's filter fallback and row keys), tested in `test/design-view.test.mjs`. `test/views-data.test.mjs` checks on the sources that no view opens a listener or writes to Firestore itself.
+
+**Review fixes** (each with a test):
+- **Flags that cannot load never read as green.** The Attention band shows the level saved on the record with "Could not load the flags…", offers no clearing, and shows a stored green as "Attention flag not loaded" (`attentionBand`).
+- **Charts in a hidden tab.** The Overview and Signals charts forget their width when a live update arrives while their tab is hidden, so showing the tab redraws them (`chartDrawPlan`, `needsRedraw`).
+- **Sleep follows Signal Consent in the roster.** The sparkline shows only while the sleep Consent is granted; otherwise "Sleep not shared", and nothing while it loads.
+- **The roster filter.** A filter no longer offered (Unassessed, Withdrawn) falls back to All before the table is drawn (`rosterFor`).
+- **Roster rows are updated by Patient id** (`rosterRowKey`): an unchanged row stays the same element, so focus on its link survives a live update.
+- **Visits after the TMS end date.** The date picker starts the day after TMS ended, as the data layer's check does.
+- **One subscription per Patient page**, and the page's status is a live region (`role="status"`, `aria-live="polite"`); when the content is withdrawn, focus moves to the status heading. A Patient who shares again comes back without a reload (the data layer checks again).
+
+**Left out (conflicts in [design/dashboard-backend-sync.md](design/dashboard-backend-sync.md)):**
+- "Retry automatic assessment": not shown. The band says the latest assessment is unavailable and keeps the open flags.
+- Deletion on withdrawal: the withdrawn page says the Patient is not sharing right now, never that data was removed. The roster drops a withdrawn Patient at once (`keepWithdrawn` is off).
+- The Clinician's action note when clearing: no field. The dialog has only the design's confirmation checkbox ("I have followed up on this reason.").
+- "Felt x/5 on average": what seems to help keeps the grouped feeling counts.
+- Also left out: the prototype's "Prototype states" footer, the "View source Summaries" list in the Digest (the count is shown), and the Intake saved date (not stored).
+
+**Tests:** after merging #74 (with `main` and #67) and the review fixes: hosting `node --test` 416 pass (including `design-view.test.mjs` and `views-data.test.mjs`); functions `npm test` 498; seed `npm test` 158; the functions emulator suite 110 pass, 1 skipped; the seed emulator suite 37 pass. Smoke-checked in Chrome against the emulators (auth, firestore, hosting from this branch): sign-in as the emulator Clinician; an account without the Clinician claim is signed out with "This account isn't set up as a Clinician yet…"; the roster with sparklines, a row keeping focus while another Patient's row updates, and "Sleep not shared" once the sleep Consent is withheld; a Patient page with every tab, charts redrawn after data changed while their tab was hidden, a Visit on the TMS end date refused, a flag cleared with the confirmation checkbox; withdrawal of a non-demo Patient moving focus to "Sharing withdrawn", and the page coming back without a reload when the Patient shared again. No console errors.
+
+**Preview:**
+- With the emulators running, serve the folder on another port: `python3 -m http.server 5010 --bind 127.0.0.1` in `firebase/hosting`.
+- Open http://127.0.0.1:5010 and sign in as the emulator Clinician.
 
 ## Dashboard backend sync
 
@@ -371,7 +406,7 @@ Results on `feat/21-outcomes` (on #62), all from local runs on 14 November 2026:
 | iOS build | `xcodegen generate`, then `xcodebuild` for the arm64 simulator | Not rerun on this branch (built on #14's branch) |
 | Functions | `cd firebase/functions && npm test` | 435 pass, including `outcomes.test.ts` (the shared fixture, which answer counts, the day's steps, the write), `baseline.test.ts` (the Baseline fixture through the TypeScript copy), `checkin-outcome.test.ts` (the Outcome through the handler: target, precedence, prefer not to say, declined, the draft's own Suggestion, retries, steps Consent, the dashboard read-back), `decisions.test.ts`, `decisions-api.test.ts` and the spy test across the Decisions and Outcome paths |
 | Seed | `cd firebase/seed && npm test` | 103 pass, including the shared Outcome fixture; 105 on `feat/26-daily-job-rules` (`flags.test.js`) |
-| Dashboard helpers | `cd firebase/hosting && node --test` | 309 pass |
+| Dashboard helpers | `cd firebase/hosting && node --test` | 309 pass (later counts: see the #74 and #78 rows above) |
 | Rules, functions and end-to-end on the emulators | `firebase emulators:exec --only auth,firestore,functions --project demo-twoam "npm --prefix functions run test:emulator"` | 97 pass, 1 skipped (the opt-in real-Gemini test), with Firebase CLI 15.36.0. Includes the Outcome written in the finish transaction on the Admin store (steps computed from the daily records, a retry changing nothing, the phone unable to change it under the rules, `whatHelps` reading the new score), the rules refusing a client-set `outcomeCheckInId`, Decisions flags written in the finish transaction on the Admin store, and a silent Check-in with the crisis marker finished through the deployed callable: red `crisis-<checkInId>`, level red, and `redFlagAlert` wrote one `[CRISIS]` email (outcome `sent`); the retry raised no second flag. |
 | Seed on the emulator | `... "npm --prefix seed run test:emulator"` | 16 pass (with the Functions emulator; the seeded Demo Patients' red flags are skipped as synthetic) |
 | Decisions API, real | One script outside the suite, key read from Secret Manager into memory, no Firestore | Routine and low fictional transcripts routed as expected (see the Decisions row above) |
