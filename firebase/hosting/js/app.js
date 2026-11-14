@@ -6,9 +6,12 @@ import {
 } from "https://www.gstatic.com/firebasejs/13.3.0/firebase-auth.js";
 import { collection, onSnapshot, query, where } from "https://www.gstatic.com/firebasejs/13.3.0/firebase-firestore.js";
 import { initFirebase } from "./firebase.js";
+import { intakeCalls } from "./functions.js";
 import { signInErrorMessage } from "./lib/auth.js";
 import { COLLECTIONS } from "./lib/contract.js";
 import { toPatientRows } from "./lib/patients.js";
+import { parseRoute, patientHref } from "./lib/route.js";
+import { showPatient } from "./views/patient.js";
 
 const $ = (id) => document.getElementById(id);
 
@@ -22,6 +25,7 @@ const COPY = {
 };
 
 let stopPatients = null;
+let stopPatient = null;
 
 function show(id, visible) {
   $(id).hidden = !visible;
@@ -33,7 +37,10 @@ function renderPatients(rows) {
     ...rows.map((row) => {
       const tr = document.createElement("tr");
       const name = document.createElement("td");
-      name.textContent = row.displayName;
+      const link = document.createElement("a");
+      link.href = patientHref(row.id);
+      link.textContent = row.displayName;
+      name.append(link);
       const level = document.createElement("td");
       level.textContent = LEVEL_WORDS[row.flagLevel] ?? LEVEL_WORDS.green;
       const reasons = document.createElement("td");
@@ -78,6 +85,24 @@ function wireSignIn(auth) {
   $("sign-out").addEventListener("click", () => signOut(auth));
 }
 
+/** Shows the Patient list or one Patient's page, from the URL hash. */
+function applyRoute(firebase, signedIn) {
+  stopPatient?.();
+  stopPatient = null;
+  const route = signedIn ? parseRoute(window.location.hash) : { name: "list" };
+  const onPatient = signedIn && route.name === "patient";
+  show("patients", signedIn && !onPatient);
+  show("patient", onPatient);
+  if (onPatient) {
+    stopPatient = showPatient({
+      root: $("patient"),
+      db: firebase.db,
+      patientId: route.patientId,
+      calls: intakeCalls(firebase.auth.app),
+    });
+  }
+}
+
 async function main() {
   let firebase;
   try {
@@ -88,16 +113,17 @@ async function main() {
   }
   const { auth, db } = firebase;
   wireSignIn(auth);
+  window.addEventListener("hashchange", () => applyRoute(firebase, Boolean(auth.currentUser?.email)));
   onAuthStateChanged(auth, (user) => {
     show("starting", false);
     stopPatients?.();
     stopPatients = null;
     const signedIn = Boolean(user?.email);
     show("sign-in", !signedIn);
-    show("patients", signedIn);
     show("account", signedIn);
     $("account-email").textContent = signedIn ? user.email : "";
     if (signedIn) stopPatients = watchPatients(db, user.email);
+    applyRoute(firebase, signedIn);
   });
 }
 
