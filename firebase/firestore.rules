@@ -1,0 +1,36 @@
+rules_version = '2';
+
+// Minimal rules for the walking skeleton (issue #7). The full rules, with Clinician writes,
+// sharing Consent, Demo Patients and the mail collection, come with issue #8.
+//
+// - A Patient (anonymous auth uid == patientId) reads and writes only their own record and the
+//   collections under it.
+// - The Clinician reads Patients whose clinicianEmail is their sign-in email.
+// - Signed-out users read nothing. Everything not matched here is denied.
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function isPatient(patientId) {
+      return signedIn() && request.auth.uid == patientId;
+    }
+
+    function isClinicianOf(patient) {
+      return signedIn()
+        && request.auth.token.email != null
+        && patient.clinicianEmail == request.auth.token.email;
+    }
+
+    match /patients/{patientId} {
+      allow read, write: if isPatient(patientId);
+      allow read: if isClinicianOf(resource.data);
+
+      match /{collection}/{docId} {
+        allow read, write: if isPatient(patientId);
+      }
+    }
+  }
+}
