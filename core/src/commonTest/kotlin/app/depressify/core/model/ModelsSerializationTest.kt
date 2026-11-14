@@ -81,7 +81,7 @@ class ModelsSerializationTest {
             Suggestion.serializer(),
             Suggestion(id = "s1", kind = SuggestionKind.walk, details = "A short walk", suggestedAtMillis = 1L, sharedWithClinician = true),
         )
-        for (key in listOf("tried", "felt", "objectiveChange", "outcomeScore")) {
+        for (key in listOf("tried", "felt", "objectiveChange", "outcomeScore", "outcomeCheckInId")) {
             assertTrue(suggestion.containsKey(key)); assertNull(suggestion[key])
         }
         assertEquals("proposed", suggestion["status"])
@@ -278,6 +278,14 @@ class ModelsSerializationTest {
         assertNull(checkIn.assessment); assertNull(checkIn.previousTried)
         val suggestion = Suggestion(id = "s1", kind = SuggestionKind.walk, details = "", suggestedAtMillis = 1L, sharedWithClinician = false)
         assertNull(suggestion.tried); assertNull(suggestion.felt); assertNull(suggestion.objectiveChange); assertNull(suggestion.outcomeScore)
+        assertNull(suggestion.outcomeCheckInId)
+    }
+
+    @Test
+    fun aSuggestionStoredBeforeOutcomeCheckInIdExistedReadsAsOpen() {
+        val stored = """{"id":"s1","kind":"walk","details":"","suggestedAtMillis":1,"status":"accepted","booked":false,""" +
+            """"tried":null,"felt":null,"objectiveChange":null,"outcomeScore":null,"sharedWithClinician":true}"""
+        assertNull(FirestoreJson.json.decodeFromString(Suggestion.serializer(), stored).outcomeCheckInId)
     }
 
     @Test

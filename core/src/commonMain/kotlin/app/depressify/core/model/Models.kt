@@ -266,8 +266,10 @@ data class Summary(
 
 /**
  * `patients/{id}/suggestions/{suggestionId}`. The app creates it and changes only [status] and
- * [booked]. The Outcome ([tried], [felt], [objectiveChange], [outcomeScore]) is written by functions
- * only: null when the app creates it, and never changed by the app.
+ * [booked]. The Outcome ([tried], [felt], [objectiveChange], [outcomeScore], [outcomeCheckInId]) is
+ * written by functions only (Finish Check-in, #21): null when the app creates it, and never changed
+ * by the app. Open, "prefer not to say", not tried and tried are told apart by [outcomeCheckInId]
+ * and [tried]; see `app.depressify.core.learning.Outcomes`.
  */
 @Serializable
 data class Suggestion(
@@ -277,13 +279,16 @@ data class Suggestion(
     val suggestedAtMillis: Long,
     val status: SuggestionStatus = SuggestionStatus.proposed,
     val booked: Boolean = false,
-    /** Null until the Patient answers; false means "not this time". */
+    /** True or false once the Patient answers; false means "not this time". Null while open and for "prefer not to say". */
     val tried: Boolean? = null,
-    /** How it felt, 1 to 5, or null. */
+    /** How it felt, 1 to 5, or null. Only when tried. */
     val felt: Int? = null,
-    /** That day's oriented steps comparison with Baseline, or null. */
+    /** The oriented steps comparison with Baseline on the day the Suggestion was made, or null. */
     val objectiveChange: Double? = null,
+    /** Null until answered and for "prefer not to say"; -0.1 for not tried; otherwise in -1..1. */
     val outcomeScore: Double? = null,
+    /** The Check-in whose answer recorded the Outcome; null while the Outcome is open. */
+    val outcomeCheckInId: String? = null,
     /** Whether the Patient was sharing when this Suggestion was created ([sharingStamp]). Never changes. */
     val sharedWithClinician: Boolean,
 )

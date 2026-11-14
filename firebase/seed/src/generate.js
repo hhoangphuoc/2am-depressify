@@ -157,15 +157,20 @@ function previousOutcomeLine(suggestion) {
 }
 
 /**
- * The Outcome score once the Patient has answered: not tried is a small negative value; otherwise
- * 0.7 x the feeling (centred on 3, scaled to plus or minus 1) plus 0.3 x that day's oriented steps
- * comparison with Baseline, clamped to plus or minus 1. A missing comparison adds nothing.
- * @param {boolean} tried @param {number | null} felt @param {number | null} objectiveChange
+ * The Outcome score, as Finish Check-in writes it (firebase/functions/src/outcomes.ts; pinned for
+ * both by fixtures/outcomes/outcome-cases.json): null until answered; not tried is a small negative
+ * value; otherwise 0.7 x the feeling (centred on 3, scaled to plus or minus 1) plus 0.3 x that
+ * day's oriented steps comparison with Baseline, itself clamped to plus or minus 1 first, all
+ * clamped to plus or minus 1. A feeling not given and a missing comparison each add nothing.
+ * @param {boolean | null} tried @param {number | null} felt @param {number | null} objectiveChange
+ * @returns {number | null}
  */
 export function outcomeScore(tried, felt, objectiveChange) {
+  if (tried === null) return null;
   if (!tried) return NOT_TRIED_OUTCOME;
-  const feeling = felt === null ? 0 : (felt - 3) / 2;
-  return clamp(0.7 * feeling + 0.3 * (objectiveChange ?? 0), -1, 1);
+  const feeling = Number.isInteger(felt) && /** @type {number} */ (felt) >= 1 && /** @type {number} */ (felt) <= 5 ? (/** @type {number} */ (felt) - 3) / 2 : 0;
+  const steps = typeof objectiveChange === "number" && Number.isFinite(objectiveChange) ? clamp(objectiveChange, -1, 1) : 0;
+  return clamp(0.7 * feeling + 0.3 * steps, -1, 1);
 }
 
 /**
@@ -276,6 +281,7 @@ export function makePatient(profileKey, options) {
       previous.felt = previous.tried ? clamp(random.int(3, 5) - (low ? 1 : 0), 1, 5) : null;
       previous.objectiveChange = oriented("steps", stepsChange);
       previous.outcomeScore = outcomeScore(previous.tried, previous.felt, previous.objectiveChange);
+      previous.outcomeCheckInId = checkInId;
     }
 
     const kind = random.pick(profile.suggestionKinds);
@@ -294,6 +300,7 @@ export function makePatient(profileKey, options) {
         felt: null,
         objectiveChange: null,
         outcomeScore: null,
+        outcomeCheckInId: null,
         sharedWithClinician: sharedAt(startedAtMillis + 120_000),
       },
     });

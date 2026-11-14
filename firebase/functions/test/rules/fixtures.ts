@@ -88,6 +88,7 @@ export const suggestion: Suggestion = {
   felt: null,
   objectiveChange: null,
   outcomeScore: null,
+  outcomeCheckInId: null,
   sharedWithClinician: true,
 };
 export const openFlag: Flag = {

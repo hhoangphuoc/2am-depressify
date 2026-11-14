@@ -52,6 +52,41 @@
  */
 
 /**
+ * `patients/{id}/suggestions/{suggestionId}`. The app changes only `status` and `booked`; the Outcome
+ * fields are written by Finish Check-in (#21). Open: `outcomeCheckInId` and `tried` null; "prefer
+ * not to say": `outcomeCheckInId` set, `tried` null; not tried: `tried` false; tried: `tried` true.
+ * @typedef {object} Suggestion
+ * @property {string} id
+ * @property {string} kind a SuggestionKind
+ * @property {string} details
+ * @property {number} suggestedAtMillis
+ * @property {"proposed" | "accepted" | "declined"} status
+ * @property {boolean} booked
+ * @property {boolean | null} tried
+ * @property {number | null} felt 1 to 5, only when tried
+ * @property {number | null} objectiveChange the oriented steps comparison with Baseline on the day it was made
+ * @property {number | null} outcomeScore null until answered and for "prefer not to say"; what "what seems to help" orders by
+ * @property {string | null} outcomeCheckInId the Check-in whose answer recorded the Outcome
+ * @property {boolean} sharedWithClinician
+ */
+
+/** The Suggestion's fields, in contract order. firebase/functions/test/contract.test.ts checks them. */
+export const SUGGESTION_FIELDS = Object.freeze([
+  "id",
+  "kind",
+  "details",
+  "suggestedAtMillis",
+  "status",
+  "booked",
+  "tried",
+  "felt",
+  "objectiveChange",
+  "outcomeScore",
+  "outcomeCheckInId",
+  "sharedWithClinician",
+]);
+
+/**
  * `patients/{id}/digests/{isoWeek}`, for example `2026-W46`. Written by functions only.
  * @typedef {object} Digest
  * @property {string} isoWeek

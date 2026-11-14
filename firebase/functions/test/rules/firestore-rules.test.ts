@@ -561,7 +561,9 @@ describe("Ratings, Voice cues, the crisis marker, the assessment and the Outcome
     { assessment: "unavailable" },
     { previousTried: false },
   ];
-  const OUTCOME: Record<string, unknown>[] = [{ tried: true }, { tried: false }, { felt: 4 }, { objectiveChange: 0.4 }, { outcomeScore: 0.6 }];
+  const OUTCOME: Record<string, unknown>[] = [
+    { tried: true }, { tried: false }, { felt: 4 }, { objectiveChange: 0.4 }, { outcomeScore: 0.6 }, { outcomeCheckInId: "c1" },
+  ];
 
   /** The Patient themselves, and anyone signed in through the demo shortcut, stamped as each shares now. */
   const actors = () => [
@@ -603,6 +605,9 @@ describe("Ratings, Voice cues, the crisis marker, the assessment and the Outcome
       await assertSucceeds(updateDoc(ref, { status: "accepted" }));
       await assertSucceeds(updateDoc(ref, { booked: true }));
       await assertSucceeds(updateDoc(doc(db, samplePath(patientId, "suggestions")), { status: "declined", booked: false }));
+      // An app built before #21 writes no `outcomeCheckInId` at all.
+      const { outcomeCheckInId: _left, ...older } = appCreates("suggestions", shared) as Record<string, unknown>;
+      await assertSucceeds(setDoc(doc(db, `patients/${patientId}/suggestions/s3`), older));
     }
   });
 

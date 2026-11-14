@@ -1,0 +1,709 @@
+{
+  "description": "Shared Outcome fixture (#21): the Outcome score, the ranking of kinds, the Brief's guidance and the Suggestion an answer belongs to. Read by the functions' tests (firebase/functions/src/outcomes.ts), core's Kotlin tests (app.depressify.core.learning) and the seed's tests (outcomeScore only). The rules are described in docs/firestore-schema.md, 'Outcomes and learning what helps'. Compare numbers with an absolute tolerance of `tolerance`; null means no score.",
+  "rule": {
+    "score": "null when tried is null (unanswered, or prefer not to say); -0.1 when tried is false, whatever felt and the steps say; otherwise clamp(0.7 * feeling + 0.3 * clamp(objectiveChange, -1, 1), -1, 1), where feeling = (felt - 3) / 2 for felt 1 to 5 and 0 when not given, and a missing objectiveChange counts as 0",
+    "objectiveChange": "the oriented steps comparison with Baseline on the daily record of the date the Suggestion was made",
+    "rank": "kinds with at least one numeric outcomeScore, by mean descending, then count descending, then contract order of SuggestionKind",
+    "guidance": "preferred = the first 3 of rank; random() is called once; when it is below 0.2, tryNew = the first kind in contract order with no score, else the kind outside preferred with the fewest scores (ties in contract order); otherwise tryNew = null",
+    "target": "the most recent (suggestedAtMillis, then id) accepted Suggestion with suggestedAtMillis before the Check-in started, not in excludeIds, and with no Outcome (outcomeCheckInId null, tried null and outcomeScore null) or with outcomeCheckInId equal to this Check-in; null when there is none",
+    "tolerance": 1e-09
+  },
+  "scores": [
+    {
+      "name": "unknown until the Patient answers",
+      "tried": null,
+      "felt": 5,
+      "objectiveChange": 1.0,
+      "expected": null
+    },
+    {
+      "name": "not tried is slightly negative, whatever the steps",
+      "tried": false,
+      "felt": null,
+      "objectiveChange": 2.0,
+      "expected": -0.1
+    },
+    {
+      "name": "not tried ignores a feeling",
+      "tried": false,
+      "felt": 5,
+      "objectiveChange": null,
+      "expected": -0.1
+    },
+    {
+      "name": "felt 5 with no step change is 0.7",
+      "tried": true,
+      "felt": 5,
+      "objectiveChange": null,
+      "expected": 0.7
+    },
+    {
+      "name": "felt 1 with no step change is -0.7",
+      "tried": true,
+      "felt": 1,
+      "objectiveChange": null,
+      "expected": -0.7
+    },
+    {
+      "name": "felt 3 is neutral; the steps add 0.3 times the change",
+      "tried": true,
+      "felt": 3,
+      "objectiveChange": 0.5,
+      "expected": 0.15
+    },
+    {
+      "name": "tried with no feeling and no step change is 0",
+      "tried": true,
+      "felt": null,
+      "objectiveChange": null,
+      "expected": 0.0
+    },
+    {
+      "name": "tried with no feeling: the steps alone",
+      "tried": true,
+      "felt": null,
+      "objectiveChange": -0.8,
+      "expected": -0.24
+    },
+    {
+      "name": "felt 4 and a step change of 1",
+      "tried": true,
+      "felt": 4,
+      "objectiveChange": 1.0,
+      "expected": 0.65
+    },
+    {
+      "name": "the step change is clamped to 1 before it is weighted",
+      "tried": true,
+      "felt": 5,
+      "objectiveChange": 3.0,
+      "expected": 1.0
+    },
+    {
+      "name": "a large step change cannot turn a bad feeling good",
+      "tried": true,
+      "felt": 1,
+      "objectiveChange": 3.0,
+      "expected": -0.4
+    },
+    {
+      "name": "the step change is clamped to -1 before it is weighted",
+      "tried": true,
+      "felt": 2,
+      "objectiveChange": -2.5,
+      "expected": -0.65
+    },
+    {
+      "name": "a feeling outside 1 to 5 counts as not given",
+      "tried": true,
+      "felt": 7,
+      "objectiveChange": 0.5,
+      "expected": 0.15
+    }
+  ],
+  "rankings": [
+    {
+      "name": "an empty history ranks nothing",
+      "history": [],
+      "expected": []
+    },
+    {
+      "name": "only scored Suggestions count",
+      "history": [
+        {
+          "kind": "walk",
+          "outcomeScore": 0.7
+        },
+        {
+          "kind": "walk",
+          "outcomeScore": null
+        },
+        {
+          "kind": "music",
+          "outcomeScore": null
+        },
+        {
+          "kind": "nature",
+          "outcomeScore": -0.1
+        }
+      ],
+      "expected": [
+        {
+          "kind": "walk",
+          "mean": 0.7,
+          "n": 1
+        },
+        {
+          "kind": "nature",
+          "mean": -0.1,
+          "n": 1
+        }
+      ]
+    },
+    {
+      "name": "by mean, highest first",
+      "history": [
+        {
+          "kind": "walk",
+          "outcomeScore": 0.7
+        },
+        {
+          "kind": "walk",
+          "outcomeScore": 0.5
+        },
+        {
+          "kind": "music",
+          "outcomeScore": 0.65
+        },
+        {
+          "kind": "breathing",
+          "outcomeScore": -0.1
+        },
+        {
+          "kind": "daylight",
+          "outcomeScore": 0.0
+        }
+      ],
+      "expected": [
+        {
+          "kind": "music",
+          "mean": 0.65,
+          "n": 1
+        },
+        {
+          "kind": "walk",
+          "mean": 0.6,
+          "n": 2
+        },
+        {
+          "kind": "daylight",
+          "mean": 0.0,
+          "n": 1
+        },
+        {
+          "kind": "breathing",
+          "mean": -0.1,
+          "n": 1
+        }
+      ]
+    },
+    {
+      "name": "an equal mean is broken by count",
+      "history": [
+        {
+          "kind": "walk",
+          "outcomeScore": 0.35
+        },
+        {
+          "kind": "nature",
+          "outcomeScore": 0.35
+        },
+        {
+          "kind": "nature",
+          "outcomeScore": 0.35
+        }
+      ],
+      "expected": [
+        {
+          "kind": "nature",
+          "mean": 0.35,
+          "n": 2
+        },
+        {
+          "kind": "walk",
+          "mean": 0.35,
+          "n": 1
+        }
+      ]
+    },
+    {
+      "name": "an equal mean and count keeps the kinds' order",
+      "history": [
+        {
+          "kind": "daylight",
+          "outcomeScore": 0.2
+        },
+        {
+          "kind": "music",
+          "outcomeScore": 0.2
+        }
+      ],
+      "expected": [
+        {
+          "kind": "music",
+          "mean": 0.2,
+          "n": 1
+        },
+        {
+          "kind": "daylight",
+          "mean": 0.2,
+          "n": 1
+        }
+      ]
+    }
+  ],
+  "guidance": [
+    {
+      "name": "an empty history with random above 0.2: nothing",
+      "history": [],
+      "random": 0.5,
+      "expected": {
+        "preferred": [],
+        "tryNew": null
+      }
+    },
+    {
+      "name": "an empty history with random below 0.2: the first kind",
+      "history": [],
+      "random": 0.1,
+      "expected": {
+        "preferred": [],
+        "tryNew": "walk"
+      }
+    },
+    {
+      "name": "the top three only; random at 0.2 proposes nothing new",
+      "history": [
+        {
+          "kind": "walk",
+          "outcomeScore": 0.7
+        },
+        {
+          "kind": "nature",
+          "outcomeScore": 0.5
+        },
+        {
+          "kind": "music",
+          "outcomeScore": 0.3
+        },
+        {
+          "kind": "social_call",
+          "outcomeScore": 0.1
+        },
+        {
+          "kind": "breathing",
+          "outcomeScore": -0.1
+        }
+      ],
+      "random": 0.2,
+      "expected": {
+        "preferred": [
+          "walk",
+          "nature",
+          "music"
+        ],
+        "tryNew": null
+      }
+    },
+    {
+      "name": "random below 0.2 proposes the first kind with no score",
+      "history": [
+        {
+          "kind": "walk",
+          "outcomeScore": 0.7
+        },
+        {
+          "kind": "nature",
+          "outcomeScore": 0.5
+        },
+        {
+          "kind": "music",
+          "outcomeScore": 0.3
+        },
+        {
+          "kind": "social_call",
+          "outcomeScore": 0.1
+        },
+        {
+          "kind": "breathing",
+          "outcomeScore": -0.1
+        }
+      ],
+      "random": 0.19,
+      "expected": {
+        "preferred": [
+          "walk",
+          "nature",
+          "music"
+        ],
+        "tryNew": "class_activity"
+      }
+    },
+    {
+      "name": "every kind scored: the least-scored outside the top three",
+      "history": [
+        {
+          "kind": "walk",
+          "outcomeScore": 0.7
+        },
+        {
+          "kind": "nature",
+          "outcomeScore": 0.5
+        },
+        {
+          "kind": "nature",
+          "outcomeScore": 0.5
+        },
+        {
+          "kind": "music",
+          "outcomeScore": 0.3
+        },
+        {
+          "kind": "social_call",
+          "outcomeScore": 0.1
+        },
+        {
+          "kind": "social_call",
+          "outcomeScore": 0.1
+        },
+        {
+          "kind": "social_call",
+          "outcomeScore": 0.1
+        },
+        {
+          "kind": "breathing",
+          "outcomeScore": -0.1
+        },
+        {
+          "kind": "breathing",
+          "outcomeScore": -0.1
+        },
+        {
+          "kind": "class_activity",
+          "outcomeScore": 0.0
+        },
+        {
+          "kind": "class_activity",
+          "outcomeScore": 0.0
+        },
+        {
+          "kind": "daylight",
+          "outcomeScore": 0.2
+        }
+      ],
+      "random": 0.0,
+      "expected": {
+        "preferred": [
+          "walk",
+          "nature",
+          "music"
+        ],
+        "tryNew": "daylight"
+      }
+    },
+    {
+      "name": "an unscored Suggestion does not make its kind tried",
+      "history": [
+        {
+          "kind": "walk",
+          "outcomeScore": 0.5
+        },
+        {
+          "kind": "nature",
+          "outcomeScore": null
+        }
+      ],
+      "random": 0.05,
+      "expected": {
+        "preferred": [
+          "walk"
+        ],
+        "tryNew": "nature"
+      }
+    }
+  ],
+  "targets": [
+    {
+      "name": "the most recent accepted Suggestion without an Outcome",
+      "checkIn": {
+        "id": "c-now",
+        "startedAtMillis": 1000000
+      },
+      "excludeIds": [],
+      "suggestions": [
+        {
+          "id": "s-old",
+          "kind": "walk",
+          "status": "accepted",
+          "suggestedAtMillis": 100,
+          "tried": null,
+          "outcomeScore": null,
+          "outcomeCheckInId": null
+        },
+        {
+          "id": "s-new",
+          "kind": "walk",
+          "status": "accepted",
+          "suggestedAtMillis": 200,
+          "tried": null,
+          "outcomeScore": null,
+          "outcomeCheckInId": null
+        }
+      ],
+      "expected": "s-new"
+    },
+    {
+      "name": "a proposed or declined Suggestion never gets an Outcome",
+      "checkIn": {
+        "id": "c-now",
+        "startedAtMillis": 1000000
+      },
+      "excludeIds": [],
+      "suggestions": [
+        {
+          "id": "s-a",
+          "kind": "walk",
+          "status": "accepted",
+          "suggestedAtMillis": 100,
+          "tried": null,
+          "outcomeScore": null,
+          "outcomeCheckInId": null
+        },
+        {
+          "id": "s-d",
+          "kind": "walk",
+          "status": "declined",
+          "suggestedAtMillis": 300,
+          "tried": null,
+          "outcomeScore": null,
+          "outcomeCheckInId": null
+        },
+        {
+          "id": "s-p",
+          "kind": "walk",
+          "status": "proposed",
+          "suggestedAtMillis": 400,
+          "tried": null,
+          "outcomeScore": null,
+          "outcomeCheckInId": null
+        }
+      ],
+      "expected": "s-a"
+    },
+    {
+      "name": "one another Check-in answered is passed over",
+      "checkIn": {
+        "id": "c-now",
+        "startedAtMillis": 1000000
+      },
+      "excludeIds": [],
+      "suggestions": [
+        {
+          "id": "s-a",
+          "kind": "walk",
+          "status": "accepted",
+          "suggestedAtMillis": 100,
+          "tried": null,
+          "outcomeScore": null,
+          "outcomeCheckInId": null
+        },
+        {
+          "id": "s-b",
+          "kind": "walk",
+          "status": "accepted",
+          "suggestedAtMillis": 200,
+          "tried": true,
+          "outcomeScore": 0.5,
+          "outcomeCheckInId": "c-before"
+        }
+      ],
+      "expected": "s-a"
+    },
+    {
+      "name": "prefer not to say is an Outcome too",
+      "checkIn": {
+        "id": "c-now",
+        "startedAtMillis": 1000000
+      },
+      "excludeIds": [],
+      "suggestions": [
+        {
+          "id": "s-a",
+          "kind": "walk",
+          "status": "accepted",
+          "suggestedAtMillis": 100,
+          "tried": null,
+          "outcomeScore": null,
+          "outcomeCheckInId": null
+        },
+        {
+          "id": "s-b",
+          "kind": "walk",
+          "status": "accepted",
+          "suggestedAtMillis": 200,
+          "tried": null,
+          "outcomeScore": null,
+          "outcomeCheckInId": "c-before"
+        }
+      ],
+      "expected": "s-a"
+    },
+    {
+      "name": "a retried finish finds the one it answered",
+      "checkIn": {
+        "id": "c-now",
+        "startedAtMillis": 1000000
+      },
+      "excludeIds": [],
+      "suggestions": [
+        {
+          "id": "s-a",
+          "kind": "walk",
+          "status": "accepted",
+          "suggestedAtMillis": 100,
+          "tried": null,
+          "outcomeScore": null,
+          "outcomeCheckInId": null
+        },
+        {
+          "id": "s-b",
+          "kind": "walk",
+          "status": "accepted",
+          "suggestedAtMillis": 200,
+          "tried": false,
+          "outcomeScore": -0.1,
+          "outcomeCheckInId": "c-now"
+        }
+      ],
+      "expected": "s-b"
+    },
+    {
+      "name": "an older document with an answer but no outcomeCheckInId has an Outcome",
+      "checkIn": {
+        "id": "c-now",
+        "startedAtMillis": 1000000
+      },
+      "excludeIds": [],
+      "suggestions": [
+        {
+          "id": "s-a",
+          "kind": "walk",
+          "status": "accepted",
+          "suggestedAtMillis": 100,
+          "tried": null,
+          "outcomeScore": null,
+          "outcomeCheckInId": null
+        },
+        {
+          "id": "s-b",
+          "kind": "walk",
+          "status": "accepted",
+          "suggestedAtMillis": 200,
+          "tried": false,
+          "outcomeScore": -0.1,
+          "outcomeCheckInId": null
+        }
+      ],
+      "expected": "s-a"
+    },
+    {
+      "name": "a Suggestion made during this Check-in is not the previous one",
+      "checkIn": {
+        "id": "c-now",
+        "startedAtMillis": 1000000
+      },
+      "excludeIds": [],
+      "suggestions": [
+        {
+          "id": "s-a",
+          "kind": "walk",
+          "status": "accepted",
+          "suggestedAtMillis": 100,
+          "tried": null,
+          "outcomeScore": null,
+          "outcomeCheckInId": null
+        },
+        {
+          "id": "s-now",
+          "kind": "walk",
+          "status": "accepted",
+          "suggestedAtMillis": 1000500,
+          "tried": null,
+          "outcomeScore": null,
+          "outcomeCheckInId": null
+        }
+      ],
+      "expected": "s-a"
+    },
+    {
+      "name": "a Suggestion in this Check-in's draft is left out, even with an earlier clock",
+      "checkIn": {
+        "id": "c-now",
+        "startedAtMillis": 1000000
+      },
+      "excludeIds": [
+        "s-draft"
+      ],
+      "suggestions": [
+        {
+          "id": "s-a",
+          "kind": "walk",
+          "status": "accepted",
+          "suggestedAtMillis": 100,
+          "tried": null,
+          "outcomeScore": null,
+          "outcomeCheckInId": null
+        },
+        {
+          "id": "s-draft",
+          "kind": "walk",
+          "status": "accepted",
+          "suggestedAtMillis": 999000,
+          "tried": null,
+          "outcomeScore": null,
+          "outcomeCheckInId": null
+        }
+      ],
+      "expected": "s-a"
+    },
+    {
+      "name": "the same time is broken by id",
+      "checkIn": {
+        "id": "c-now",
+        "startedAtMillis": 1000000
+      },
+      "excludeIds": [],
+      "suggestions": [
+        {
+          "id": "s-a",
+          "kind": "walk",
+          "status": "accepted",
+          "suggestedAtMillis": 100,
+          "tried": null,
+          "outcomeScore": null,
+          "outcomeCheckInId": null
+        },
+        {
+          "id": "s-b",
+          "kind": "walk",
+          "status": "accepted",
+          "suggestedAtMillis": 100,
+          "tried": null,
+          "outcomeScore": null,
+          "outcomeCheckInId": null
+        }
+      ],
+      "expected": "s-b"
+    },
+    {
+      "name": "nothing to ask about",
+      "checkIn": {
+        "id": "c-now",
+        "startedAtMillis": 1000000
+      },
+      "excludeIds": [],
+      "suggestions": [
+        {
+          "id": "s-d",
+          "kind": "walk",
+          "status": "declined",
+          "suggestedAtMillis": 100,
+          "tried": null,
+          "outcomeScore": null,
+          "outcomeCheckInId": null
+        }
+      ],
+      "expected": null
+    }
+  ]
+}
