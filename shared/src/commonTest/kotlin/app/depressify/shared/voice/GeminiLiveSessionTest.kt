@@ -170,7 +170,7 @@ class GeminiLiveSessionTest {
     }
 
     @Test
-    fun theVoiceSheetsPlaceCardNamesTheNearestPlaceAndOpensItInGoogleMaps() {
+    fun aWalkSuggestionLinksTheNearestPlaceFoundWithItsMinutesOnFoot() {
         gateway.places = listOf(
             NearbyPlace("Karhupuisto", "https://maps.google.com/?cid=1", 350, walkMinutes = 5),
             NearbyPlace("Kaisaniemi Park", "https://maps.google.com/?cid=2", 1400, walkMinutes = 18),

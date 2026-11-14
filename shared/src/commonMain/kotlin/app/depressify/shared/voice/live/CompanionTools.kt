@@ -54,7 +54,7 @@ class CompanionTools(
     private val effects: ToolEffects,
     /** Runs the music generation after the tool has answered; cancelled with the Check-in. */
     private val scope: CoroutineScope,
-    private val location: PatientLocation = PatientLocation.Sample,
+    private val location: PatientLocation,
 ) {
     private var suggestionSeq = 0
     suspend fun dispatch(name: String, args: JsonObject): JsonObject = try {
@@ -246,6 +246,9 @@ class CompanionTools(
         /** "350 m" or "1.2 km". */
         fun distanceLabel(meters: Int): String =
             if (meters < 1000) meters.toString() + " m" else (meters / 1000).toString() + "." + (meters % 1000 / 100) + " km"
+
+        /** "6 min walk", or "350 m away" when the route lookup failed. */
+        fun howFar(place: NearbyPlace): String = place.walkMinutes?.let { "$it min walk" } ?: (distanceLabel(place.distanceMeters) + " away")
 
         /** A short line for the screen while a tool runs. */
         fun label(name: String): String = when (name) {

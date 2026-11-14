@@ -99,7 +99,7 @@ class GeminiLiveSession(
                 val start = checkIns.startCheckIn(id, brief, typed = state.value.muted)
                 checkInId = start.checkInId
                 // This coroutine's scope: music still being made is cancelled with the Check-in.
-                // The same stored location Today's places use; the sample only when the Patient has none.
+                // Today's places come from the stored location too, so both screens suggest the same neighbourhood.
                 val near = patient?.location?.let { PatientLocation(it.label, it.latitude, it.longitude) } ?: PatientLocation.Sample
                 val tools = CompanionTools(patients, checkIns, id, nowMillis, effects, scope = this, location = near)
                 client.run(start.endpoint, start.token, start.model, out) { handle(it, tools, out) }
@@ -180,11 +180,10 @@ class GeminiLiveSession(
                     }
                 }
                 is ToolCard.Places -> {
-                    // The places come nearest first: the card names the one the Companion is told to name.
+                    // The places come nearest first, and the Brief tells the Companion to name the first.
                     val nearest = card.places.firstOrNull()
                     val url = nearest?.mapsUrl ?: card.url
-                    val label = nearest?.let { it.name + " · " + (it.walkMinutes?.let { m -> "$m min walk" } ?: (CompanionTools.distanceLabel(it.distanceMeters) + " away")) }
-                        ?: "Open in Google Maps"
+                    val label = nearest?.let { it.name + " · " + CompanionTools.howFar(it) } ?: "Open in Google Maps"
                     val top = s.suggestions.firstOrNull()
                     if (top != null && top.kind == SuggestionKind.Walk && top.actionUrl == null) {
                         listOf(top.copy(actionUrl = url, actionLabel = label)) + s.suggestions.drop(1)

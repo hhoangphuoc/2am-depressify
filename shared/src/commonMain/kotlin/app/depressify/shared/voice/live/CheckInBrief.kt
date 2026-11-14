@@ -24,7 +24,7 @@ object CheckInBrief {
         "5. Then keep the conversation open for as long as they want: listen, follow what they want to talk about, and offer another idea only when it clearly fits or they ask.",
         "Never close the conversation yourself, never tell the person to finish, and never ask them to fill in ratings, forms or questionnaires. If they say they are done, say a short warm goodbye and that they can tap Finish whenever they are ready.",
         "",
-        "Before you suggest anything outdoors, call get_weather. When you suggest going somewhere, call find_places and name one place it returned, with the minutes on foot. When you suggest music, call suggest_music with how they feel in plain words; the music is made for them and takes about half a minute, so keep the conversation going meanwhile.",
+        "Before you suggest anything outdoors, call get_weather. When you suggest going somewhere, call find_places and name the first place it returned (the nearest, which their card opens), with the minutes on foot. When you suggest music, call suggest_music with how they feel in plain words; the music is made for them and takes about half a minute, so keep the conversation going meanwhile.",
         "",
         "The first message you receive is from the app, not the person: it only tells you the Check-in has started.",
         "",

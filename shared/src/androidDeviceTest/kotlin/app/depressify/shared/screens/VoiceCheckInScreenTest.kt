@@ -25,7 +25,7 @@ class VoiceCheckInScreenTest {
         setContent {
             val vm = remember { PatientViewModel() }
             val scope = rememberCoroutineScope()
-            val playback = remember { MusicPlayback(createClipPlayer(), scope, { false }, {}, {}) }
+            val playback = remember { MusicPlayback(createClipPlayer(), scope, isMuted = { false }, mute = {}, interrupt = {}) }
             DepressifyTheme(night = false) {
                 VoiceCheckInScreen(vm, PatientState(), LiveSnapshot(cards = listOf(weather)), playback) {}
             }

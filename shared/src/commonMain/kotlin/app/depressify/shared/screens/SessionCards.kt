@@ -53,7 +53,7 @@ private fun PlacesSessionCard(card: ToolCard.Places) {
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Column(Modifier.weight(1f)) {
                     Txt(place.name, DepressifyType.bodyStrong, c.ink)
-                    Txt(place.walkMinutes?.let { "$it min walk" } ?: (CompanionTools.distanceLabel(place.distanceMeters) + " away"), DepressifyType.small, c.muted)
+                    Txt(CompanionTools.howFar(place), DepressifyType.small, c.muted)
                 }
                 IconButton(PhosphorIcons.arrowSquareOut, "Open ${place.name} in Google Maps", { uri.openUri(place.mapsUrl) })
             }
