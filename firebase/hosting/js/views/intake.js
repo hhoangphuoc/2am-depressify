@@ -97,7 +97,7 @@ export function mountIntake(container, { patientId, extract, save }) {
   }
 
   function header() {
-    return [el("h3", { id: "intake-heading", text: COPY.heading }), el("p", { class: "muted", text: COPY.about })];
+    return [el("h4", { id: "intake-heading", text: COPY.heading }), el("p", { class: "muted", text: COPY.about })];
   }
 
   function errorLine() {

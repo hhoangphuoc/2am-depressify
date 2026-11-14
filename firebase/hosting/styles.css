@@ -174,3 +174,78 @@ select:focus-visible { outline: 3px solid var(--ink); outline-offset: 2px; }
 .after p { margin-bottom: 4px; }
 .notice-changed { border-left-color: var(--amber-ink); background: var(--amber-bg); color: var(--amber-ink); }
 [aria-disabled="true"] { opacity: 0.6; cursor: progress; }
+
+/* Patient page sections (views/patient.js). Each section stacks its blocks; empty slots take no room. */
+:root {
+  --phase-odd: #eef3f1;
+  --phase-even: #f7f5f0;
+  --mood: #173f45;
+  --phq9: #8a4b00;
+  --phq2: #5b3f8c;
+  --grid: #e3e7e4;
+}
+.section-menu {
+  position: sticky; top: 0; z-index: 1; margin: 0 -16px 16px; padding: 4px 16px;
+  background: var(--paper); border-bottom: 1px solid var(--hairline);
+}
+.section-menu ul { display: flex; flex-wrap: wrap; gap: 0 8px; margin: 0; padding: 0; list-style: none; }
+.section-menu .link { padding: 0 8px; }
+.patient-sections { display: grid; gap: 32px; }
+.patient-section { display: grid; gap: 12px; scroll-margin-top: 64px; }
+.patient-section > h3 { margin: 0; font-size: 1.25rem; }
+.patient-section > h3:focus { outline: none; }
+.patient-section > h3:focus-visible { outline: 3px solid var(--ink); outline-offset: 2px; }
+.section-body { display: grid; gap: 16px; min-width: 0; }
+.slot { min-width: 0; }
+.slot:empty { display: none; }
+/* Intake and Visits side by side when there is room. */
+@media (min-width: 900px) {
+  .section-body-intake-visits { grid-template-columns: 1fr 1fr; align-items: start; }
+}
+.panel h4 { margin: 0; font-size: 1.125rem; }
+.panel h5 { margin: 16px 0 0; font-size: 1rem; }
+
+.attention-row { display: flex; flex-wrap: wrap; align-items: baseline; gap: 12px; }
+
+.tms-prompt { display: grid; gap: 8px; }
+.inline-form { display: grid; gap: 4px; max-width: 320px; }
+.tms-end .actions p { margin: 0; }
+.phase-list { margin: 0; padding-left: 1.25rem; display: grid; gap: 4px; }
+.chart { width: 100%; min-width: 0; overflow: hidden; }
+.timeline-chart { display: block; font-size: 12px; }
+.timeline-chart .phase-band-odd { fill: var(--phase-odd); }
+.timeline-chart .phase-band-even { fill: var(--phase-even); }
+.timeline-chart .phase-label, .timeline-chart .lane-title { fill: var(--ink); font-weight: 600; }
+.timeline-chart .axis-label, .timeline-chart .axis-title, .timeline-chart .lane-empty { fill: var(--ink-muted); }
+.timeline-chart .lane { fill: none; stroke: var(--hairline); }
+.timeline-chart .grid-week, .timeline-chart .grid-value { stroke: var(--grid); }
+.timeline-chart .mood-line { fill: none; stroke: var(--mood); stroke-width: 2; }
+.timeline-chart .mood-point { fill: var(--mood); }
+.timeline-chart .q-phq9 { fill: var(--phq9); }
+.timeline-chart .q-phq2 { fill: var(--phq2); }
+.timeline-chart .q-label { fill: var(--ink); font-weight: 600; }
+.timeline-chart .visit-line { stroke: var(--ink); stroke-width: 1.5; stroke-dasharray: 4 3; }
+details.timeline-data summary { cursor: pointer; min-height: var(--min-target); display: flex; align-items: center; font-weight: 600; }
+details.timeline-data summary:focus-visible { outline: 3px solid var(--ink); outline-offset: 2px; }
+.table-scroll { overflow-x: auto; }
+.table-scroll:focus-visible { outline: 3px solid var(--ink); outline-offset: 2px; }
+.timeline-table caption { text-align: left; padding: 8px 0; color: var(--ink-muted); }
+
+.visit-form { display: grid; gap: 4px; max-width: 360px; }
+fieldset { margin: 8px 0 0; padding: 8px 12px 12px; border: 1px solid var(--hairline); border-radius: 8px; display: grid; gap: 4px; }
+legend { font-weight: 600; padding: 0 4px; }
+.radios { display: flex; flex-wrap: wrap; gap: 0 16px; }
+.radio { display: inline-flex; align-items: center; gap: 8px; min-height: var(--min-target); margin: 0; font-weight: 400; }
+.radio input { width: 20px; height: 20px; min-height: 0; margin: 0; }
+input.score { max-width: 120px; }
+input[disabled] { background: var(--paper); }
+input[aria-invalid="true"] { border-color: var(--danger-text); border-width: 2px; }
+.visit-list { margin: 0; padding: 0; list-style: none; display: grid; gap: 0; }
+.visit-list li { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: var(--min-target); border-bottom: 1px solid var(--hairline); }
+
+/* At phone width the timeline table's rows become cards; each cell names its column. */
+@media (max-width: 600px) {
+  .panel { padding: 16px; }
+  .timeline-table caption { display: block; padding: 8px 16px; }
+  .timeline-table td[data-label]::before { content: attr(data-label) ": "; font-weight: 600; color: var(--ink-muted); }
+}

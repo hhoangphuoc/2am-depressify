@@ -104,6 +104,13 @@ This starts Auth (9099), Firestore (8080), Functions (5001), Hosting (5002) and 
 
 Use only the `demo-twoam` project with the emulators. Do not run `firebase deploy` against it.
 
+### Patient page
+
+A Patient's page (`#/patient/{id}`) has four sections: **Overview** (the Attention flag level and reasons, then the Phase timeline), **Summaries**, **Signals**, and **Intake and Visits**. A menu at the top moves to each section. `firebase/hosting/js/views/patient.js` lists the slots each section has and what a block mounted into one receives.
+
+- **Phase timeline.** Week 1 starts the day after TMS ended. Phases run from the end of TMS to the first Visit, Visit to Visit, and the last Visit to today. The weekly Mood rating (1 to 5, gaps where there is none) and each Questionnaire kind have their own lanes on one axis; "Show the timeline as a table" gives the same data as a table. Without a TMS end date the timeline uses calendar weeks and asks for the date. The arithmetic is in `js/lib/timeline.js`.
+- **Visits.** Under Intake and Visits the Clinician sets the TMS end date and records or edits a Visit with an optional PHQ-2 (0 to 6) or PHQ-9 (0 to 27) score. The date cannot be in the future. Both are written straight to Firestore within the rules; a Visit never changes an Attention flag. A failed save keeps what was typed.
+
 ### Intake
 
 On the dashboard, open a Patient from the list (`#/patient/{id}`) to reach the Intake section. The Clinician pastes the clinical report, reviews and edits the extracted highlights (at most 120 words) and saves them. Two callables do the work, both for the Patient's Clinician only:
