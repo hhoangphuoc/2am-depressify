@@ -1,9 +1,11 @@
-// Music for a Check-in: the callable behind the Companion's suggest_music tool.
+// Music for a Check-in: the callables behind the Companion's suggest_music tool.
 //
-//   generateMusic  {patientId, mood} -> {mimeType: "audio/mpeg", audioBase64, artwork?}
+//   generateMusic       {patientId, mood} -> {mimeType: "audio/mpeg", audioBase64}
+//   generateMusicCover  {patientId, mood} -> {artwork?}
 //
-// It asks Lyria 3.5 for about a minute of calm instrumental music and Nano Banana for optional
-// matching artwork. Only the Companion's short mood description goes to the models, in fixed wording:
+// Lyria 3.5 makes about a minute of calm instrumental music. Nano Banana makes the optional matching
+// cover, asked for only when the Patient opens the listening view. Only the Companion's short mood
+// description goes to the models, in fixed wording:
 // no name, no Intake and no transcript. Storage is off, and nothing is written or logged. The
 // Gemini key is a function secret (ADR 0002). The request and response shapes are the ones
 // recorded in fixtures/spike/music/lyria-3.5.json.
@@ -27,6 +29,9 @@ const ARTWORK_MAX_BASE64_CHARS = 4 * 1024 * 1024;
 export interface MusicClip {
   mimeType: string;
   audioBase64: string;
+}
+
+export interface MusicCover {
   artwork?: { mimeType: string; imageBase64: string };
 }
 
@@ -76,7 +81,7 @@ export function buildArtworkRequest(mood: string) {
 }
 
 /** Only inline, bounded images can travel back in the callable response. */
-function parseArtwork(body: unknown): MusicClip["artwork"] {
+function parseArtwork(body: unknown): MusicCover["artwork"] {
   const response = body as { status?: unknown; steps?: unknown } | null;
   if (response?.status !== undefined && response.status !== "completed") return undefined;
   if (!Array.isArray(response?.steps)) return undefined;
@@ -132,34 +137,27 @@ export interface MusicDeps {
   music: MusicClient;
 }
 
-/** Makes one clip. Reads the Patient only to check the caller; writes nothing. */
-export async function generateMusicHandler(call: IntakeCall, deps: MusicDeps): Promise<MusicClip> {
+/** The trimmed mood, once the caller may act as the Patient. Reads the Patient only to check that. */
+async function checkedMood(name: string, call: IntakeCall, deps: MusicDeps): Promise<{ patientId: string; mood: string }> {
   const auth = requireAuth(call.auth);
-  const { patientId, mood } = parseMusicRequest(call.data);
+  const request = parseMusicRequest(call.data);
   let patient;
   try {
-    patient = await deps.store.getPatient(patientId);
+    patient = await deps.store.getPatient(request.patientId);
   } catch {
-    logger.warn("generateMusic: a read failed", { patientId });
+    logger.warn(name + ": a read failed", { patientId: request.patientId });
     throw new HttpsError("unavailable", "Could not reach your records. Try again.");
   }
-  assertActsAsPatient(patientId, patient, auth);
+  assertActsAsPatient(request.patientId, patient, auth);
+  return request;
+}
+
+/** Makes one clip; writes nothing. */
+export async function generateMusicHandler(call: IntakeCall, deps: MusicDeps): Promise<MusicClip> {
+  const { patientId, mood } = await checkedMood("generateMusic", call, deps);
   let clip: MusicClip | null;
-  let artwork: MusicClip["artwork"];
   try {
-    const [audio, cover] = await Promise.all([
-      deps.music.createInteraction(buildMusicRequest(mood)),
-      (async () => {
-        try {
-          return parseArtwork(await deps.music.createInteraction(buildArtworkRequest(mood)));
-        } catch {
-          // Artwork is optional; provider errors can contain the prompt or image.
-          return undefined;
-        }
-      })(),
-    ]);
-    clip = parseMusic(audio);
-    artwork = cover;
+    clip = parseMusic(await deps.music.createInteraction(buildMusicRequest(mood)));
   } catch (error) {
     // Never log the error or the mood.
     logger.warn("generateMusic: the model call failed", { patientId, status: statusOf(error) });
@@ -170,19 +168,35 @@ export async function generateMusicHandler(call: IntakeCall, deps: MusicDeps): P
     logger.warn("generateMusic: no audio came back", { patientId });
     throw new HttpsError("unavailable", "Could not make the music. Try again.");
   }
-  return artwork ? { ...clip, artwork } : clip;
+  return clip;
 }
 
-/** Builds the callable. Production passes the Admin SDK and Gemini; tests pass fakes. */
+/** Makes the cover for the same mood; writes nothing. The cover is optional, so failures answer without one. */
+export async function generateMusicCoverHandler(call: IntakeCall, deps: MusicDeps): Promise<MusicCover> {
+  const { mood } = await checkedMood("generateMusicCover", call, deps);
+  try {
+    const artwork = parseArtwork(await deps.music.createInteraction(buildArtworkRequest(mood)));
+    return artwork ? { artwork } : {};
+  } catch {
+    // Never log the error: provider errors can contain the prompt or image.
+    return {};
+  }
+}
+
+/** Builds the callables. Production passes the Admin SDK and Gemini; tests pass fakes. */
 export function createMusicFunctions(deps: { store: () => MusicDeps["store"]; music: () => MusicClient }) {
-  const generateMusic = onCall({ secrets: [GEMINI_API_KEY], timeoutSeconds: 120, memory: "512MiB" }, (request) =>
-    safely("generateMusic", () =>
-      generateMusicHandler(callerOf(request), {
-        store: deps.store(),
-        // Built only when the model is called, after the input and caller checks.
-        music: { createInteraction: (body) => deps.music().createInteraction(body) },
-      }),
-    ),
-  );
-  return { generateMusic };
+  const callable = <T>(name: string, handler: (call: IntakeCall, deps: MusicDeps) => Promise<T>) =>
+    onCall({ secrets: [GEMINI_API_KEY], timeoutSeconds: 120, memory: "512MiB" }, (request) =>
+      safely(name, () =>
+        handler(callerOf(request), {
+          store: deps.store(),
+          // Built only when the model is called, after the input and caller checks.
+          music: { createInteraction: (body) => deps.music().createInteraction(body) },
+        }),
+      ),
+    );
+  return {
+    generateMusic: callable("generateMusic", generateMusicHandler),
+    generateMusicCover: callable("generateMusicCover", generateMusicCoverHandler),
+  };
 }

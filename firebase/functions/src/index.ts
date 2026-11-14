@@ -95,8 +95,11 @@ export const { suggestToday } = createSuggestFunctions({
   places: () => fetchPlacesClient(MAPS_API_KEY.value()),
 });
 
-/** Music (the Patient, or anyone signed in on a Demo Patient): about a minute of calm instrumental music from Lyria 3.5. */
-export const { generateMusic } = createMusicFunctions({
+/**
+ * Music (the Patient, or anyone signed in on a Demo Patient): about a minute of calm instrumental
+ * music from Lyria 3.5, and its cover from Nano Banana when the listening view opens.
+ */
+export const { generateMusic, generateMusicCover } = createMusicFunctions({
   store: () => adminCheckInStore(adminDb()),
   music: () => fetchMusicClient(GEMINI_API_KEY.value()),
 });

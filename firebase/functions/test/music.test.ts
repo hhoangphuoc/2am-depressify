@@ -2,7 +2,7 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { API_REVISION, buildArtworkRequest, buildMusicRequest, fetchMusicClient, generateMusicHandler, INTERACTIONS_URL, parseMusic, type MusicClient } from "../src/music";
+import { API_REVISION, buildArtworkRequest, buildMusicRequest, fetchMusicClient, generateMusicCoverHandler, generateMusicHandler, INTERACTIONS_URL, parseMusic, type MusicClient } from "../src/music";
 import { FakeCheckInStore, PATIENT_ID } from "./fakes";
 
 const recorded = JSON.parse(readFileSync(join(__dirname, "..", "..", "..", "fixtures", "spike", "music", "lyria-3.5.json"), "utf8"));
@@ -11,20 +11,21 @@ const imageBlock = { type: "image", mime_type: "image/jpeg", data: "/9j/2Q==" };
 const imageResponse = (block: unknown = imageBlock) => ({ status: "completed", steps: [{ type: "model_output", content: [block] }] });
 
 /** Returns `body`, or throws it when it is an Error, and records what was sent. */
-function music(body: unknown = recorded.response.body, artwork: unknown = imageResponse()) {
+function music(body: unknown = recorded.response.body) {
   const sent: unknown[] = [];
   const client: MusicClient = {
     async createInteraction(request) {
       sent.push(request);
-      const response = sent.length === 1 ? body : artwork;
-      if (response instanceof Error) throw response;
-      return response;
+      if (body instanceof Error) throw body;
+      return body;
     },
   };
   return { client, sent };
 }
 const call = (data: unknown, uid: string | null = PATIENT_ID, fake = music()) =>
   generateMusicHandler({ data, auth: uid ? { uid, token: {} } : undefined }, { store: new FakeCheckInStore(), music: fake.client });
+const coverCall = (data: unknown, uid: string | null = PATIENT_ID, fake = music(imageResponse())) =>
+  generateMusicCoverHandler({ data, auth: uid ? { uid, token: {} } : undefined }, { store: new FakeCheckInStore(), music: fake.client });
 
 describe("generateMusic", () => {
   it("asks Lyria 3.5, storage off, for calm instrumental music around the mood only", () => {
@@ -40,16 +41,16 @@ describe("generateMusic", () => {
     expect(parseMusic({})).toBeNull();
   });
 
-  it("serves the Patient with the trimmed mood", async () => {
+  it("serves the Patient with the trimmed mood, without making a cover", async () => {
     const fake = music();
-    expect(await call(DATA, PATIENT_ID, fake)).toEqual({
-      ...parseMusic(recorded.response.body),
-      artwork: { mimeType: "image/jpeg", imageBase64: imageBlock.data },
-    });
-    expect(fake.sent).toEqual([
-      buildMusicRequest(DATA.mood.trim()),
-      buildArtworkRequest(DATA.mood.trim()),
-    ]);
+    expect(await call(DATA, PATIENT_ID, fake)).toEqual(parseMusic(recorded.response.body));
+    expect(fake.sent).toEqual([buildMusicRequest(DATA.mood.trim())]);
+  });
+
+  it("makes the cover on its own call, from the same musical brief", async () => {
+    const fake = music(imageResponse());
+    expect(await coverCall(DATA, PATIENT_ID, fake)).toEqual({ artwork: { mimeType: "image/jpeg", imageBase64: imageBlock.data } });
+    expect(fake.sent).toEqual([buildArtworkRequest(DATA.mood.trim())]);
   });
 
   it.each(["tired and tense", "quietly hopeful"])("shares the exact musical brief with the cover for %s", (mood) => {
@@ -63,23 +64,6 @@ describe("generateMusic", () => {
     for (const instruction of ["one peaceful nature view", "complement the music's mood", "two or three muted colors", "edge to edge as a full-bleed scene", "Do not draw a border, frame", "open horizon", "No people, faces", "text, logos, photographs or medical claims"]) {
       expect(body.input).toContain(instruction);
     }
-  });
-
-  it("starts both requests before waiting for audio", async () => {
-    let finishAudio!: (body: unknown) => void;
-    let coverStarted = false;
-    const audio = new Promise((resolve) => { finishAudio = resolve; });
-    const result = generateMusicHandler({ data: DATA, auth: { uid: PATIENT_ID, token: {} } }, {
-      store: new FakeCheckInStore(),
-      music: { createInteraction: (body) => {
-        if ((body as { model: string }).model === "lyria-3.5") return audio;
-        coverStarted = true;
-        finishAudio(recorded.response.body);
-        return Promise.resolve(imageResponse());
-      } },
-    });
-    await expect(result).resolves.toHaveProperty("artwork");
-    expect(coverStarted).toBe(true);
   });
 
   it.each([
@@ -99,18 +83,18 @@ describe("generateMusic", () => {
     ["truncated base64", imageResponse({ ...imageBlock, data: "AAA" })],
     ["image URL", imageResponse({ ...imageBlock, data: undefined, uri: "https://example.com/cover.jpg" })],
     ["oversized image", imageResponse({ ...imageBlock, data: "A".repeat(4 * 1024 * 1024 + 4) })],
-  ])("serves audio without artwork for %s", async (_name, artwork) => {
-    expect(await call(DATA, PATIENT_ID, music(recorded.response.body, artwork))).toEqual(parseMusic(recorded.response.body));
+  ])("answers without a cover for %s", async (_name, artwork) => {
+    expect(await coverCall(DATA, PATIENT_ID, music(artwork))).toEqual({});
   });
 
   it.each(["image/jpeg", "image/png", "image/webp"])("accepts %s artwork", async (mimeType) => {
-    const result = await call(DATA, PATIENT_ID, music(recorded.response.body, imageResponse({ ...imageBlock, mime_type: mimeType })));
+    const result = await coverCall(DATA, PATIENT_ID, music(imageResponse({ ...imageBlock, mime_type: mimeType })));
     expect(result.artwork).toEqual({ mimeType, imageBase64: imageBlock.data });
   });
 
   it("accepts artwork at the encoded size limit", async () => {
     const data = "A".repeat(4 * 1024 * 1024);
-    const result = await call(DATA, PATIENT_ID, music(recorded.response.body, imageResponse({ ...imageBlock, data })));
+    const result = await coverCall(DATA, PATIENT_ID, music(imageResponse({ ...imageBlock, data })));
     expect(result.artwork?.imageBase64.length).toBe(data.length);
   });
 
@@ -128,19 +112,18 @@ describe("generateMusic", () => {
     expect(await client.createInteraction(body)).toEqual(imageResponse());
   });
 
-  it("rejects signed-out callers, other users and bad input before calling the model", async () => {
+  it.each([["music", call], ["cover", coverCall]] as const)("rejects signed-out callers, other users and bad input before asking for %s", async (_name, run) => {
     const fake = music();
-    await expect(call(DATA, null, fake)).rejects.toMatchObject({ code: "unauthenticated" });
-    await expect(call(DATA, "someone-else", fake)).rejects.toMatchObject({ code: "permission-denied" });
-    await expect(call({ ...DATA, mood: "" }, PATIENT_ID, fake)).rejects.toMatchObject({ code: "invalid-argument" });
-    await expect(call({ ...DATA, mood: "x".repeat(201) }, PATIENT_ID, fake)).rejects.toMatchObject({ code: "invalid-argument" });
+    await expect(run(DATA, null, fake)).rejects.toMatchObject({ code: "unauthenticated" });
+    await expect(run(DATA, "someone-else", fake)).rejects.toMatchObject({ code: "permission-denied" });
+    await expect(run({ ...DATA, mood: "" }, PATIENT_ID, fake)).rejects.toMatchObject({ code: "invalid-argument" });
+    await expect(run({ ...DATA, mood: "x".repeat(201) }, PATIENT_ID, fake)).rejects.toMatchObject({ code: "invalid-argument" });
     expect(fake.sent).toEqual([]);
   });
 
   it("turns a failed call or a reply without audio into a named error without the mood", async () => {
     const message = "Could not make the music. Try again.";
     await expect(call(DATA, PATIENT_ID, music(Object.assign(new Error("failed for tired"), { status: 429 })))).rejects.toMatchObject({ code: "unavailable", message });
-    await expect(call(DATA, PATIENT_ID, music(new Error("audio failed"), new Error("artwork failed")))).rejects.toMatchObject({ code: "unavailable", message });
     await expect(call(DATA, PATIENT_ID, music({ steps: [] }))).rejects.toMatchObject({ code: "unavailable", message });
   });
 });

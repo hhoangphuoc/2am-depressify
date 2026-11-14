@@ -6,13 +6,12 @@ import kotlin.test.*
 
 class MusicArtworkResponseTest {
     @Test
-    fun decodesGeneratedArtAndRejectsUnsupportedOrBrokenDataWithoutAffectingAudio() {
+    fun decodesGeneratedArtAndRejectsUnsupportedOrBrokenData() {
         val art = Json.decodeFromString<MusicArtworkResponse>("""{"mimeType":"image/jpeg","imageBase64":"AQID"}""")
         assertContentEquals(byteArrayOf(1, 2, 3), art.decode())
         assertNull(art.copy(mimeType = "image/svg+xml").decode())
         assertNull(art.copy(imageBase64 = "%").decode())
         assertNull(art.copy(imageBase64 = "").decode())
         assertNull(art.copy(imageBase64 = "A".repeat(4 * 1024 * 1024 + 4)).decode())
-        assertNull(MusicClip("audio/mpeg", byteArrayOf(1)).artwork)
     }
 }

@@ -190,6 +190,13 @@ class PatientViewModel(
         null
     }
 
+    /** The cover for music made from [mood]; null on demo data, or when none came back in time. */
+    suspend fun musicCover(mood: String): ByteArray? {
+        val id = patientId ?: return null
+        val checkIns = backend?.checkIns ?: return null
+        return attempt(FINISH_TIMEOUT) { checkIns.generateMusicCover(id, mood) }
+    }
+
     /**
      * Runs [onSaved] once the sharing choice is stored; on demo data that is at once. A failed save
      * changes nothing and says so, so the Patient never sees a choice that was not saved.

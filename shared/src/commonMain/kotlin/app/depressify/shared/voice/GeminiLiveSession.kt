@@ -161,7 +161,7 @@ class GeminiLiveSession(
                     val top = s.suggestions.firstOrNull()
                     when {
                         s.suggestions.any { it.opensListening } -> s.suggestions
-                        top != null && top.kind == SuggestionKind.Music -> listOf(top.copy(opensListening = true, actionLabel = "Open listening session")) + s.suggestions.drop(1)
+                        top != null && top.kind == SuggestionKind.Music -> listOf(top.copy(opensListening = true, actionLabel = "Listen")) + s.suggestions.drop(1)
                         else ->
                         listOf(
                             SessionSuggestion(
@@ -169,7 +169,7 @@ class GeminiLiveSession(
                                 kind = SuggestionKind.Music,
                                 title = card.mood.replaceFirstChar { it.uppercase() },
                                 detail = SuggestionKind.Music.detail,
-                                actionLabel = "Open listening session",
+                                actionLabel = "Listen",
                                 opensListening = true,
                             )
                         ) + s.suggestions

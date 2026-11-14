@@ -68,7 +68,7 @@ data class TodaySuggestion(
 data class TodaySuggestions(val location: StoredPatientLocation? = null, val suggestions: List<TodaySuggestion> = emptyList())
 
 /** About a minute of generated music, held in memory only and never saved. */
-class MusicClip(val mimeType: String, val bytes: ByteArray, val artwork: ByteArray? = null)
+class MusicClip(val mimeType: String, val bytes: ByteArray)
 
 /** What a Check-in needs from the backend: the Live token, and the Patient's records the Companion's tools read and write. */
 interface CheckInGateway {
@@ -92,6 +92,9 @@ interface CheckInGateway {
 
     /** About a minute of calm instrumental music matched to [mood], from Lyria. Takes about half a minute. */
     suspend fun generateMusic(patientId: String, mood: String): MusicClip
+
+    /** A square cover for the music made from [mood], from Nano Banana; null when none came back. Takes a few seconds. */
+    suspend fun generateMusicCover(patientId: String, mood: String): ByteArray?
 
     /** The most recent daily records, newest first. */
     suspend fun recentDays(patientId: String, count: Int): List<DailyDoc>

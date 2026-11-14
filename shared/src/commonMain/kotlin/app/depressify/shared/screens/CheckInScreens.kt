@@ -81,6 +81,8 @@ fun CheckInScreen(vm: PatientViewModel, s: PatientState) {
     }
     val lifecycle = LocalLifecycleOwner.current.lifecycle
     var listening by remember { mutableStateOf(false) }
+    // Covers are made only when the listening view opens, and kept only for this Check-in.
+    val covers = remember { mutableStateMapOf<String, ByteArray?>() }
     fun openListening() { playback.enterListening(); listening = true }
     fun closeListening() { playback.leaveListening(); listening = false }
     DisposableEffect(playback, lifecycle) {
@@ -90,7 +92,9 @@ fun CheckInScreen(vm: PatientViewModel, s: PatientState) {
     }
     if (s.typed) TypedCheckInScreen(vm, s, playback, ::openListening) else VoiceCheckInScreen(vm, s, snap, playback, ::openListening)
     if (listening) snap.cards.filterIsInstance<ToolCard.Music>().lastOrNull()?.let { card ->
-        MusicListeningScreen(card, playback, ::closeListening) { vm.live.sendText("Could you try making that music again?") }
+        val wantsCover = !card.failed && card.mood !in covers
+        LaunchedEffect(card.mood, wantsCover) { if (wantsCover) covers[card.mood] = vm.musicCover(card.mood) }
+        MusicListeningScreen(card, covers[card.mood], wantsCover, playback, ::closeListening) { vm.live.sendText("Could you try making that music again?") }
     }
 }
 

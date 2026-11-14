@@ -63,7 +63,10 @@ class FirebaseCheckInGateway(private val db: FirebaseFirestore, private val func
     private data class MusicRequest(val patientId: String, val mood: String)
 
     @Serializable
-    private data class MusicResponse(val mimeType: String, val audioBase64: String, val artwork: MusicArtworkResponse? = null)
+    private data class MusicResponse(val mimeType: String, val audioBase64: String)
+
+    @Serializable
+    private data class CoverResponse(val artwork: MusicArtworkResponse? = null)
 
     private fun patient(patientId: String) = db.collection(Collections.PATIENTS).document(patientId)
 
@@ -103,8 +106,13 @@ class FirebaseCheckInGateway(private val db: FirebaseFirestore, private val func
         val response = functions.httpsCallable("generateMusic", timeout = 120.seconds)
             .invoke(MusicRequest.serializer(), MusicRequest(patientId, mood))
             .data(MusicResponse.serializer())
-        return MusicClip(response.mimeType, Base64.decode(response.audioBase64), response.artwork?.decode())
+        return MusicClip(response.mimeType, Base64.decode(response.audioBase64))
     }
+
+    override suspend fun generateMusicCover(patientId: String, mood: String): ByteArray? =
+        functions.httpsCallable("generateMusicCover", timeout = 60.seconds)
+            .invoke(MusicRequest.serializer(), MusicRequest(patientId, mood))
+            .data(CoverResponse.serializer()).artwork?.decode()
 
     override suspend fun recentDays(patientId: String, count: Int): List<DailyDoc> =
         patient(patientId).collection(Collections.DAILY).orderBy("date", Direction.DESCENDING).limit(count).get()
