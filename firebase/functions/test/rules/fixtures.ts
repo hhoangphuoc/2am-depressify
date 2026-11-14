@@ -22,9 +22,13 @@ import {
   type Visit,
 } from "../../src/types";
 
-/** The demo Clinician: `DemoConfig.CLINICIAN_EMAIL` in `shared`, and the one the rules let a new Patient link to. */
+/** The Clinician in the `clinicians` allowlist, the one the rules let a new Patient link to. */
 export const CLINICIAN = "clinician@example.com";
+/** Bob's Clinician. Not in the allowlist, so no new Patient may link to them. */
 export const OTHER_CLINICIAN = "other-clinician@example.com";
+
+/** An allowlist document, `clinicians/{email}`, as the Admin SDK writes it. */
+export const allowlisted = (email: string) => ({ email });
 
 /** Patient ids. A Patient's id is their anonymous auth uid. */
 export const ALICE = "alice"; // linked to CLINICIAN, sharing granted, amber with one open flag
@@ -183,7 +187,7 @@ export async function startEnv(): Promise<RulesTestEnvironment> {
 
 /**
  * Alice, Bob and a Demo Patient, each with one document in every collection, plus one mail
- * document. Alice also has one document in each stamped collection saved while she was not sharing
+ * document and CLINICIAN in the `clinicians` allowlist. Alice also has one document in each stamped collection saved while she was not sharing
  * (`OFF_PERIOD_ID`, stamped false).
  */
 export async function seed(env: RulesTestEnvironment): Promise<void> {
@@ -198,6 +202,7 @@ export async function seed(env: RulesTestEnvironment): Promise<void> {
       await setDoc(doc(db, `patients/${ALICE}/${sub}/${OFF_PERIOD_ID}`), { ...SAMPLES[sub].data, sharedWithClinician: false });
     }
     await setDoc(doc(db, "mail/m1"), mail);
+    await setDoc(doc(db, "clinicians", CLINICIAN), allowlisted(CLINICIAN));
   });
 }
 

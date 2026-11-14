@@ -41,6 +41,7 @@ patients/{patientId}                 PatientDoc      patientId = the Patient's a
   visits/{visitId}                   Visit           written by the Clinician
   digests/{isoWeek}                  Digest          isoWeek = e.g. 2026-W46
 mail/{autoId}                        MailDoc         written by functions only; read by Trigger Email
+clinicians/{email}                   (allowlist)     the Clinicians a new Patient may link to; Admin SDK only
 ```
 
 ### `patients/{patientId}`: PatientDoc
@@ -48,7 +49,7 @@ mail/{autoId}                        MailDoc         written by functions only; 
 | Field | Type | Default on creation | Notes |
 |---|---|---|---|
 | `displayName` | string | `"Live patient"` (app) | The Clinician may rename. |
-| `clinicianEmail` | string | the demo Clinician (`DemoConfig.CLINICIAN_EMAIL`) | Links the Patient to the Clinician; the dashboard queries on it. |
+| `clinicianEmail` | string | the configured Clinician (`DemoConfig.clinicianEmail`, from `secrets.properties` or the iOS plist) | Links the Patient to the Clinician; the dashboard queries on it. Lower case. On creation it must have a document in [`clinicians`](#cliniciansemail-allowlist). |
 | `intakeHighlights` | string | `""` | Extracted from the Intake, at most 120 words, reviewed by the Clinician. Written only by the `saveIntake` function (Clinician only); no client writes it. The report itself is never stored. |
 | `tmsEndDate` | date string or null | `null` | Set by the Clinician. Week 1 starts the day after. |
 | `flagLevel` | FlagLevel | `green` | The highest uncleared flag stamped `sharedWithClinician: true`. A flag raised while the Patient was not sharing never counts. Never shown to the Patient. |
@@ -200,6 +201,14 @@ The shape the Trigger Email extension reads. Written by functions only.
 | `message.subject` | string | `[CRISIS]` or `[RED]` plus the display name. |
 | `message.text` | string | The reason and a dashboard link. Never a transcript or a quote. |
 
+### `clinicians/{email}`: allowlist
+
+The Clinicians a new Patient may link to, one document per email. The document id is the email in lower case, exactly as the Clinician's sign-in token carries it and as the app writes `clinicianEmail`. The rules only check that the document exists. No client may read or write the collection; it is written with the Admin SDK by `npm run allow-clinician -- --email <addr>` and by the seed (for the Clinician it seeds for). This keeps the real Clinician's email out of the repository. Removing a document stops new Patients linking to that Clinician; Patients already linked keep their link.
+
+| Field | Type | Notes |
+|---|---|---|
+| `email` | string | The same as the document id. |
+
 ## Queries
 
 | Who | Query | Index |
@@ -216,7 +225,7 @@ The list query must carry the sharing filter (built by `clinicianListFilters` in
 
 ## Demo Patients
 
-`firebase/seed` writes three Demo Patients with the Admin SDK: `demo-steady` (green), `demo-declining` (amber flags, then red in the last two days) and `demo-sparse` (seven Check-ins at most, days of missing Signals, amber for low mood). Each has `synthetic: true`, `healthSource: "synthetic"`, `sharingConsent: "granted"`, the demo Clinician, an Intake that begins "Synthetic demo data", 42 daily records ending today, a TMS end date 42 days ago, one Visit 21 days ago with a PHQ-9 score, every Consent granted, and Check-ins with Summaries and Suggestions (most with an Outcome score). Every value is invented. Flags sit on the first morning the spec's starting thresholds hold. Every stamped document is `sharedWithClinician: true`, except that `demo-steady` stopped sharing from 06:00 30 days ago to 06:00 27 days ago: its three daily records, Check-ins, Summaries and Suggestions from that time are stamped `false`, so the dashboard shows a three-day gap; its `sharingChangedAtMillis` and `consents/sharing` are the time it shared again. Document ids are stable: daily records by date, `checkin-<date>` (also the Summary id), `suggestion-<date>`, `<kind>-<date>` for flags and `visit-<date>`.
+`firebase/seed` writes three Demo Patients with the Admin SDK: `demo-steady` (green), `demo-declining` (amber flags, then red in the last two days) and `demo-sparse` (seven Check-ins at most, days of missing Signals, amber for low mood). Each has `synthetic: true`, `healthSource: "synthetic"`, `sharingConsent: "granted"`, the seeded Clinician (`--clinician` or `CLINICIAN_EMAIL`, also added to `clinicians`), an Intake that begins "Synthetic demo data", 42 daily records ending today, a TMS end date 42 days ago, one Visit 21 days ago with a PHQ-9 score, every Consent granted, and Check-ins with Summaries and Suggestions (most with an Outcome score). Every value is invented. Flags sit on the first morning the spec's starting thresholds hold. Every stamped document is `sharedWithClinician: true`, except that `demo-steady` stopped sharing from 06:00 30 days ago to 06:00 27 days ago: its three daily records, Check-ins, Summaries and Suggestions from that time are stamped `false`, so the dashboard shows a three-day gap; its `sharingChangedAtMillis` and `consents/sharing` are the time it shared again. Document ids are stable: daily records by date, `checkin-<date>` (also the Summary id), `suggestion-<date>`, `<kind>-<date>` for flags and `visit-<date>`.
 
 
 ## Security rules
@@ -224,13 +233,13 @@ The list query must carry the sharing filter (built by `clinicianListFilters` in
 [`firebase/firestore.rules`](../firebase/firestore.rules) encodes who may see a Patient's progress: the Patient themselves, their Clinician, and, as a demo shortcut, any signed-in user for a Patient marked `synthetic`. The tests are in [`firebase/functions/test/rules/`](../firebase/functions/test/rules/firestore-rules.test.ts). Functions and the seed use the Admin SDK, which bypasses the rules.
 
 - **Patient**: the anonymous auth uid equal to `patientId`.
-- **Clinician**: a signed-in user whose token email equals the record's `clinicianEmail`, while the record's `sharingConsent` is `granted`. The demo does not require `email_verified` because emulator accounts are unverified; production must.
+- **Clinician**: a signed-in user whose token email equals the record's `clinicianEmail`, while the record's `sharingConsent` is `granted`. A new record may only name a Clinician in the `clinicians` allowlist. The demo does not require `email_verified` because emulator accounts are unverified; production must.
 - **Demo shortcut**: on a record with `synthetic == true`, any signed-in user has the Patient's access, with the Patient's limits.
 
 | | Patient (or anyone on a Demo Patient) | Clinician of the Patient, while sharing is granted | Anyone else signed in | Signed out |
 |---|---|---|---|---|
 | Patient record: read | yes | yes | no | no |
-| Patient record: create | own id only, `clinicianEmail` the demo Clinician, `synthetic` false, `tmsEndDate` null, `intakeHighlights` empty | no | no | no |
+| Patient record: create | own id only, `clinicianEmail` a Clinician in `clinicians`, `synthetic` false, `tmsEndDate` null, `intakeHighlights` empty | no | no | no |
 | Patient record: update | `quietHoursStart`, `quietHoursEnd`, `lastSeenAtMillis`, `lastCheckInAtMillis`, `healthSource`, `sharingConsent` (to `granted` or `declined`, always with a new `sharingChangedAtMillis`), `sharingChangedAtMillis`; `flagLevel` and `flagReasons` only to raise (level never lower, reasons kept) | `displayName`, `tmsEndDate`, and a reset of `flagLevel` and `flagReasons` | no | no |
 | Patient record: delete | no | no | no | no |
 | `daily` | read, write (create stamped as now; the stamp never changes) | read documents stamped `true` | no | no |
@@ -242,6 +251,7 @@ The list query must carry the sharing filter (built by `clinicianListFilters` in
 | `visits` | read | read, create, update, delete | no | no |
 | `digests` | read | read documents stamped `true` | no | no |
 | `mail` | no | no | no | no |
+| `clinicians` | no | no | no | no |
 
 Anything not listed, including a collection outside this schema, is denied. Field owners: `displayName`, `tmsEndDate` and clearing flags belong to the Clinician; `intakeHighlights`, Summaries, a Check-in's ratings, Voice cues and crisis marker, and a Suggestion's Outcome are written by functions only, so what reaches the Clinician is recorded by the app and functions, not edited by hand; `synthetic` and `clinicianEmail` never change after creation from a client; `sharedWithClinician` never changes after creation.
 

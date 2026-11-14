@@ -20,6 +20,9 @@ rules_version = '2';
 //              reasons after follow-up. Nothing else.
 //   Demo       any signed-in user acts as the Patient on a record marked synthetic.
 //   mail       no client access. Functions write it with the Admin SDK, which bypasses rules.
+//   clinicians the allowlist of Clinicians a new Patient may link to, one document per email.
+//              No client access; only the Admin SDK writes it (`npm run allow-clinician` and the
+//              seed in firebase/seed). The real Clinician's email lives there, never in this file.
 //
 // Functions (Finish Check-in, Intake, Digest, silence check) and the seed use the Admin SDK and
 // are not bound by these rules. Everything not matched below is denied.
@@ -85,11 +88,12 @@ service cloud.firestore {
     // Values
     // ---------------------------------------------------------------------------------------
 
-    // The Clinicians a new Patient may link to. V1 has one demo Clinician, DemoConfig.CLINICIAN_EMAIL
-    // in `shared`; functions/test/demo-clinician.test.ts keeps the two in step. The Invite will
-    // replace this list.
-    function linkableClinicians() {
-      return ['clinician@example.com'];
+    // A Clinician a new Patient may link to: their email has a document in the `clinicians`
+    // allowlist. The app's email comes from configuration (secrets.properties on Android, a plist
+    // on iOS) and must match one there. The Invite will replace this.
+    function isLinkableClinician(email) {
+      return email is string
+        && exists(/databases/$(database)/documents/clinicians/$(email));
     }
 
     function flagLevels() {
@@ -112,10 +116,10 @@ service cloud.firestore {
     // The Patient record
     // ---------------------------------------------------------------------------------------
 
-    // A new record as the app writes it (PatientSession): the Patient's own id, linked to a
-    // known Clinician, not synthetic, and with nothing yet in the Clinician's fields.
+    // A new record as the app writes it (PatientSession): the Patient's own id, linked to an
+    // allowlisted Clinician, not synthetic, and with nothing yet in the Clinician's fields.
     function validNewPatient(patient) {
-      return patient.clinicianEmail in linkableClinicians()
+      return isLinkableClinician(patient.clinicianEmail)
         && patient.synthetic == false
         && patient.tmsEndDate == null
         && patient.intakeHighlights == ''
@@ -318,6 +322,12 @@ service cloud.firestore {
 
     // Flag emails for the Trigger Email extension. Written by functions only; no client access.
     match /mail/{mailId} {
+      allow read, write: if false;
+    }
+
+    // The Clinician allowlist, keyed by email. Written with the Admin SDK only; no client may read
+    // it (so it never lists who the Clinicians are) or write it. Rules read it through exists().
+    match /clinicians/{email} {
       allow read, write: if false;
     }
   }

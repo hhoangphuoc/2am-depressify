@@ -2,6 +2,8 @@
 // SDK standing in for both clients: an anonymous Patient creates their record the way the app does,
 // chooses to share, and the Clinician's live list (the dashboard's query) receives it without
 // reloading. Withdrawing sharing removes the Patient from the list and from an open Patient view.
+import { deleteApp as deleteAdminApp, initializeApp as initializeAdminApp } from "firebase-admin/app";
+import { getFirestore as getAdminFirestore } from "firebase-admin/firestore";
 import { deleteApp, initializeApp, type FirebaseApp } from "firebase/app";
 import {
   connectAuthEmulator,
@@ -32,6 +34,7 @@ const PROJECT_ID = "demo-twoam";
 const HOST = "127.0.0.1";
 const CLINICIAN = { email: "clinician@example.com", password: "demo-password-1" };
 const apps: FirebaseApp[] = [];
+const adminApp = initializeAdminApp({ projectId: PROJECT_ID }, "skeleton-admin");
 
 function client(name: string) {
   const app = initializeApp({ projectId: PROJECT_ID, apiKey: "demo-api-key" }, name);
@@ -49,6 +52,8 @@ beforeAll(async () => {
   await fetch(`http://${HOST}:8080/emulator/v1/projects/${PROJECT_ID}/databases/(default)/documents`, { method: "DELETE" });
   const setup = client("setup");
   await createUserWithEmailAndPassword(setup.auth, CLINICIAN.email, CLINICIAN.password);
+  // The Clinician is on the allowlist, as `npm run allow-clinician` (or the seed) puts them there.
+  await getAdminFirestore(adminApp).doc(`clinicians/${CLINICIAN.email}`).set({ email: CLINICIAN.email });
 });
 
 /** The dashboard's Patient list query. */
@@ -88,6 +93,7 @@ function listUntil(db: Firestore, done: (names: string[]) => boolean, seen: stri
 
 afterAll(async () => {
   await Promise.all(apps.map((app) => deleteApp(app)));
+  await deleteAdminApp(adminApp);
 });
 
 describe("walking skeleton", () => {
@@ -98,7 +104,7 @@ describe("walking skeleton", () => {
     const snapshots: string[][] = [];
     const appeared = listUntil(dashboard.db, (names) => names.includes("Live patient"), snapshots);
 
-    // The Patient app: anonymous sign-in, then its own record linked to the demo Clinician. The
+    // The Patient app: anonymous sign-in, then its own record linked to the allowlisted Clinician. The
     // record starts undecided, so the Clinician does not see it yet.
     const phone = client("phone");
     const { user } = await signInAnonymously(phone.auth);

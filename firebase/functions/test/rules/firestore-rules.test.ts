@@ -37,6 +37,7 @@ import {
   STAMPED,
   STRANGER,
   SUBCOLLECTIONS,
+  allowlisted,
   appCreates,
   asClinician,
   asPatient,
@@ -92,7 +93,7 @@ const dashboardQuery = (db: ReturnType<typeof signedOut>, patientId: string, sub
   patientCollectionQuery(FS, db, patientId, sub, ...constraints) as Query;
 
 describe("A Patient reads and writes their own record and its collections, but can only read Visits and Digests", () => {
-  it("creates their own record the way the app does, linked to the demo Clinician, and reads it", async () => {
+  it("creates their own record the way the app does, linked to the allowlisted Clinician, and reads it", async () => {
     const db = asPatient(env, "carol");
     await assertSucceeds(getDoc(doc(db, "patients/carol"))); // PatientSession checks it exists first
     await assertSucceeds(setDoc(doc(db, "patients/carol"), newPatientDoc("Live patient", CLINICIAN)));
@@ -107,6 +108,21 @@ describe("A Patient reads and writes their own record and its collections, but c
     await assertFails(setDoc(doc(db, "patients/carol"), { ...ok, synthetic: true }));
     await assertFails(setDoc(doc(db, "patients/carol"), { ...ok, tmsEndDate: "2026-10-01" }));
     await assertFails(setDoc(doc(db, "patients/carol"), { ...ok, intakeHighlights: "Responds well to walks." }));
+  });
+
+  it("links only to a Clinician in the clinicians allowlist", async () => {
+    const db = asPatient(env, "carol");
+    const linkedTo = (email: unknown) => setDoc(doc(db, "patients/carol"), { ...newPatientDoc("Live patient", CLINICIAN), clinicianEmail: email });
+    await assertFails(linkedTo(OTHER_CLINICIAN));
+    await assertFails(linkedTo("CLINICIAN@example.com")); // the allowlist is keyed by the exact (lower-case) email
+    await assertFails(linkedTo(""));
+    await assertFails(linkedTo(null));
+
+    // Once the Admin SDK adds the other Clinician, a new Patient may link to them.
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), "clinicians", OTHER_CLINICIAN), allowlisted(OTHER_CLINICIAN));
+    });
+    await assertSucceeds(linkedTo(OTHER_CLINICIAN));
   });
 
   it("reads every collection of their own record", async () => {
@@ -661,6 +677,26 @@ describe("The mail collection is not writable or readable by any client", () => 
   });
 });
 
+describe("The clinicians allowlist is not readable or writable by any client", () => {
+  it("no Patient, Clinician, signed-in or signed-out user reads, lists or writes it", async () => {
+    const path = `clinicians/${CLINICIAN}`;
+    for (const db of [asPatient(env, ALICE), asClinician(env, CLINICIAN), asPatient(env, STRANGER), signedOut(env)]) {
+      await assertFails(getDoc(doc(db, path)));
+      await assertFails(getDocs(collection(db, "clinicians")));
+      await assertFails(setDoc(doc(db, path), allowlisted(CLINICIAN)));
+      await assertFails(setDoc(doc(db, "clinicians/attacker@example.com"), allowlisted("attacker@example.com")));
+      await assertFails(updateDoc(doc(db, path), { email: "attacker@example.com" }));
+      await assertFails(deleteDoc(doc(db, path)));
+    }
+  });
+
+  it("a Clinician cannot add themselves and then link a new Patient to themselves", async () => {
+    const intruder = "intruder@example.com";
+    await assertFails(setDoc(doc(asClinician(env, intruder), "clinicians", intruder), allowlisted(intruder)));
+    await assertFails(setDoc(doc(asPatient(env, "carol"), "patients/carol"), newPatientDoc("Live patient", intruder)));
+  });
+});
+
 describe("Signed-out users read nothing", () => {
   it("signedOutReadsNothing: no record, collection, list or Demo Patient", async () => {
     const db = signedOut(env);
@@ -685,6 +721,5 @@ describe("Everything outside the data contract is denied", () => {
     const db = asPatient(env, ALICE);
     await assertFails(setDoc(doc(db, `patients/${ALICE}/notes/n1`), { text: "hello" }));
     await assertFails(getDoc(doc(db, `patients/${ALICE}/notes/n1`)));
-    await assertFails(setDoc(doc(db, "clinicians/c1"), { email: CLINICIAN }));
   });
 });
