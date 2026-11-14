@@ -4,12 +4,14 @@
 import { assertFails, assertSucceeds, initializeTestEnvironment } from "@firebase/rules-unit-testing";
 import { deleteApp, initializeApp } from "firebase-admin/app";
 import { getFirestore } from "firebase-admin/firestore";
-import { collection, getDocs, query, where } from "firebase/firestore";
+import { collection, getDocs, onSnapshot, query, where } from "firebase/firestore";
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { after, before, test } from "node:test";
+import { patientListRows } from "../../../hosting/js/lib/list-row.js";
+import { newestOpenFlagAt } from "../../../hosting/js/lib/sort.js";
 import { demoToday, generateDemoPatients } from "../../src/generate.js";
 import { SEEDED_COLLECTIONS } from "../../src/firestore.js";
 
@@ -97,4 +99,51 @@ test("the Clinician's list query sees all three Demo Patients under the rules", 
 test("a signed-out visitor cannot read the Demo Patients", async () => {
   const visitor = rules.unauthenticatedContext().firestore();
   await assertFails(getDocs(query(collection(visitor, "patients"), where("clinicianEmail", "==", CLINICIAN))));
+});
+
+test("the dashboard list orders them red, amber, green and re-sorts live when a flag changes", async () => {
+  const clinician = rules.authenticatedContext("clinician-uid", { email: CLINICIAN }).firestore();
+  /** @type {Record<string, number | null>} */
+  const latestFlagAt = {};
+  for (const id of DEMO_IDS) {
+    const flags = await getDocs(collection(clinician, "patients", id, "flags"));
+    latestFlagAt[id] = newestOpenFlagAt(/** @type {any[]} */ (flags.docs.map((d) => d.data())));
+  }
+  /** @type {string[][]} */
+  const orders = [];
+  /** @type {(order: string[]) => void} */
+  let onOrder = () => {};
+  const stop = onSnapshot(query(collection(clinician, "patients"), where("clinicianEmail", "==", CLINICIAN)), (snapshot) => {
+    const docs = snapshot.docs.map((d) => ({ id: d.id, data: d.data() }));
+    const order = patientListRows(docs, latestFlagAt, { nowMillis: Date.now() })
+      .map((row) => row.id)
+      .filter((id) => DEMO_IDS.includes(id));
+    orders.push(order);
+    onOrder(order);
+  });
+  /** @param {string[]} expected */
+  const waitFor = (expected) =>
+    new Promise((resolve, reject) => {
+      if (JSON.stringify(orders.at(-1)) === JSON.stringify(expected)) return resolve(undefined);
+      const timeout = setTimeout(() => reject(new Error(`list order never became ${expected}; saw ${JSON.stringify(orders)}`)), 10_000);
+      onOrder = (order) => {
+        if (JSON.stringify(order) === JSON.stringify(expected)) {
+          clearTimeout(timeout);
+          resolve(undefined);
+        }
+      };
+    });
+  try {
+    await waitFor(["demo-declining", "demo-sparse", "demo-steady"]);
+    // A new red flag on the steady Patient, as the phone would raise it: it is now the newest red.
+    const raisedAtMillis = Date.now();
+    await db.doc("patients/demo-steady/flags/inactive-live").set({
+      level: "red", kind: "inactive", reason: "No steps and no screen use for a day.", raisedAtMillis, clearedAtMillis: null,
+    });
+    latestFlagAt["demo-steady"] = raisedAtMillis;
+    await db.doc("patients/demo-steady").update({ flagLevel: "red", flagReasons: ["No steps and no screen use for a day."] });
+    await waitFor(["demo-steady", "demo-declining", "demo-sparse"]);
+  } finally {
+    stop();
+  }
 });
