@@ -549,13 +549,17 @@ describe("Re-consent shares future records only: the Clinician reads only what w
   });
 });
 
-describe("Ratings, Voice cues, the crisis marker and the Outcome are recorded by functions, not edited by hand", () => {
+describe("Ratings, Voice cues, the crisis marker, the assessment and the Outcome are recorded by functions, not edited by hand", () => {
   const RATINGS_AND_MARKERS: Record<string, unknown>[] = [
     { mood: 4 },
     { energy: 1 },
     { sleepQuality: 5 },
     { voiceCues: [{ label: "bright tone", intensity: 1, heard: "laughed" }] },
     { crisis: true },
+    // The sample Check-in holds "assessed" and true, so each of these is a change.
+    { assessment: "unassessed" },
+    { assessment: "unavailable" },
+    { previousTried: false },
   ];
   const OUTCOME: Record<string, unknown>[] = [{ tried: true }, { tried: false }, { felt: 4 }, { objectiveChange: 0.4 }, { outcomeScore: 0.6 }];
 
@@ -574,7 +578,7 @@ describe("Ratings, Voice cues, the crisis marker and the Outcome are recorded by
     }
   });
 
-  it("the Patient cannot set ratings, Voice cues or the crisis marker on a new Check-in", async () => {
+  it("the Patient cannot set ratings, Voice cues, the crisis marker or the assessment on a new Check-in", async () => {
     for (const { db, patientId, shared } of actors()) {
       for (const field of RATINGS_AND_MARKERS) {
         await assertFails(setDoc(doc(db, `patients/${patientId}/checkIns/c2`), { ...appCreates("checkIns", shared), ...field }));
@@ -582,10 +586,10 @@ describe("Ratings, Voice cues, the crisis marker and the Outcome are recorded by
     }
   });
 
-  it("the Patient cannot change the ratings, Voice cues or crisis marker Finish Check-in wrote", async () => {
+  it("the Patient cannot change the ratings, Voice cues, crisis marker or assessment Finish Check-in wrote", async () => {
     for (const { db, patientId } of actors()) {
       const ref = doc(db, samplePath(patientId, "checkIns"));
-      for (const field of [...RATINGS_AND_MARKERS, { mood: null }, { voiceCues: [] }, { id: "other" }]) {
+      for (const field of [...RATINGS_AND_MARKERS, { mood: null }, { voiceCues: [] }, { assessment: null }, { previousTried: null }, { id: "other" }]) {
         await assertFails(updateDoc(ref, field));
       }
       await assertFails(setDoc(ref, { ...checkIn, mood: 5 }));

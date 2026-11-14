@@ -249,10 +249,21 @@ export function makePatient(profileKey, options) {
         ? [{ ...random.pick(CUES[tone]), intensity: low ? random.int(2, 4) : random.int(1, 2) }]
         : [];
     const checkInId = `checkin-${date}`;
-    checkIns.push({
+    /** @type {CheckIn} */
+    const checkIn = {
       id: checkInId,
-      data: { id: checkInId, startedAtMillis, endedAtMillis, ...ratings, voiceCues, crisis: false, sharedWithClinician: sharedAt(startedAtMillis) },
-    });
+      startedAtMillis,
+      endedAtMillis,
+      ...ratings,
+      voiceCues,
+      crisis: false,
+      // As Finish Check-in writes them (#20): the review answered, and whether the previous
+      // Suggestion was tried (set below when there was one to ask about).
+      assessment: "assessed",
+      previousTried: null,
+      sharedWithClinician: sharedAt(startedAtMillis),
+    };
+    checkIns.push({ id: checkInId, data: checkIn });
 
     // Answer the previous Suggestion now, if the Patient accepted it.
     const previous = suggestions.at(-1)?.data ?? null;
@@ -261,6 +272,7 @@ export function makePatient(profileKey, options) {
       const previousD = DAILY_RECORDS - 1 - days.findIndex((day) => day.date === previousDate);
       const stepsChange = valuesByD.get(previousD)?.vsBaseline.steps ?? null;
       previous.tried = random.chance(low ? 0.45 : 0.75);
+      checkIn.previousTried = previous.tried;
       previous.felt = previous.tried ? clamp(random.int(3, 5) - (low ? 1 : 0), 1, 5) : null;
       previous.objectiveChange = oriented("steps", stepsChange);
       previous.outcomeScore = outcomeScore(previous.tried, previous.felt, previous.objectiveChange);

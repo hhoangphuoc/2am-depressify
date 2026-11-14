@@ -104,6 +104,17 @@ enum class ConsentPurpose { sharing, ratings, voice_cues }
 @Serializable
 enum class QuestionnaireKind { phq2, phq9 }
 
+/**
+ * How Finish Check-in's automatic review of a Check-in (the Gemini Decisions API, #20) went. For the
+ * Clinician's dashboard only; the Patient app never shows it.
+ * - [assessed]: the questions were answered; any flag they gave is in `flags`.
+ * - [unassessed]: the safety filter refused to judge it; an amber `unassessed` flag was raised.
+ * - [unavailable]: a timeout or other failure. No flag came from it; the dashboard shows
+ *   "assessment unavailable" beside the last known flag, never a new green.
+ */
+@Serializable
+enum class Assessment { assessed, unassessed, unavailable }
+
 // ---------------------------------------------------------------------------------------------
 // Documents
 // ---------------------------------------------------------------------------------------------
@@ -204,8 +215,9 @@ data class VoiceCue(
  * `patients/{id}/checkIns/{checkInId}`. Ratings are 1 to 5, or null when not given.
  *
  * The app creates the Check-in and owns only its times. The ratings, Voice cues and crisis marker
- * are written by Finish Check-in from the draft, so the app creates them empty (null, empty, false)
- * and never changes them; the security rules enforce it.
+ * are written by Finish Check-in from the draft, and the assessment and previousTried from the
+ * Decisions API, so the app creates them empty (null, empty, false) and never changes them; the
+ * security rules enforce it.
  */
 @Serializable
 data class CheckIn(
@@ -217,6 +229,13 @@ data class CheckIn(
     val sleepQuality: Int? = null,
     val voiceCues: List<VoiceCue> = emptyList(),
     val crisis: Boolean = false,
+    /** How the automatic review went. Null until Finish Check-in, and when the Patient said nothing. */
+    val assessment: Assessment? = null,
+    /**
+     * Whether the Patient tried the previous Suggestion, as the automatic review heard it; null when
+     * unknown. Written by Finish Check-in; the Outcome on the Suggestion (#21) comes from it.
+     */
+    val previousTried: Boolean? = null,
     /** Whether the Patient was sharing when this Check-in was created ([sharingStamp]). Never changes. */
     val sharedWithClinician: Boolean,
 )
