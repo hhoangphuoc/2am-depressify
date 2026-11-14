@@ -51,6 +51,7 @@ class PatientViewModelBackendTest {
     fun firstOpenCreatesThePatientAndAsksForTheSharingChoice() {
         val vm = PatientViewModel(backend, nowMillis = { 42 })
 
+        assertEquals(stored.displayName, vm.ui.value.displayName)
         assertEquals(SharingConsent.undecided, stored.sharingConsent)
         assertEquals(listOf<Route>(Route.Welcome), vm.backStack.toList())
         assertFalse(vm.ui.value.sharing)

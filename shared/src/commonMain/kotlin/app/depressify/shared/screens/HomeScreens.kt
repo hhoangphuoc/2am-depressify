@@ -46,7 +46,7 @@ fun TodayScreen(vm: PatientViewModel, s: PatientState, hour: Int) {
     Page(top = { BrandHeader { vm.showSheet(Sheet.Demo) } }, bottom = { TabBar(Route.Today, vm::selectTab) }, notice = s.notice) {
         if (s.offline) Notice("You’re offline. Saved content is still here.") { TextLink("Reconnect", { vm.applyScenario(Scenario.Everyday) }) }
         Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            Txt(greetingFor(if (night && !isNightHour(hour)) 23 else hour, DemoData.PatientName), DepressifyType.meta, c.muted)
+            Txt(greetingFor(if (night && !isNightHour(hour)) 23 else hour, s.displayName), DepressifyType.meta, c.muted)
             Txt(if (night) "Nights can\nfeel long." else "One small thing\nis enough.", DepressifyType.todayHeadline, c.ink, heading = true)
             Txt(if (night) "I’m here if you want company." else "A few minutes, at your pace.", DepressifyType.bodyLarge, c.muted)
         }

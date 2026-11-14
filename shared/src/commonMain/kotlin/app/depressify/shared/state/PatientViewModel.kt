@@ -57,6 +57,7 @@ data class TypedCheckIn(
 )
 
 data class PatientState(
+    val displayName: String = DemoData.PatientName,
     val scenario: Scenario = Scenario.Everyday,
     val themeMode: ThemeMode = ThemeMode.Auto,
     val sharing: Boolean = true,
@@ -123,7 +124,7 @@ class PatientViewModel(
         // shortcut: one sign of life per app start; the daily job (#26) should repeat it while the app runs.
         attempt { backend.patients.markSeen(started.patientId, nowMillis()) }
         val choice = started.patient.sharingConsent
-        state.update { it.copy(sharing = choice == SharingConsent.granted) }
+        state.update { it.copy(sharing = choice == SharingConsent.granted, displayName = started.patient.displayName) }
         // First open: ask for the sharing choice, unless the Patient has already moved on from a tab root.
         if (choice == SharingConsent.undecided && backStack.size == 1) replaceAll(Route.Welcome)
         loadTodaySuggestions()
@@ -179,7 +180,7 @@ class PatientViewModel(
     fun applyScenario(s: Scenario) {
         live.stop()
         // A signed-in Patient keeps their stored sharing choice; demo data starts from sharing on.
-        state.update { PatientState(scenario = s, themeMode = it.themeMode, sharing = patientId == null || it.sharing, history = if (s == Scenario.NoHistory) emptyList() else DemoData.history, todayLoad = it.todayLoad, today = it.today) }
+        state.update { PatientState(displayName = it.displayName, scenario = s, themeMode = it.themeMode, sharing = patientId == null || it.sharing, history = if (s == Scenario.NoHistory) emptyList() else DemoData.history, todayLoad = it.todayLoad, today = it.today) }
         when (s) {
             Scenario.FirstUse -> replaceAll(Route.Welcome)
             Scenario.MicDeclined -> replaceAll(Route.Today, Route.CheckInIntro)
