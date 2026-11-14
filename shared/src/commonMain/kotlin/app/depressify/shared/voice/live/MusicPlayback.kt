@@ -30,7 +30,29 @@ class MusicPlayback(
     val snapshot = state.asStateFlow()
     private var progress: Job? = null
     private var previousMute: Boolean? = null
+    private var listeningMute: Boolean? = null
     private var generation = 0
+
+    fun enterListening() {
+        if (listeningMute != null) return
+        listeningMute = previousMute ?: isMuted()
+        interrupt()
+        mute(true)
+        pauseCompanionAudio(true)
+    }
+
+    fun leaveListening() {
+        pause()
+        listeningMute?.let { mute(it); pauseCompanionAudio(false) }
+        listeningMute = null
+    }
+
+    fun onBackground() {
+        pause()
+        // Returning from a listening screen must preserve the explicit background mute.
+        if (listeningMute != null) listeningMute = true
+        mute(true)
+    }
 
     fun toggle(clip: MusicClip) {
         if (state.value.clip === clip && state.value.status == PlaybackStatus.Playing) { pause(); return }
@@ -88,5 +110,5 @@ class MusicPlayback(
         state.value = MusicPlaybackState(clip = clip, status = PlaybackStatus.Failed)
     }
 
-    private fun restoreMic() { previousMute?.let { mute(it); pauseCompanionAudio(false) }; previousMute = null }
+    private fun restoreMic() { previousMute?.let { mute(if (listeningMute != null) true else it); pauseCompanionAudio(listeningMute != null) }; previousMute = null }
 }

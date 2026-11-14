@@ -67,6 +67,60 @@ class MusicPlaybackTest {
     }
 
     @Test
+    fun listeningViewWaitsWithoutAutoplayAndRestoresThePreviousMicOnReturn() = runTest {
+        for (initialMute in listOf(false, true)) {
+            val player = Player()
+            var muted = initialMute
+            var audioPaused = false
+            val playback = MusicPlayback(player, backgroundScope, { muted }, { muted = it }, {}, { audioPaused = it })
+            playback.enterListening()
+            playback.enterListening()
+            assertTrue(muted)
+            assertTrue(audioPaused)
+            assertEquals(0, player.starts)
+            playback.leaveListening()
+            assertEquals(initialMute, muted)
+            assertFalse(audioPaused)
+
+            playback.enterListening()
+            playback.toggle(clip)
+            player.ready()
+            player.positionMillis = 12_000
+            playback.pause()
+            assertTrue(muted)
+            assertTrue(audioPaused)
+            playback.leaveListening()
+            assertEquals(initialMute, muted)
+            assertEquals(12_000, playback.snapshot.value.positionMillis)
+            assertEquals(PlaybackStatus.Paused, playback.snapshot.value.status)
+            playback.enterListening()
+            playback.toggle(clip)
+            assertEquals(1, player.resumes)
+            player.done()
+            assertTrue(muted)
+            assertTrue(audioPaused)
+            playback.leaveListening()
+            assertEquals(initialMute, muted)
+        }
+    }
+
+    @Test
+    fun backgroundingPreventsBackFromRestoringAStaleUnmutedState() = runTest {
+        for (startPlaying in listOf(false, true)) {
+            val player = Player()
+            var muted = false
+            val playback = MusicPlayback(player, backgroundScope, { muted }, { muted = it }, {})
+            playback.enterListening()
+            if (startPlaying) { playback.toggle(clip); player.ready() }
+            playback.onBackground()
+            assertTrue(muted)
+            playback.leaveListening()
+            assertTrue(muted)
+            assertNotEquals(PlaybackStatus.Playing, playback.snapshot.value.status)
+        }
+    }
+
+    @Test
     fun lateCallbacksCannotRestartACancelledPlayerOrMuteTheConversation() = runTest {
         val player = Player()
         var muted = false

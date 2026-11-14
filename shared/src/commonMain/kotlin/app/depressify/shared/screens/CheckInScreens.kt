@@ -73,16 +73,22 @@ fun CheckInScreen(vm: PatientViewModel, s: PatientState) {
         MusicPlayback(createClipPlayer(), scope, { vm.live.snapshot.value.muted }, vm.live::setMuted, vm.live::interrupt, vm.live::setCompanionAudioPaused)
     }
     val lifecycle = LocalLifecycleOwner.current.lifecycle
+    var listening by remember { mutableStateOf(false) }
+    fun openListening() { playback.enterListening(); listening = true }
+    fun closeListening() { playback.leaveListening(); listening = false }
     DisposableEffect(playback, lifecycle) {
-        val observer = LifecycleEventObserver { _, event -> if (event == Lifecycle.Event.ON_STOP) { playback.pause(); vm.live.setMuted(true) } }
+        val observer = LifecycleEventObserver { _, event -> if (event == Lifecycle.Event.ON_STOP) playback.onBackground() }
         lifecycle.addObserver(observer)
-        onDispose { lifecycle.removeObserver(observer); playback.stop() }
+        onDispose { lifecycle.removeObserver(observer); playback.stop(); playback.leaveListening(); vm.live.setMuted(true) }
     }
-    if (s.typed) TypedCheckInScreen(vm, s, playback) else VoiceCheckInScreen(vm, s, snap, playback)
+    if (s.typed) TypedCheckInScreen(vm, s, playback, ::openListening) else VoiceCheckInScreen(vm, s, snap, playback, ::openListening)
+    if (listening) snap.cards.filterIsInstance<ToolCard.Music>().lastOrNull()?.let { card ->
+        MusicListeningScreen(card, playback, ::closeListening) { vm.live.sendText("Could you try making that music again?") }
+    }
 }
 
 @Composable
-private fun VoiceCheckInScreen(vm: PatientViewModel, s: PatientState, snap: LiveSnapshot, playback: MusicPlayback) {
+private fun VoiceCheckInScreen(vm: PatientViewModel, s: PatientState, snap: LiveSnapshot, playback: MusicPlayback, onOpenMusic: () -> Unit) {
     val c = Theme.colors
     val state = snap.shownState
     val line = snap.event.speaker?.let { sp -> snap.event.text?.let { TranscriptLine(sp, it) } }
@@ -133,7 +139,7 @@ private fun VoiceCheckInScreen(vm: PatientViewModel, s: PatientState, snap: Live
                 onBook = { vm.showSheet(Sheet.Booking) }, onFinish = vm::finishCheckIn)
         }
         // What the Companion's tool calls found or opened, newest first.
-        SessionToolCards(snap.cards, playback, musicActions = { MusicOfferActions(vm, s, snap, playback) }) { vm.live.sendText("Could you try making that music again?") }
+        SessionToolCards(snap.cards, playback, onOpenMusic, musicActions = { MusicOfferActions(vm, s, snap, playback) })
         if (snap.wrapped) PrimaryButton(if (s.consents[SignalId.Ratings] == true) "Continue to ratings" else "Finish Check-in", vm::finishCheckIn)
         if (snap.transcript.isNotEmpty()) {
             Disclosure("Conversation · ${snap.transcript.size} messages") {
@@ -147,7 +153,7 @@ private fun VoiceCheckInScreen(vm: PatientViewModel, s: PatientState, snap: Live
 }
 
 @Composable
-private fun TypedCheckInScreen(vm: PatientViewModel, s: PatientState, playback: MusicPlayback) {
+private fun TypedCheckInScreen(vm: PatientViewModel, s: PatientState, playback: MusicPlayback, onOpenMusic: () -> Unit) {
     val c = Theme.colors
     val t = s.typedCheckIn
     val snap by vm.live.snapshot.collectAsStateWithLifecycle()
@@ -188,7 +194,7 @@ private fun TypedCheckInScreen(vm: PatientViewModel, s: PatientState, playback: 
                 onBook = { vm.showSheet(Sheet.Booking) }, onFinish = vm::finishCheckIn)
         }
         // What the Companion's tool calls found or made, newest first.
-        if (vm.live.isLive) SessionToolCards(snap.cards, playback, musicActions = { MusicOfferActions(vm, s, snap, playback) }) { vm.sendTyped("Could you try making that music again?") }
+        if (vm.live.isLive) SessionToolCards(snap.cards, playback, onOpenMusic, musicActions = { MusicOfferActions(vm, s, snap, playback) })
         if (t.lines.size > 2) Disclosure("Earlier messages · ${t.lines.size - 2}") {
             t.lines.dropLast(2).forEach { line -> Column {
                 Txt(line.speaker.label, DepressifyType.small, c.muted)
