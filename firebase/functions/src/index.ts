@@ -63,7 +63,7 @@ export const { silenceCheck } = createSilenceFunctions({
 });
 
 /**
- * Check-in (the Patient, or any verified account on a Demo Patient): `startCheckIn` mints the
+ * Check-in (the Patient, or anyone signed in on a Demo Patient): `startCheckIn` mints the
  * single-use Live token and creates the Check-in; `finishCheckIn` writes the Summary and the
  * Check-in's ratings and Voice cues, and drops the transcript.
  */

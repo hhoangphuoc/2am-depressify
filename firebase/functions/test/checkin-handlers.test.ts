@@ -7,16 +7,7 @@ import { finishCheckInHandler, startCheckInHandler } from "../src/checkInFunctio
 import type { CallerAuth } from "../src/clinician";
 import { LIVE_ENDPOINT, LIVE_NEW_SESSION_WINDOW_MS, LIVE_TOKEN_LIFETIME_MS } from "../src/live";
 import { newPatientDoc, type PatientDoc } from "../src/types";
-import {
-  CLINICIAN_EMAIL,
-  FakeCheckInStore,
-  FakeLiveTokens,
-  FakeTextModel,
-  PATIENT_ID,
-  clinicianToken,
-  failingTextModel,
-  verifiedToken,
-} from "./fakes";
+import { CLINICIAN_EMAIL, FakeCheckInStore, FakeLiveTokens, FakeTextModel, PATIENT_ID, failingTextModel } from "./fakes";
 
 const SPIKE = join(__dirname, "..", "..", "..", "fixtures", "spike", "interactions");
 const recorded = JSON.parse(readFileSync(join(SPIKE, "finish-checkin-structured-v1.json"), "utf8"));
@@ -24,6 +15,9 @@ const MODEL_JSON: string = recorded.response.body.steps.find((s: { type: string 
 
 const NOW = 1_763_000_000_000;
 const DEMO_ID = "demo-steady";
+/** A verified email and password account (ADR 0010); the claim makes it a Clinician's. */
+const verifiedToken = (email: string): CallerAuth["token"] => ({ email, email_verified: true, firebase: { sign_in_provider: "password" } });
+const clinicianToken = (email: string): CallerAuth["token"] => ({ ...verifiedToken(email), role: "clinician" });
 const patientAuth: CallerAuth = { uid: PATIENT_ID, token: verifiedToken("patient-1@example.com") };
 const otherAuth: CallerAuth = { uid: "someone-else", token: verifiedToken("someone-else@example.com") };
 const clinicianAuth: CallerAuth = { uid: "clinician-uid", token: clinicianToken(CLINICIAN_EMAIL) };
