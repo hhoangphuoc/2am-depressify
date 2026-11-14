@@ -13,6 +13,10 @@
         android:label="Depressify"
         android:supportsRtl="true"
         android:theme="@style/Theme.Depressify">
+        <!-- The Maps SDK for Android key (maps.apiKey in secrets.properties). Empty means no embedded map. -->
+        <meta-data
+            android:name="com.google.android.geo.API_KEY"
+            android:value="${mapsApiKey}" />
         <activity
             android:name=".MainActivity"
             android:exported="true"

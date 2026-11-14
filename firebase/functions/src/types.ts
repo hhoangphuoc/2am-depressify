@@ -132,6 +132,13 @@ export const STAMPED_COLLECTIONS = [
 // Documents
 // ---------------------------------------------------------------------------------------------
 
+/** A point on the map and what to call it. */
+export interface PatientLocation {
+  label: string;
+  latitude: number;
+  longitude: number;
+}
+
 /** `patients/{patientId}`. The Patient id is the Patient's auth uid. */
 export interface PatientDoc {
   displayName: string;
@@ -154,6 +161,11 @@ export interface PatientDoc {
   synthetic: boolean;
   sharingConsent: SharingConsent;
   sharingChangedAtMillis: number | null;
+  /**
+   * Where Suggest today looks for places near the Patient, or null. Only Demo Patients have one,
+   * an example address written by the seed: a live Patient's location stays on their phone.
+   */
+  location: PatientLocation | null;
 }
 
 /** `patients/{id}/daily/{date}`. `values` and `vsBaseline` hold every SignalKey, null where missing. */
@@ -322,5 +334,6 @@ export function newPatientDoc(displayName: string, clinicianEmail: string): Pati
     synthetic: false,
     sharingConsent: "undecided",
     sharingChangedAtMillis: null,
+    location: null,
   };
 }

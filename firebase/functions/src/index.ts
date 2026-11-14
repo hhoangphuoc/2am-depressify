@@ -10,8 +10,11 @@ import { adminDigestStore, createDigestFunctions } from "./digestFunctions";
 import { healthStatus } from "./health";
 import { adminPatientStore, createIntakeFunctions } from "./intakeFunctions";
 import { fetchLiveTokenClient } from "./live";
+import { MAPS_API_KEY, createMapToolFunctions, fetchMapsClient } from "./mapTool";
+import { createMusicFunctions, fetchMusicClient } from "./music";
 import { REGION } from "./region";
 import { adminSilenceStore, createSilenceFunctions } from "./silenceFunctions";
+import { adminSuggestStore, createSuggestFunctions, fetchPlacesClient } from "./suggestFunctions";
 
 // All functions run in the Firestore database's region (src/region.ts).
 setGlobalOptions({ region: REGION });
@@ -74,4 +77,32 @@ export const { startCheckIn, finishCheckIn } = createCheckInFunctions({
   textModel: () => genaiTextClient(GEMINI_API_KEY.value()),
   decisions: () => fetchDecisionsClient(GEMINI_API_KEY.value()),
   liveTokens: () => fetchLiveTokenClient(GEMINI_API_KEY.value()),
+});
+
+/**
+ * The Map tool (the Patient, or anyone signed in on a Demo Patient): places with walking times, or
+ * the weather, near the location the phone sends, from Maps agent tools.
+ */
+export const { mapTool } = createMapToolFunctions({
+  store: () => adminCheckInStore(adminDb()),
+  maps: () => fetchMapsClient(MAPS_API_KEY.value()),
+});
+
+/**
+ * Suggest today (the Patient, or anyone signed in on a Demo Patient): up to three Suggestions from
+ * the Patient's Context, with real places near them for the ones that mean going somewhere.
+ */
+export const { suggestToday } = createSuggestFunctions({
+  store: () => adminSuggestStore(adminDb()),
+  textModel: () => genaiTextClient(GEMINI_API_KEY.value()),
+  places: () => fetchPlacesClient(MAPS_API_KEY.value()),
+});
+
+/**
+ * Music (the Patient, or anyone signed in on a Demo Patient): about a minute of calm instrumental
+ * music from Lyria 3.5, and its cover from Nano Banana when the listening view opens.
+ */
+export const { generateMusic, generateMusicCover } = createMusicFunctions({
+  store: () => adminCheckInStore(adminDb()),
+  music: () => fetchMusicClient(GEMINI_API_KEY.value()),
 });

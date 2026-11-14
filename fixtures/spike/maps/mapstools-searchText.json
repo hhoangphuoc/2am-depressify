@@ -6,35 +6,121 @@
       "X-Goog-Api-Key": "REDACTED"
     },
     "body": {
-      "textQuery": "quiet park for a short walk near Helsinki city centre",
+      "textQuery": "yoga studio",
       "languageCode": "en",
-      "regionCode": "FI"
+      "locationBias": {
+        "circle": {
+          "center": {
+            "latitude": 60.185,
+            "longitude": 24.8324
+          },
+          "radiusMeters": 3000
+        }
+      }
     }
   },
   "response": {
-    "status": 403,
-    "latencyMs": 117,
+    "status": 200,
     "body": {
-      "error": {
-        "code": 403,
-        "message": "Permission denied on the service.",
-        "status": "PERMISSION_DENIED",
-        "details": [
-          {
-            "@type": "type.googleapis.com/google.rpc.ErrorInfo",
-            "reason": "ACCESS_DENIED",
-            "domain": "googleapis.com",
-            "metadata": {
-              "service": "mapstools.googleapis.com"
-            }
+      "places": [
+        {
+          "place": "places/ChIJdR6fmYP1jUYRYfZKVMby67s",
+          "id": "ChIJdR6fmYP1jUYRYfZKVMby67s",
+          "location": {
+            "latitude": 60.1878332,
+            "longitude": 24.8039369
           },
-          {
-            "@type": "type.googleapis.com/google.rpc.LocalizedMessage",
-            "locale": "en-US",
-            "message": "Permission denied on the service."
+          "googleMapsLinks": {
+            "directionsUrl": "https://www.google.com/maps/dir//''/data=!4m7!4m6!1m1!4e2!1m2!1m1!1s0x468df583999f1e75:0xbbebf2c6544af661!3e0",
+            "placeUrl": "https://www.google.com/maps/place//data=!4m2!3m1!1s0x468df583999f1e75:0xbbebf2c6544af661",
+            "writeAReviewUrl": "https://www.google.com/maps/place//data=!4m3!3m2!1s0x468df583999f1e75:0xbbebf2c6544af661!12e1",
+            "reviewsUrl": "https://www.google.com/maps/place//data=!4m4!3m3!1s0x468df583999f1e75:0xbbebf2c6544af661!9m1!1b1",
+            "photosUrl": "https://www.google.com/maps/place//data=!4m3!3m2!1s0x468df583999f1e75:0xbbebf2c6544af661!10e5"
+          },
+          "attribution": {
+            "title": "Flowel yoga - Google Maps",
+            "url": "https://www.google.com/maps/place//data=!4m2!3m1!1s0x468df583999f1e75:0xbbebf2c6544af661"
           }
-        ]
-      }
+        },
+        {
+          "place": "places/ChIJRS-QrYYLkkYRY3C9KRXq3kk",
+          "id": "ChIJRS-QrYYLkkYRY3C9KRXq3kk",
+          "location": {
+            "latitude": 60.1546802,
+            "longitude": 24.9075637
+          },
+          "googleMapsLinks": {
+            "directionsUrl": "https://www.google.com/maps/dir//''/data=!4m7!4m6!1m1!4e2!1m2!1m1!1s0x46920b86ad902f45:0x49deea1529bd7063!3e0",
+            "placeUrl": "https://www.google.com/maps/place//data=!4m2!3m1!1s0x46920b86ad902f45:0x49deea1529bd7063",
+            "writeAReviewUrl": "https://www.google.com/maps/place//data=!4m3!3m2!1s0x46920b86ad902f45:0x49deea1529bd7063!12e1",
+            "reviewsUrl": "https://www.google.com/maps/place//data=!4m4!3m3!1s0x46920b86ad902f45:0x49deea1529bd7063!9m1!1b1",
+            "photosUrl": "https://www.google.com/maps/place//data=!4m3!3m2!1s0x46920b86ad902f45:0x49deea1529bd7063!10e5"
+          },
+          "attribution": {
+            "title": "Gentle Yoga Studio - Google Maps",
+            "url": "https://www.google.com/maps/place//data=!4m2!3m1!1s0x46920b86ad902f45:0x49deea1529bd7063"
+          }
+        },
+        {
+          "place": "places/ChIJv7oH17z1jUYRNIqsXssHW_I",
+          "id": "ChIJv7oH17z1jUYRNIqsXssHW_I",
+          "location": {
+            "latitude": 60.1890658,
+            "longitude": 24.8059394
+          },
+          "googleMapsLinks": {
+            "directionsUrl": "https://www.google.com/maps/dir//''/data=!4m7!4m6!1m1!4e2!1m2!1m1!1s0x468df5bcd707babf:0xf25b07cb5eac8a34!3e0",
+            "placeUrl": "https://www.google.com/maps/place//data=!4m2!3m1!1s0x468df5bcd707babf:0xf25b07cb5eac8a34",
+            "writeAReviewUrl": "https://www.google.com/maps/place//data=!4m3!3m2!1s0x468df5bcd707babf:0xf25b07cb5eac8a34!12e1",
+            "reviewsUrl": "https://www.google.com/maps/place//data=!4m4!3m3!1s0x468df5bcd707babf:0xf25b07cb5eac8a34!9m1!1b1",
+            "photosUrl": "https://www.google.com/maps/place//data=!4m3!3m2!1s0x468df5bcd707babf:0xf25b07cb5eac8a34!10e5"
+          },
+          "attribution": {
+            "title": "WellStudio - Google Maps",
+            "url": "https://www.google.com/maps/place//data=!4m2!3m1!1s0x468df5bcd707babf:0xf25b07cb5eac8a34"
+          }
+        },
+        {
+          "place": "places/ChIJVwlTtPT1jUYR7IpUNtLJciM",
+          "id": "ChIJVwlTtPT1jUYR7IpUNtLJciM",
+          "location": {
+            "latitude": 60.1947402,
+            "longitude": 24.7671604
+          },
+          "googleMapsLinks": {
+            "directionsUrl": "https://www.google.com/maps/dir//''/data=!4m7!4m6!1m1!4e2!1m2!1m1!1s0x468df5f4b4530957:0x2372c9d236548aec!3e0",
+            "placeUrl": "https://www.google.com/maps/place//data=!4m2!3m1!1s0x468df5f4b4530957:0x2372c9d236548aec",
+            "writeAReviewUrl": "https://www.google.com/maps/place//data=!4m3!3m2!1s0x468df5f4b4530957:0x2372c9d236548aec!12e1",
+            "reviewsUrl": "https://www.google.com/maps/place//data=!4m4!3m3!1s0x468df5f4b4530957:0x2372c9d236548aec!9m1!1b1",
+            "photosUrl": "https://www.google.com/maps/place//data=!4m3!3m2!1s0x468df5f4b4530957:0x2372c9d236548aec!10e5"
+          },
+          "attribution": {
+            "title": "Yoga Nordic Espoo - Google Maps",
+            "url": "https://www.google.com/maps/place//data=!4m2!3m1!1s0x468df5f4b4530957:0x2372c9d236548aec"
+          }
+        },
+        {
+          "place": "places/ChIJI95uhjMKkkYRQgqIetCkK9w",
+          "id": "ChIJI95uhjMKkkYRQgqIetCkK9w",
+          "location": {
+            "latitude": 60.1704297,
+            "longitude": 24.9288476
+          },
+          "googleMapsLinks": {
+            "directionsUrl": "https://www.google.com/maps/dir//''/data=!4m7!4m6!1m1!4e2!1m2!1m1!1s0x46920a33866ede23:0xdc2ba4d07a880a42!3e0",
+            "placeUrl": "https://www.google.com/maps/place//data=!4m2!3m1!1s0x46920a33866ede23:0xdc2ba4d07a880a42",
+            "writeAReviewUrl": "https://www.google.com/maps/place//data=!4m3!3m2!1s0x46920a33866ede23:0xdc2ba4d07a880a42!12e1",
+            "reviewsUrl": "https://www.google.com/maps/place//data=!4m4!3m3!1s0x46920a33866ede23:0xdc2ba4d07a880a42!9m1!1b1",
+            "photosUrl": "https://www.google.com/maps/place//data=!4m3!3m2!1s0x46920a33866ede23:0xdc2ba4d07a880a42!10e5"
+          },
+          "attribution": {
+            "title": "Purna Yoga Helsinki - Google Maps",
+            "url": "https://www.google.com/maps/place//data=!4m2!3m1!1s0x46920a33866ede23:0xdc2ba4d07a880a42"
+          }
+        }
+      ],
+      "summary": "**Flowel yoga** [0] (5.0★ (16)) is a relaxing yoga studio featuring aerial yoga and professional instructors, with free street parking available for visitors.\n\n**Gentle Yoga Studio** [1] (5.0★ (54)) is an inclusive, women-owned yoga studio offering a supportive instructor, shower facilities, and a transgender-safe, LGBTQ+-friendly environment equipped with changing tables.\n\n**WellStudio** [2] (4.8★ (19)) is a women-owned wellness space offering accessible facilities, gender-neutral restrooms, shower amenities, and various options including online classes and onsite services.\n\n**Yoga Nordic Espoo** [3] (4.7★ (28)) is a yoga studio known for its skilled instructors.\n\n**Purna Yoga Helsinki** [4] (5.0★ (49)) is a women-owned yoga studio offering specialized pregnancy yoga classes, a yoga wall, online classes, and onsite services by appointment.",
+      "contentToken": "REDACTED"
     }
   }
 }

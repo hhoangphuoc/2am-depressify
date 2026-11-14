@@ -11,12 +11,15 @@ import app.depressify.core.SignalId
 import app.depressify.core.Summary
 import app.depressify.core.SuggestionKind
 import app.depressify.core.model.SharingConsent
+import app.depressify.core.model.DailyDoc
 import app.depressify.shared.data.PatientBackend
+import app.depressify.shared.data.TodaySuggestions
 import app.depressify.shared.voice.GeminiLiveSession
 import app.depressify.shared.voice.LiveSession
 import app.depressify.shared.voice.Reply
 import app.depressify.shared.voice.ScriptedLiveSession
 import app.depressify.shared.voice.Speaker
+import app.depressify.shared.voice.SuggestionVote
 import app.depressify.shared.voice.TranscriptLine
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
@@ -27,8 +30,10 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.datetime.TimeZone
+import kotlinx.datetime.LocalDate
 import kotlinx.datetime.toLocalDateTime
 import kotlin.time.Clock
+import kotlin.time.Instant
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.seconds
 
@@ -44,6 +49,25 @@ enum class Sheet { Demo, Booking, DeleteSignal, StopSharing, Dialler, Leave, Map
 
 enum class FinishState { Idle, Saving, Failed }
 
+/** Where today's Suggestions stand: [Demo] until a Patient is signed in, then the Suggest today call. */
+enum class TodayLoad { Demo, Loading, Ready, Failed }
+
+enum class HistoryLoad { Demo, Loading, Ready, Failed }
+
+private fun app.depressify.core.model.Summary.forHistory(): Summary {
+    val date = Instant.fromEpochMilliseconds(createdAtMillis).toLocalDateTime(TimeZone.currentSystemDefault()).date
+    return Summary(
+        id = checkInId,
+        date = "${date.day} ${date.month.name.lowercase().replaceFirstChar(Char::uppercase)}",
+        title = suggestion ?: "A moment to check in",
+        text = (themes + sleepLine).filter(String::isNotBlank).joinToString(". ").ifEmpty { "You made space for a Check-in." },
+        ratings = Ratings(mood?.takeIf { it in 1..5 }, energy?.takeIf { it in 1..5 }, sleepQuality?.takeIf { it in 1..5 }),
+        suggestion = null,
+        previousOutcome = null,
+        voiceObservation = voiceCues.firstOrNull()?.label,
+    )
+}
+
 data class TypedCheckIn(
     val lines: List<TranscriptLine> = emptyList(),
     val offer: SuggestionKind? = null,
@@ -53,11 +77,14 @@ data class TypedCheckIn(
 )
 
 data class PatientState(
+    val displayName: String = DemoData.PatientName,
     val scenario: Scenario = Scenario.Everyday,
     val themeMode: ThemeMode = ThemeMode.Auto,
     val sharing: Boolean = true,
     val consents: Map<SignalId, Boolean> = DemoData.consents,
     val history: List<Summary> = DemoData.history,
+    val historyLoad: HistoryLoad = HistoryLoad.Demo,
+    val historyDays: List<DailyDoc> = emptyList(),
     val quietHours: QuietHours = QuietHours.Default,
     val nudges: Boolean = true,
     val typed: Boolean = false,
@@ -69,6 +96,8 @@ data class PatientState(
     val sheet: Sheet? = null,
     val selectedSignal: SignalId = SignalId.Sleep,
     val notice: String? = null,
+    val todayLoad: TodayLoad = TodayLoad.Demo,
+    val today: TodaySuggestions? = null,
 ) {
     val offline get() = scenario == Scenario.Offline
     val hasHistory get() = history.isNotEmpty()
@@ -117,9 +146,39 @@ class PatientViewModel(
         // shortcut: one sign of life per app start; the daily job (#26) should repeat it while the app runs.
         attempt { backend.patients.markSeen(started.patientId, nowMillis()) }
         val choice = started.patient.sharingConsent
-        state.update { it.copy(sharing = choice == SharingConsent.granted) }
+        state.update { it.copy(sharing = choice == SharingConsent.granted, displayName = started.patient.displayName) }
         // First open: ask for the sharing choice, unless the Patient has already moved on from a tab root.
         if (choice == SharingConsent.undecided && backStack.size == 1) replaceAll(Route.Welcome)
+        loadHistory()
+        loadTodaySuggestions()
+    }
+
+    fun loadHistory() {
+        val id = patientId ?: return
+        val checkIns = backend?.checkIns ?: return
+        state.update { it.copy(historyLoad = HistoryLoad.Loading, history = if (it.historyLoad == HistoryLoad.Demo) emptyList() else it.history) }
+        viewModelScope.launch {
+            val summaries = attempt { checkIns.recentSummaries(id, 30) }
+            val days = attempt { checkIns.recentDays(id, 7) }
+            val today = Instant.fromEpochMilliseconds(nowMillis()).toLocalDateTime(TimeZone.currentSystemDefault()).date
+            val since = LocalDate.fromEpochDays(today.toEpochDays() - 6).toString()
+            state.update {
+                it.copy(history = summaries?.map { summary -> summary.forHistory() } ?: it.history,
+                    historyDays = days?.filter { day -> day.date >= since && day.date <= today.toString() } ?: it.historyDays,
+                    historyLoad = if (summaries != null && days != null) HistoryLoad.Ready else HistoryLoad.Failed)
+            }
+        }
+    }
+
+    /** Asks Suggest today for the signed-in Patient's Suggestions; Today shows them, or a way to try again. */
+    fun loadTodaySuggestions() {
+        val id = patientId ?: return
+        val checkIns = backend?.checkIns ?: return
+        state.update { it.copy(todayLoad = TodayLoad.Loading) }
+        viewModelScope.launch {
+            val found = attempt(FINISH_TIMEOUT) { checkIns.suggestToday(id) }?.takeIf { it.suggestions.isNotEmpty() }
+            state.update { it.copy(today = found, todayLoad = if (found != null) TodayLoad.Ready else TodayLoad.Failed) }
+        }
     }
 
     /** Null when the backend throws or does not answer in time. */
@@ -129,6 +188,13 @@ class PatientViewModel(
         throw e
     } catch (e: Exception) {
         null
+    }
+
+    /** The cover for music made from [mood]; null on demo data, or when none came back in time. */
+    suspend fun musicCover(mood: String): ByteArray? {
+        val id = patientId ?: return null
+        val checkIns = backend?.checkIns ?: return null
+        return attempt(FINISH_TIMEOUT) { checkIns.generateMusicCover(id, mood) }
     }
 
     /**
@@ -151,7 +217,7 @@ class PatientViewModel(
 
     fun open(route: Route) { state.update { it.copy(notice = null) }; backStack.add(route) }
     fun back() { if (backStack.size > 1) backStack.removeAt(backStack.lastIndex) }
-    fun selectTab(root: Route) { backStack.clear(); backStack.add(root) }
+    fun selectTab(root: Route) { backStack.clear(); backStack.add(root); if (root == Route.History) loadHistory() }
     private fun replaceAll(vararg routes: Route) { backStack.clear(); backStack.addAll(routes) }
 
     fun showSheet(sheet: Sheet?) = state.update { it.copy(sheet = sheet) }
@@ -161,7 +227,7 @@ class PatientViewModel(
     fun applyScenario(s: Scenario) {
         live.stop()
         // A signed-in Patient keeps their stored sharing choice; demo data starts from sharing on.
-        state.update { PatientState(scenario = s, themeMode = it.themeMode, sharing = patientId == null || it.sharing, history = if (s == Scenario.NoHistory) emptyList() else DemoData.history) }
+        state.update { PatientState(displayName = it.displayName, scenario = s, themeMode = it.themeMode, sharing = patientId == null || it.sharing, history = if (s == Scenario.NoHistory) emptyList() else DemoData.history, todayLoad = it.todayLoad, today = it.today) }
         when (s) {
             Scenario.FirstUse -> replaceAll(Route.Welcome)
             Scenario.MicDeclined -> replaceAll(Route.Today, Route.CheckInIntro)
@@ -234,6 +300,10 @@ class PatientViewModel(
         } else live.respond(reply)
     }
 
+    fun selectSuggestion(id: String) = live.selectSuggestion(id)
+
+    fun voteSuggestion(id: String, vote: SuggestionVote?) = live.voteSuggestion(id, vote)
+
     fun finishCheckIn() {
         live.stop()
         val ratingsOn = state.value.consents[SignalId.Ratings] == true
@@ -288,18 +358,7 @@ class PatientViewModel(
         val saved = attempt(FINISH_TIMEOUT) { live.finish(ratingsLine) }
         if (saved == null) { state.update { it.copy(finish = FinishState.Failed) }; return }
         val snap = live.snapshot.value
-        val rating = { value: Int? -> value?.takeIf { it in 1..5 } }
-        val today = Clock.System.now().toLocalDateTime(TimeZone.currentSystemDefault()).date
-        val summary = Summary(
-            id = saved.checkInId,
-            date = today.day.toString() + " " + today.month.name.lowercase().replaceFirstChar { it.uppercase() },
-            title = saved.suggestion ?: "A moment to check in",
-            text = (saved.themes + saved.sleepLine).filter { it.isNotBlank() }.joinToString(". ").ifEmpty { "You made space for a Check-in." },
-            ratings = Ratings(rating(saved.mood), rating(saved.energy), rating(saved.sleepQuality)),
-            suggestion = snap.offer.takeIf { snap.accepted },
-            previousOutcome = null,
-            voiceObservation = saved.voiceCues.firstOrNull()?.label,
-        )
+        val summary = saved.forHistory().copy(suggestion = snap.offer.takeIf { snap.accepted })
         state.update { it.copy(history = listOf(summary) + it.history.filterNot { h -> h.id == summary.id }, finish = FinishState.Idle) }
         replaceAll(Route.Today, Route.Summary(summary.id))
     }
@@ -339,7 +398,7 @@ class PatientViewModel(
         /** How long sign-in or a Consent write may take before it counts as failed. */
         val BACKEND_TIMEOUT = 15.seconds
 
-        /** Finish Check-in waits on the text model, which the function gives 40 seconds. */
+        /** Finish Check-in and Suggest today wait on the text model, which the functions give 40 seconds. */
         val FINISH_TIMEOUT = 60.seconds
     }
 }

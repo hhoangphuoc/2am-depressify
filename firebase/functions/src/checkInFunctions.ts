@@ -243,7 +243,7 @@ export function adminCheckInStore(db: Firestore): CheckInStore {
   };
 }
 
-async function readOrUnavailable<T>(name: string, ids: Record<string, string>, read: () => Promise<T>): Promise<T> {
+export async function readOrUnavailable<T>(name: string, ids: Record<string, string>, read: () => Promise<T>): Promise<T> {
   try {
     return await read();
   } catch {

@@ -102,6 +102,8 @@ val SuggestionKind?.icon: ImageVector
         SuggestionKind.Walk -> PhosphorIcons.personSimpleWalk
         SuggestionKind.Window -> PhosphorIcons.sunHorizon
         SuggestionKind.Music -> PhosphorIcons.musicNotes
+        SuggestionKind.Read -> PhosphorIcons.bookOpen
+        SuggestionKind.Game -> PhosphorIcons.gameController
         SuggestionKind.Call -> PhosphorIcons.phone
         null -> PhosphorIcons.chatCircle
     }

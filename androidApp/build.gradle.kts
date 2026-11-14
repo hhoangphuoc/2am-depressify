@@ -57,6 +57,8 @@ android {
         buildConfigField("String", "CLINICIAN_EMAIL", quoted(clinicianEmail))
         // Optional: act as a seeded Demo Patient (for example demo-declining) instead of the phone's own Patient.
         buildConfigField("String", "DEMO_PATIENT_ID", quoted(secret("demo.patientId", "")))
+        // Optional: the Maps SDK for Android key, restricted to this app. Without it Today lists places with no map.
+        manifestPlaceholders["mapsApiKey"] = secret("maps.apiKey", "")
     }
     buildTypes {
         debug {
