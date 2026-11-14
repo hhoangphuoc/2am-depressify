@@ -4,6 +4,8 @@ import androidx.compose.ui.window.ComposeUIViewController
 import app.depressify.shared.data.PatientBackend
 import app.depressify.shared.data.firebase.FirebaseEmulators
 import app.depressify.shared.data.firebase.firebasePatientBackend
+import app.depressify.shared.state.DevicePreferences
+import platform.Foundation.NSUserDefaults
 import platform.UIKit.UIViewController
 
 private var backend: PatientBackend? = null
@@ -21,4 +23,9 @@ fun startBackend(emulatorHost: String?, clinicianEmail: String, demoPatientId: S
 
 /** Entry point for the SwiftUI host. The callback lets SwiftUI match the status bar to the night theme. */
 fun MainViewController(onNightChange: (Boolean) -> Unit): UIViewController =
-    ComposeUIViewController { DepressifyApp(backend, onNightChange) }
+    ComposeUIViewController { DepressifyApp(backend, UserDefaultsPreferences, onNightChange) }
+
+private object UserDefaultsPreferences : DevicePreferences {
+    override fun read(key: String) = NSUserDefaults.standardUserDefaults.stringForKey(key)
+    override fun write(key: String, value: String) = NSUserDefaults.standardUserDefaults.setObject(value, key)
+}

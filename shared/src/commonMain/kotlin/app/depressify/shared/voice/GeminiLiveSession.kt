@@ -214,7 +214,7 @@ class GeminiLiveSession(
                 val item = SessionSuggestion(
                     id = suggestion.id,
                     kind = uiKind,
-                    title = uiKind.defaultCardTitle(),
+                    title = uiKind.title,
                     detail = suggestion.details.ifBlank { uiKind.detail },
                     actionUrl = pendingTool?.actionUrl,
                     actionLabel = pendingTool?.actionLabel,
@@ -233,12 +233,13 @@ class GeminiLiveSession(
         override fun crisis() { crisis = true; onCrisis() }
     }
 
-    override suspend fun finish(): Summary? {
+    override suspend fun finish(ratingsLine: String?): Summary? {
         val id = patient
         val checkIn = checkInId
         if (scripted || id == null || checkIn == null) return null
         val snap = state.value
-        val turns = snap.transcript.map { DraftTurn(fromPatient = it.speaker == Speaker.You, text = it.text) }
+        val turns = snap.transcript.map { DraftTurn(fromPatient = it.speaker == Speaker.You, text = it.text) } +
+            listOfNotNull(ratingsLine?.let { DraftTurn(fromPatient = true, text = it) })
         val chosenId = acceptedSuggestionId
         val hasExactChosen = chosenId != null && offered.any { it.id == chosenId }
         val suggestions = offered.mapIndexed { i, s ->

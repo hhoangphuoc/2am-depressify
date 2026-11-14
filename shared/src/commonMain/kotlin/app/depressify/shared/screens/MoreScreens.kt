@@ -147,6 +147,7 @@ private fun RatingChart(label: String, week: List<Pair<String, Int?>>) {
     }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun SettingsScreen(vm: PatientViewModel, s: PatientState) {
     val c = Theme.colors
@@ -157,6 +158,10 @@ fun SettingsScreen(vm: PatientViewModel, s: PatientState) {
             ListRow("Quiet hours", s.quietHours.start.label() + "–" + s.quietHours.end.label(), { vm.open(Route.QuietHours) })
             ListRow("Sharing & privacy", if (s.sharing) "Sharing with your Clinician" else "Sharing is off", { vm.open(Route.Privacy) })
             ListRow("Support", null, { vm.open(Route.Support) })
+        }
+        Txt("Appearance", DepressifyType.titleSmall, c.ink, heading = true)
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            ThemeMode.entries.forEach { m -> ChoicePill(m.label, s.themeMode == m, { vm.setThemeMode(m) }) }
         }
         Txt("A little support, on your terms.", DepressifyType.meta, c.muted)
         TextLink("Explore prototype states", { vm.showSheet(Sheet.Demo) })

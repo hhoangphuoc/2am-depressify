@@ -50,6 +50,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
@@ -373,7 +374,8 @@ fun SuggestionsBottomModal(
                 onOpenMusic = onOpenMusic,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(268.dp)
+                    // Larger text needs a taller card, or the buttons at its foot lose their words.
+                    .height(268.dp + 160.dp * (density.fontScale - 1f).coerceIn(0f, 1f))
                     .padding(horizontal = 20.dp),
             )
 
@@ -808,20 +810,23 @@ private fun MinimalSuggestionCard(
                         overflow = TextOverflow.Ellipsis,
                     )
                     if (isFront && item.actionLabel != null && (item.actionUrl != null || item.opensListening)) {
+                        // One line with the icon first, so a long place name ends in an ellipsis instead of wrapping into the buttons.
                         Row(
                             modifier = Modifier
-                                .clip(CircleShape)
+                                .clip(RoundedCornerShape(8.dp))
                                 .clickable(role = Role.Button) { if (item.opensListening) onOpenMusic() else item.actionUrl?.let(uriHandler::openUri) }
-                                .padding(top = 2.dp, bottom = 2.dp),
+                                .padding(vertical = 2.dp),
                             verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(5.dp),
+                            horizontalArrangement = Arrangement.spacedBy(6.dp),
                         ) {
+                            if (item.opensListening) Icon(PhosphorIcons.play, 14.dp, c.accent)
+                            else Icon(PhosphorIcons.navigationArrow, 14.dp, c.accent, modifier = Modifier.rotate(90f))
                             Txt(
                                 text = item.actionLabel,
                                 style = DepressifyType.small.copy(fontWeight = FontWeight.SemiBold),
                                 color = c.accent,
+                                maxLines = 1,
                             )
-                            Icon(if (item.opensListening) PhosphorIcons.play else PhosphorIcons.arrowSquareOut, 14.dp, c.accent)
                         }
                     }
                 }

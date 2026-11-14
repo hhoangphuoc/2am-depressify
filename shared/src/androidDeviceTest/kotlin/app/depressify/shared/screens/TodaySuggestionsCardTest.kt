@@ -2,6 +2,8 @@ package app.depressify.shared.screens
 
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.assertCountEquals
+import androidx.compose.ui.test.assertHasClickAction
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithText
@@ -38,5 +40,12 @@ class TodaySuggestionsCardTest {
         onNodeWithText("1.1 km away").assertIsDisplayed()
         onNodeWithText("556 m away").assertIsDisplayed()
         onAllNodesWithText("Elisabeth Kochin tie 1, 00550 Helsinki").assertCountEquals(0)
+    }
+
+    @Test
+    fun eachPlaceOpensWalkingDirectionsFromANavigationIcon() = runComposeUiTest {
+        setContent { DepressifyTheme(night = false) { TodaySuggestionsCard(PatientState(today = today), onRetry = {}) } }
+        onNodeWithContentDescription("Walking directions to Vallila Community Garden in Google Maps").assertHasClickAction()
+        onAllNodesWithText("Google Maps").assertCountEquals(0)
     }
 }

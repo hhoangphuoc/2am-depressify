@@ -16,4 +16,12 @@ class TodayPlaceTest {
         assertEquals(556, place(60.0, 25.01).metersFrom(home))
         assertEquals(0, place(60.0, 25.0).metersFrom(home))
     }
+
+    @Test
+    fun directionsWalkToTheExactPlace() {
+        assertEquals(
+            "https://www.google.com/maps/dir/?api=1&destination=60.0%2C25.0&destination_place_id=p&travelmode=walking",
+            place(60.0, 25.0).walkingDirectionsUrl,
+        )
+    }
 }

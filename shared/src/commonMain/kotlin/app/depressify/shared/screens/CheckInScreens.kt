@@ -448,6 +448,26 @@ private fun Composer(onSend: (String) -> Unit, onVoice: (() -> Unit)?) {
 }
 
 @Composable
+fun RatingsScreen(vm: PatientViewModel, s: PatientState) {
+    val c = Theme.colors
+    val step = s.ratingStep
+    val value = when (step) { 0 -> s.ratings.mood; 1 -> s.ratings.energy; else -> s.ratings.sleepQuality }
+    Page(top = { TopBar("Your ratings", null) }) {
+        Spacer(Modifier.height(24.dp))
+        Txt("Before you go · " + (step + 1) + " of 3", DepressifyType.meta, c.muted)
+        Txt(listOf("How is your mood?", "How is your energy?", "How was your sleep?")[step], DepressifyType.title, c.ink, heading = true)
+        Txt("Just how it feels to you.", DepressifyType.body)
+        RatingRow(value, { vm.rate(it) }, if (step == 2) "Very poor" else "Very low", if (step == 1) "Very high" else "Very good", listOf("Mood", "Energy", "Sleep quality")[step])
+        Spacer(Modifier.height(12.dp))
+        PrimaryButton(if (step < 2) "Continue" else "Make my Summary", vm::nextRating, enabled = value != null)
+        Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
+            TextLink("Skip this question", { vm.rate(null); vm.nextRating() })
+            if (step > 0) TextLink("Previous question", vm::previousRating)
+        }
+    }
+}
+
+@Composable
 fun FinishingScreen(vm: PatientViewModel, s: PatientState) {
     val c = Theme.colors
     val saving = s.finish == FinishState.Saving

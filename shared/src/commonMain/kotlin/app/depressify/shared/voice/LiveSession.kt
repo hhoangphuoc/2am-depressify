@@ -126,10 +126,11 @@ interface LiveSession {
     fun sendText(text: String) {}
 
     /**
-     * Hands a live Check-in to Finish Check-in and returns the Summary it wrote. Null when the
-     * Check-in was the script. Throws when the finish fails; calling again retries the same Check-in.
+     * Hands a live Check-in to Finish Check-in and returns the Summary it wrote; [ratingsLine] is
+     * what the Patient rated on screen, in words. Null when the Check-in was the script. Throws when
+     * the finish fails; calling again retries the same Check-in.
      */
-    suspend fun finish(): app.depressify.core.model.Summary? = null
+    suspend fun finish(ratingsLine: String?): app.depressify.core.model.Summary? = null
 }
 
 object LiveScript {

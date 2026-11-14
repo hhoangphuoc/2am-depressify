@@ -10,6 +10,7 @@ import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import app.depressify.shared.DepressifyApp
 import app.depressify.shared.data.firebase.firebasePatientBackend
+import app.depressify.shared.state.DevicePreferences
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -25,9 +26,14 @@ class MainActivity : ComponentActivity() {
             preferences.edit().putString(DEMO_PATIENT_EXTRA, selected).apply()
             firebasePatientBackend(BuildConfig.CLINICIAN_EMAIL, selected)
         } else (application as DepressifyApplication).backend
+        val settings = getSharedPreferences("settings", MODE_PRIVATE)
+        val preferences = object : DevicePreferences {
+            override fun read(key: String) = settings.getString(key, null)
+            override fun write(key: String, value: String) = settings.edit().putString(key, value).apply()
+        }
         setContent {
-            // The app picks its own night theme by local time, so the system bar icons follow it.
-            DepressifyApp(backend = backend, onNightChange = { night ->
+            // The app picks its own night theme (by local time or the Patient's choice), so the system bar icons follow it.
+            DepressifyApp(backend = backend, preferences = preferences, onNightChange = { night ->
                 val style = if (night) SystemBarStyle.dark(Color.TRANSPARENT)
                 else SystemBarStyle.light(Color.TRANSPARENT, Color.TRANSPARENT)
                 enableEdgeToEdge(statusBarStyle = style, navigationBarStyle = style)
