@@ -13,6 +13,7 @@ import app.depressify.core.BookingPlan
 import app.depressify.core.LocalMinutes
 import app.depressify.core.isNightHour
 import app.depressify.shared.screens.*
+import app.depressify.shared.session.PatientBackend
 import app.depressify.shared.state.*
 import app.depressify.shared.ui.*
 import app.depressify.shared.ui.theme.DayColors
@@ -23,7 +24,7 @@ import app.depressify.shared.ui.theme.DepressifyType
 /** Patient app root, shared by Android and iOS. [onNightChange] lets each platform match its system bars. */
 @Composable
 fun DepressifyApp(onNightChange: (Boolean) -> Unit = {}) {
-    val vm = viewModel { PatientViewModel() }
+    val vm = viewModel { PatientViewModel(PatientBackend.fromKoinOrNull()) }
     val s by vm.ui.collectAsStateWithLifecycle()
     val hour = remember { localHour() }
     val night = when (s.themeMode) { ThemeMode.Auto -> isNightHour(hour); ThemeMode.Day -> false; ThemeMode.Night -> true }

@@ -10,6 +10,16 @@ import app.depressify.core.Ratings
 import app.depressify.core.SignalId
 import app.depressify.core.Summary
 import app.depressify.core.SuggestionKind
+import app.depressify.core.model.ConsentPurpose
+import app.depressify.core.model.SharingConsent
+import app.depressify.shared.session.PatientBackend
+import app.depressify.shared.session.PatientStartup
+import app.depressify.shared.session.StartedPatient
+import app.depressify.shared.session.StartupState
+import app.depressify.shared.sharing.PurposesState
+import app.depressify.shared.sharing.SharingAction
+import app.depressify.shared.sharing.SharingController
+import app.depressify.shared.sharing.SharingState
 import app.depressify.shared.voice.LiveSession
 import app.depressify.shared.voice.Reply
 import app.depressify.shared.voice.ScriptedLiveSession
@@ -63,7 +73,13 @@ data class PatientState(
     val hasHistory get() = history.isNotEmpty()
 }
 
-class PatientViewModel : ViewModel() {
+/**
+ * The Patient app's state. With a [backend] (the app as installed), start-up signs the Patient in and
+ * creates their record, and the sharing choice and the ratings and Voice observations Consents are
+ * saved through it. Everything else still runs on [DemoData]. Without one (previews, tests) the
+ * whole app runs on [DemoData].
+ */
+class PatientViewModel(private val backend: PatientBackend? = null) : ViewModel() {
     private val state = MutableStateFlow(PatientState())
     val ui: StateFlow<PatientState> = state.asStateFlow()
 
@@ -84,6 +100,7 @@ class PatientViewModel : ViewModel() {
     fun applyScenario(s: Scenario) {
         live.stop()
         state.update { PatientState(scenario = s, themeMode = it.themeMode, history = if (s == Scenario.NoHistory) emptyList() else DemoData.history) }
+        sharingController?.let { mirror(it.state.value, quiet = true) } // keep what the backend has stored
         when (s) {
             Scenario.FirstUse -> replaceAll(Route.Welcome)
             Scenario.MicDeclined -> replaceAll(Route.Today, Route.CheckInIntro)
@@ -95,7 +112,16 @@ class PatientViewModel : ViewModel() {
         }
     }
 
-    fun finishWelcome(share: Boolean) { state.update { it.copy(sharing = share) }; replaceAll(Route.Today) }
+    fun finishWelcome(share: Boolean) {
+        val controller = sharingController
+        when {
+            controller == null -> state.update { it.copy(sharing = share) }
+            // Only the sharing choice records a decision; the welcome's "Explore the demo" showed none.
+            backStack.lastOrNull() == Route.Sharing -> choose(controller, share)
+            else -> mirror(controller.state.value, quiet = true)
+        }
+        replaceAll(Route.Today)
+    }
 
     fun beginCheckIn(typed: Boolean) {
         if (state.value.offline) { setNotice("Connect to the internet to begin a Check-in."); return }
@@ -197,13 +223,19 @@ class PatientViewModel : ViewModel() {
 
     fun selectSignal(id: SignalId) { state.update { it.copy(selectedSignal = id) }; open(Route.Signal(id)) }
 
-    fun allowSignal(id: SignalId) = state.update { it.copy(consents = it.consents + (id to true), notice = "Consent saved in this demo. No device permission was requested.") }
+    fun allowSignal(id: SignalId) {
+        state.update { it.copy(consents = it.consents + (id to true), notice = "Consent saved in this demo. No device permission was requested.") }
+        savePurpose(id, included = true)
+    }
 
-    fun stopAndDelete(id: SignalId) = state.update {
-        it.copy(
-            consents = it.consents + (id to false), sheet = null, notice = id.label + " is off. Demo data removed.",
-            history = if (id == SignalId.Ratings) it.history.map { h -> h.copy(ratings = Ratings()) } else it.history,
-        )
+    fun stopAndDelete(id: SignalId) {
+        state.update {
+            it.copy(
+                consents = it.consents + (id to false), sheet = null, notice = id.label + " is off. Demo data removed.",
+                history = if (id == SignalId.Ratings) it.history.map { h -> h.copy(ratings = Ratings()) } else it.history,
+            )
+        }
+        savePurpose(id, included = false)
     }
 
     fun saveQuietHours(q: QuietHours): Boolean {
@@ -214,13 +246,110 @@ class PatientViewModel : ViewModel() {
 
     fun setNudges(on: Boolean) = state.update { it.copy(nudges = on, notice = if (on) "Nudges on. At most one a day." else "Nudges off.") }
 
-    fun setSharing(on: Boolean) = state.update {
-        it.copy(sharing = on, sheet = null, notice = if (on) "Sharing turned on for future progress." else "Sharing stopped. Your Clinician no longer sees new progress.")
+    fun setSharing(on: Boolean) {
+        val controller = sharingController
+        if (controller == null) { state.update { it.copy(sharing = on, sheet = null, notice = sharingNotice(on)) }; return }
+        // Saved through the backend: the switch and the notice change once the server accepts the choice.
+        state.update { it.copy(sheet = null) }
+        val current = controller.state.value
+        if (current.saving == null && current.choice == sharingChoice(on)) { setNotice(sharingNotice(on)); return }
+        sharingNoticePending = true
+        choose(controller, on)
     }
+
+    private fun sharingNotice(on: Boolean) =
+        if (on) "Sharing turned on for future progress." else "Sharing stopped. Your Clinician no longer sees new progress."
 
     fun keepTalkingAfterCrisis() {
         state.update { it.copy(scenario = Scenario.Everyday, typed = true, typedCheckIn = TypedCheckIn(lines = listOf(TranscriptLine(Speaker.Companion, "I’m here while you choose human support.")))) }
         live.stop()
         open(Route.CheckIn)
+    }
+
+    // ---- Backend: start-up, the sharing choice and the purpose Consents ---------------------------
+
+    private val startup: PatientStartup? = backend?.let { PatientStartup(it.session, viewModelScope) }
+
+    /**
+     * Sign-in and the Patient record. [StartupState.Disabled] without a backend; otherwise Starting,
+     * then Ready, or Failed with vetted copy and [retryStartup]. No screen shows it yet.
+     */
+    val startupState: StateFlow<StartupState> = startup?.state ?: MutableStateFlow(StartupState.Disabled).asStateFlow()
+
+    /** Starts the backend again after [StartupState.Failed]. */
+    fun retryStartup() { startup?.retry() }
+
+    /** Saves the sharing and purpose Consents once start-up is Ready; null until then and without a backend. */
+    private var sharingController: SharingController? = null
+    private var sharingNoticePending = false
+    private var lastSharingError: String? = null
+    private val lastPurposeErrors = mutableMapOf<ConsentPurpose, String?>()
+
+    init {
+        if (backend != null && startup != null) {
+            viewModelScope.launch {
+                startup.state.collect { if (it is StartupState.Ready && sharingController == null) onStarted(it.started, backend) }
+            }
+            startup.start()
+        }
+    }
+
+    private fun onStarted(started: StartedPatient, backend: PatientBackend) {
+        val controller = SharingController(started, backend.patients, backend.consents, backend.nowMillis, viewModelScope)
+        sharingController = controller
+        mirror(controller.state.value, quiet = true)
+        viewModelScope.launch { controller.state.collect { mirror(it, quiet = false) } }
+        // The welcome and the sharing choice show while sharing is undecided (docs/firestore-schema.md, Sharing Consent).
+        if (started.patient.sharingConsent == SharingConsent.undecided && state.value.scenario == Scenario.Everyday &&
+            backStack.toList() == listOf(Route.Today)
+        ) {
+            replaceAll(Route.Welcome)
+        }
+    }
+
+    /** Shows what the backend has stored: sharing, and the ratings and Voice observations Signals. Failures become the notice. */
+    private fun mirror(stored: SharingState, quiet: Boolean) {
+        var notice: String? = null
+        if (!quiet) {
+            if (sharingNoticePending && stored.saving == null) {
+                sharingNoticePending = false
+                notice = stored.error ?: sharingNotice(stored.choice == SharingConsent.granted)
+            } else if (stored.error != null && stored.error != lastSharingError) {
+                notice = stored.error
+            }
+            (stored.purposes as? PurposesState.Loaded)?.let { loaded ->
+                listOf(loaded.ratings, loaded.voiceCues).forEach { row ->
+                    if (row.error != null && row.error != lastPurposeErrors[row.purpose]) notice = row.error
+                    lastPurposeErrors[row.purpose] = row.error
+                }
+            }
+        }
+        lastSharingError = stored.error
+        state.update { s ->
+            val loaded = stored.purposes as? PurposesState.Loaded
+            s.copy(
+                sharing = stored.choice == SharingConsent.granted,
+                consents = if (loaded == null) s.consents else s.consents +
+                    (SignalId.Ratings to loaded.ratings.included) + (SignalId.VoiceObservations to loaded.voiceCues.included),
+                notice = notice ?: s.notice,
+            )
+        }
+    }
+
+    private fun savePurpose(id: SignalId, included: Boolean) {
+        val purpose = when (id) {
+            SignalId.Ratings -> ConsentPurpose.ratings
+            SignalId.VoiceObservations -> ConsentPurpose.voice_cues
+            else -> return // device Signal Consents stay local until Signals are collected (#19)
+        }
+        sharingController?.onAction(SharingAction.SetIncluded(purpose, included))
+    }
+
+    private fun sharingChoice(on: Boolean) = if (on) SharingConsent.granted else SharingConsent.declined
+
+    /** The app's own sheet has already confirmed a withdrawal, so it is confirmed here too. */
+    private fun choose(controller: SharingController, on: Boolean) {
+        controller.onAction(SharingAction.Choose(sharingChoice(on)))
+        if (controller.state.value.confirmingWithdrawal) controller.onAction(SharingAction.ConfirmWithdrawal)
     }
 }
