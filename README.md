@@ -50,7 +50,7 @@ The repository is public, so the Clinician's email is configuration, never code.
 |---|---|---|
 | Android app | `demo.clinicianEmail` in `secrets.properties` (becomes `BuildConfig.CLINICIAN_EMAIL`) | `clinician@example.com` for the `demo-twoam` emulator project; with a real `firebase.projectId` the build fails |
 | iOS app | `ClinicianEmail` (string) in a gitignored `iosApp/Depressify/Secrets.plist` | `clinician@example.com` with the emulators; with `GoogleService-Info.plist` the app stops at launch |
-| Allowlist | `npm run allow-clinician -- --email <clinician-email> [--project <project-id>]` in `firebase/seed` | a new Patient cannot create their record |
+| Allowlist and Clinician role | `npm run allow-clinician -- --email <clinician-email> [--uid <uid>] [--project <project-id>]` in `firebase/seed`. Also gives the Clinician's sign-in account the `role: "clinician"` claim and a verified email ([ADR 0010](docs/adr/0010-patients-sign-in-with-their-own-account.md)); an account not yet verified needs `--uid` | a new Patient cannot create their record, and the Clinician's account reads nothing |
 | Seed | `--clinician <clinician-email>` or `CLINICIAN_EMAIL` (the option wins); the seed also allows that email | `clinician@example.com` in the emulator; a real project (`--project`) refuses to seed |
 | Live demo Patient | `--clinician <clinician-email>` or `CLINICIAN_EMAIL`; it must already be allowed (a warning if not) | `clinician@example.com` in the emulator; a real project refuses to seed |
 
@@ -67,6 +67,45 @@ Emails are stored trimmed and in lower case, as Firebase Auth puts them in the s
 </plist>
 ```
 
+## Patient sign-in
+
+Patients sign in with an account of their own, email and password or Google, instead of anonymously ([ADR 0010](docs/adr/0010-patients-sign-in-with-their-own-account.md)). The backend half is built; the app's `PatientSession` still signs in anonymously. This is the contract for the app team.
+
+**What the backend accepts.** A *verified account* is one whose ID token has `firebase.sign_in_provider` other than `anonymous` and `email_verified: true`. Google accounts are verified at once; email and password accounts once the Patient opens the verification link and the app refreshes the ID token.
+
+| Action | Needs |
+|---|---|
+| Create `patients/{uid}` | A verified account whose uid is the document id, linked to an allowlisted Clinician (as before) |
+| Read and write an existing `patients/{uid}` and its collections | The owner (`auth.uid == patientId`), whatever the account, so Patients who signed in anonymously before keep their records |
+| `startCheckIn`, `finishCheckIn`, `suggestToday`, `mapTool`, `generateMusic`, `generateMusicCover` | A verified account. Otherwise `failed-precondition` with "Verify your account to continue." |
+| Act as a Demo Patient (`demo.patientId`) | A verified account. An anonymous one reads nothing |
+
+**Flow**, with the GitLive SDK the app already uses (`dev.gitlive.firebase.auth`):
+
+1. **Sign up:** `Firebase.auth.createUserWithEmailAndPassword(email, password)`, then `user.sendEmailVerification()`.
+2. **"Verify your email" gate:** show the address, a "Resend" button (`sendEmailVerification()` again) and "I've verified it", which calls `user.reload()` and then `user.getIdToken(forceRefresh = true)` and goes on only when `user.isEmailVerified` is true. The refresh matters: without it the token keeps `email_verified: false` for up to an hour and the record is refused.
+3. **Sign in:** `signInWithEmailAndPassword(email, password)`; an account that is still unverified goes to the gate. Show one message for a wrong password and an unknown email.
+4. **Google:**
+   - Android: Credential Manager (`androidx.credentials` with `com.google.android.libraries.identity.googleid`), `GetSignInWithGoogleOption` or `GetGoogleIdOption` with `setServerClientId(<web client id>)`. The web client id is the OAuth client Firebase creates when the Google provider is enabled (client type 3 in a downloaded `google-services.json`; this app has no Google Services plugin, so put it in `secrets.properties` next to the other Firebase values). Pass the returned ID token to `Firebase.auth.signInWithCredential(GoogleAuthProvider.credential(idToken, null))`. Google sign-in needs the build's SHA-1 on `app.depressify.patient`; the main development Mac's debug key is registered, every other machine adds its own.
+   - iOS: the GoogleSignIn SDK with `CLIENT_ID` from `GoogleService-Info.plist` (download it again after enabling Google so it has `CLIENT_ID` and `REVERSED_CLIENT_ID`), and `REVERSED_CLIENT_ID` added as a URL scheme (`CFBundleURLTypes`) in `iosApp/project.yml`. Then the same `signInWithCredential`.
+5. **Password reset:** `Firebase.auth.sendPasswordResetEmail(email)`, with the same confirmation whether or not the address has an account.
+6. **Sign out:** `Firebase.auth.signOut()`. The Patient record stays and comes back at the next sign-in.
+
+**How `PatientSession` changes:**
+- `start()` no longer calls `signInAnonymously()`. With nobody signed in, or an unverified account, it reports that (for the sign-in screen or the gate) instead of failing like a lost connection.
+- It still reads `patients/{uid}` first. An existing record is used as it is, whatever the account.
+- It creates the record only after verification and the forced token refresh above.
+- `AuthGateway` loses `signInAnonymously()` and gains sign-up, sign-in, Google, `sendEmailVerification`, a reload-and-refresh, `isEmailVerified` and password reset; `currentUserId()` stays.
+- The Check-in screens show the gate on `failed-precondition` from `startCheckIn` or `finishCheckIn`, not a generic error.
+
+**Optional: keeping an anonymous Patient's record.** If `Firebase.auth.currentUser?.isAnonymous` is true, link instead of signing in: `currentUser.linkWithCredential(EmailAuthProvider.credential(email, password))` and then `sendEmailVerification()`, or `linkWithCredential(GoogleAuthProvider.credential(idToken, null))`. The uid stays, so `patients/{uid}` and its history stay. If the email or Google account already has a Firebase user, linking fails (`credential-already-in-use` or `email-already-in-use`); sign in to that account instead, and the anonymous record is left behind.
+
+**Console steps (a person with access to the project):**
+1. Authentication → Sign-in method → **Google** → Enable, with a support email. Download `google-services.json` and `GoogleService-Info.plist` again for the client ids.
+2. **Email/Password** stays enabled. Optionally, Authentication → Settings → User actions → **Email enumeration protection** on, so sign-in and password reset don't reveal which emails have accounts.
+3. Before deploying the new rules or functions: run `npm run allow-clinician -- --email <clinician-email> --project <project-id>` for every Clinician, or the dashboard, Intake and the Digest lose access (they now need the claim), and ship the app's new sign-in, or new Patients cannot create their record, the demo phone's Demo Patient reads nothing, and no Check-in starts or finishes (`startCheckIn` and `finishCheckIn` refuse anonymous accounts).
+4. Later, once every tester has upgraded or signed up: **Anonymous** → Disable. That stops new anonymous sign-ins; records already made stay their owners'.
+
 ## Build
 
 ```sh
@@ -76,7 +115,7 @@ Emails are stored trimmed and in lower case, as Firebase Auth puts them in the s
 
 iOS: run `cd iosApp && xcodegen generate`, open `iosApp/Depressify.xcodeproj` in Xcode and run. The build phase calls `./gradlew :shared:embedAndSignAppleFrameworkForXcode`; Xcode resolves the Firebase iOS SDK through Swift Package Manager.
 
-The Patient app runs on local demo data until Firebase answers. With a backend it signs in anonymously, creates the Patient record and saves the sharing choice; when the backend cannot be reached it stays on demo data.
+The Patient app runs on local demo data until Firebase answers. With a backend it signs in anonymously, creates the Patient record and saves the sharing choice; when the backend cannot be reached it stays on demo data. Patients are moving to accounts of their own ([ADR 0010](docs/adr/0010-patients-sign-in-with-their-own-account.md)): the rules on this branch refuse a new anonymous Patient record, so until the app follows the [Patient sign-in](#patient-sign-in) contract a fresh install stays on demo data against them.
 
 ## Tests, one command per seam
 
@@ -115,18 +154,18 @@ The Firestore database and every function are in `europe-north1` (Finland), exce
    firebase use default      # back to demo-twoam for local work
    ```
    `firebase use --add` writes the alias into `.firebaserc`. A project ID is not a secret, but leave that change out of commits unless the team wants it.
-2. **In the Firebase console:** enable the Anonymous and Email/Password sign-in providers, add the Clinician as a user (Authentication, Users, Add user), and register the apps: Android package name `app.depressify.patient`, iOS bundle ID `app.depressify.patient`. Put the apps' values in `secrets.properties` (with `demo.clinicianEmail`) and `iosApp/Depressify/GoogleService-Info.plist` plus `Secrets.plist`, as above.
-3. **Deploy the rules and indexes.** Run the rules tests first. The dashboard's latest-Digest query needs the composite index in `firestore.indexes.json` (the emulator does not check indexes). Before real Patients use it, require `email_verified` in `authEmail()` in `firestore.rules` (see the comment there).
+2. **In the Firebase console:** enable the Email/Password and Google sign-in providers (and Anonymous only until the app ships [Patient sign-in](#patient-sign-in)), add the Clinician as a user (Authentication, Users, Add user), and register the apps: Android package name `app.depressify.patient`, iOS bundle ID `app.depressify.patient`. Put the apps' values in `secrets.properties` (with `demo.clinicianEmail`) and `iosApp/Depressify/GoogleService-Info.plist` plus `Secrets.plist`, as above.
+3. **Deploy the rules and indexes.** Run the rules tests first. The dashboard's latest-Digest query needs the composite index in `firestore.indexes.json` (the emulator does not check indexes). The rules require verified accounts and the Clinician claim (ADR 0010), so run step 4 first.
    ```sh
    firebase deploy --only firestore:rules,firestore:indexes --project prod
    ```
-4. **Allow the Clinician.** The seed commands use the Admin SDK with Application Default Credentials and take the project ID, not the alias:
+4. **Allow the Clinician.** This adds the email to the allowlist and gives the Clinician's account (added in step 2) the `role: "clinician"` claim and a verified email; without an account it says so and writes only the allowlist, so run it again after adding the user. An account added in the console starts unverified, and anyone could have signed up with that address first, so pass its User UID from Authentication → Users with `--uid`; a verified account (the Clinician opened the verification link, or signs in with Google) needs none. The Clinician signs out and in again, or reloads the dashboard, to pick up the claim. The seed commands use the Admin SDK with Application Default Credentials and take the project ID, not the alias:
    ```sh
    gcloud auth application-default login
    cd seed && npm install
-   npm run allow-clinician -- --email <clinician-email> --project <your-project-id>
+   npm run allow-clinician -- --email <clinician-email> --uid <user-uid> --project <your-project-id>
    ```
-5. **Seed the Demo Patients** (optional; they are readable by any signed-in user, by design of the demo):
+5. **Seed the Demo Patients** (optional; they are readable by any verified account, by design of the demo):
    ```sh
    npm run seed -- --project <your-project-id> --clinician <clinician-email>
    ```
@@ -134,7 +173,7 @@ The Firestore database and every function are in `europe-north1` (Finland), exce
    ```sh
    cd .. && firebase functions:secrets:set GEMINI_API_KEY --project prod
    ```
-7. **Deploy the functions** (the predeploy step builds them):
+7. **Deploy the functions** (the predeploy step builds them). The Patient's callables (`startCheckIn`, `finishCheckIn`, `suggestToday`, `mapTool`, `generateMusic`, `generateMusicCover`) refuse anonymous accounts (ADR 0010), and the app still signs in anonymously, so until the app ships the [Patient sign-in](#patient-sign-in) deploy the other functions by name (`--only functions:<name>`) and leave those as they are:
    ```sh
    firebase deploy --only functions --project prod
    ```
@@ -183,16 +222,16 @@ firebase emulators:start --project demo-twoam
 
 This starts Auth (9099), Firestore (8080), Functions (5001), Hosting (5002) and the Emulator UI (4000). Then:
 
-1. Create the Clinician in the Auth emulator and allow them. `<clinician-email>` is the app's configured email: `clinician@example.com` unless `demo.clinicianEmail` is set.
+1. Create the Clinician in the Auth emulator and allow them, with the `localId` from the sign-up reply as `<uid>`. `<clinician-email>` is the app's configured email: `clinician@example.com` unless `demo.clinicianEmail` is set.
    ```sh
    curl -s -X POST 'http://127.0.0.1:9099/identitytoolkit.googleapis.com/v1/accounts:signUp?key=demo-api-key' \
      -H 'Content-Type: application/json' \
      -d '{"email":"<clinician-email>","password":"demo-password-1","returnSecureToken":true}'
-   cd seed && npm install && npm run allow-clinician -- --email <clinician-email>
+   cd seed && npm install && npm run allow-clinician -- --email <clinician-email> --uid <uid>
    ```
-   (`npm run seed` allows its Clinician too.)
+   `allow-clinician` also gives the account the `role: "clinician"` claim and marks its email verified, which the dashboard and the rules require ([ADR 0010](docs/adr/0010-patients-sign-in-with-their-own-account.md)); create the account first. (`npm run seed` adds its Clinician to the allowlist too, but sets no claim.)
 2. Open http://localhost:5002 and sign in as that Clinician. The Patient list is empty.
-3. Run the Android debug build (after `adb reverse`, above). The app signs in anonymously and creates the Patient record, then shows the welcome and the sharing choice. Choose **Share my progress**: the app lands on Today and "Live patient" appears on the dashboard without a reload. **Continue without sharing** also lands on Today, and the Patient stays off the dashboard (the security rules allow the Clinician to see a Patient only while sharing is granted). Stopping in Settings → Sharing & privacy removes them from the open dashboard at once. Sharing again shows what is saved from then on and what was shared before, never what was saved in between: every shared record is stamped `sharedWithClinician` when it is saved (see [the sharing stamp](docs/firestore-schema.md#the-sharing-stamp)).
+3. Run the Android debug build (after `adb reverse`, above). Until the app implements [Patient sign-in](#patient-sign-in), it signs in anonymously, the rules refuse its new record and it stays on demo data; `test/emulator/walking-skeleton.test.ts` runs the same flow with a verified account. With the new sign-in, the app signs the Patient up and creates the Patient record once the email is verified, then shows the welcome and the sharing choice. Choose **Share my progress**: the app lands on Today and "Live patient" appears on the dashboard without a reload. **Continue without sharing** also lands on Today, and the Patient stays off the dashboard (the security rules allow the Clinician to see a Patient only while sharing is granted). Stopping in Settings → Sharing & privacy removes them from the open dashboard at once. Sharing again shows what is saved from then on and what was shared before, never what was saved in between: every shared record is stamped `sharedWithClinician` when it is saved (see [the sharing stamp](docs/firestore-schema.md#the-sharing-stamp)).
 
 Use only the `demo-twoam` project with the emulators. Do not run `firebase deploy` against it.
 
@@ -229,7 +268,7 @@ The fictional Intake for the live demo Patient is in [docs/demo/intake-live-pati
 
 ### Check-in (Start and Finish)
 
-Two callables in `europe-north1` serve a Check-in (#14). The caller must be the Patient (`auth.uid == patientId`), or anyone signed in when the Patient is a Demo Patient (`synthetic: true`), as in the rules. Signed out: `unauthenticated`; anyone else, or a missing Patient: `permission-denied`. On a Demo Patient only the caller who started a Check-in may finish it, so the seeded Summaries cannot be overwritten. One Patient record starts at most 10 Check-ins an hour; past that `startCheckIn` answers `resource-exhausted` without minting a token.
+Two callables in `europe-north1` serve a Check-in (#14). The caller must have a verified account ([Patient sign-in](#patient-sign-in)) and be the Patient (`auth.uid == patientId`), or any verified account when the Patient is a Demo Patient (`synthetic: true`), as in the rules. Signed out: `unauthenticated`; anonymous or not yet verified: `failed-precondition`, "Verify your account to continue."; anyone else, or a missing Patient: `permission-denied`. On a Demo Patient only the caller who started a Check-in may finish it, so the seeded Summaries cannot be overwritten. One Patient record starts at most 10 Check-ins an hour; past that `startCheckIn` answers `resource-exhausted` without minting a token.
 
 | Callable | Request | Response |
 |---|---|---|
@@ -274,7 +313,7 @@ Both need the `GEMINI_API_KEY` secret. In the emulator there is no secret, so `s
 
 ### Suggest today
 
-One callable in `europe-north1` makes Suggestions for the Today screen, outside a Check-in. The caller rule is the same as for a Check-in: the Patient, or anyone signed in on a Demo Patient.
+One callable in `europe-north1` makes Suggestions for the Today screen, outside a Check-in. The caller rule is the same as for a Check-in: the Patient, or any verified account on a Demo Patient.
 
 | Callable | Request | Response |
 |---|---|---|

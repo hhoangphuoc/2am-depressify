@@ -13,7 +13,7 @@
 import { deleteApp as deleteAdminApp, initializeApp as initializeAdminApp } from "firebase-admin/app";
 import { getFirestore as getAdminFirestore } from "firebase-admin/firestore";
 import { deleteApp, initializeApp, type FirebaseApp } from "firebase/app";
-import { connectAuthEmulator, createUserWithEmailAndPassword, getAuth, signInAnonymously, signInWithEmailAndPassword } from "firebase/auth";
+import { connectAuthEmulator, getAuth, signInAnonymously } from "firebase/auth";
 import { connectFunctionsEmulator, getFunctions, httpsCallable } from "firebase/functions";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { generateDemoPatients } from "../../../seed/src/generate.js";
@@ -21,7 +21,8 @@ import { writeDemoPatients } from "../../../seed/src/firestore.js";
 import { dateInZone, onDemandPeriod, scheduledPeriod } from "../../src/digest";
 import { adminDigestStore, generateDigestHandler, weeklyDigestHandler } from "../../src/digestFunctions";
 import { newPatientDoc, type Digest, type Summary } from "../../src/types";
-import { FakeTextModel } from "../fakes";
+import { FakeTextModel, clinicianToken } from "../fakes";
+import { signInClinician } from "./accounts";
 import { REGION } from "../../src/region";
 
 const PROJECT_ID = "demo-twoam";
@@ -38,7 +39,7 @@ const MODEL_TEXT = "The Patient rated mood lower as the week went on. (fake mode
 const adminApp = initializeAdminApp({ projectId: PROJECT_ID }, "digest-admin");
 const adminDb = getAdminFirestore(adminApp);
 const store = adminDigestStore(adminDb);
-const clinicianAuth = { uid: "clinician-uid", token: { email: CLINICIAN.email } };
+const clinicianAuth = { uid: "clinician-uid", token: clinicianToken(CLINICIAN.email) };
 
 const nowMillis = Date.now();
 const today = dateInZone(nowMillis);
@@ -176,11 +177,7 @@ describe.skipIf(!withFunctions)("generateDigest through the Functions emulator",
 
   async function signedIn(name: string, account: { email: string; password: string }) {
     const c = client(name);
-    try {
-      await createUserWithEmailAndPassword(c.auth, account.email, account.password);
-    } catch {
-      await signInWithEmailAndPassword(c.auth, account.email, account.password);
-    }
+    await signInClinician(adminApp, c.auth, account);
     return c;
   }
 

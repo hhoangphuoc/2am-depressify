@@ -67,7 +67,7 @@ export const { silenceCheck } = createSilenceFunctions({
 });
 
 /**
- * Check-in (the Patient, or anyone signed in on a Demo Patient): `startCheckIn` mints the
+ * Check-in (the Patient, or any verified account on a Demo Patient): `startCheckIn` mints the
  * single-use Live token and creates the Check-in; `finishCheckIn` writes the Summary, the
  * Check-in's ratings and Voice cues, and the Attention flags the Decisions API's answers raise
  * (#20), and drops the transcript.
@@ -80,7 +80,7 @@ export const { startCheckIn, finishCheckIn } = createCheckInFunctions({
 });
 
 /**
- * The Map tool (the Patient, or anyone signed in on a Demo Patient): places with walking times, or
+ * The Map tool (the Patient, or any verified account on a Demo Patient): places with walking times, or
  * the weather, near the location the phone sends, from Maps agent tools.
  */
 export const { mapTool } = createMapToolFunctions({
@@ -89,7 +89,7 @@ export const { mapTool } = createMapToolFunctions({
 });
 
 /**
- * Suggest today (the Patient, or anyone signed in on a Demo Patient): up to three Suggestions from
+ * Suggest today (the Patient, or any verified account on a Demo Patient): up to three Suggestions from
  * the Patient's Context, with real places near them for the ones that mean going somewhere.
  */
 export const { suggestToday } = createSuggestFunctions({
@@ -99,7 +99,7 @@ export const { suggestToday } = createSuggestFunctions({
 });
 
 /**
- * Music (the Patient, or anyone signed in on a Demo Patient): about a minute of calm instrumental
+ * Music (the Patient, or any verified account on a Demo Patient): about a minute of calm instrumental
  * music from Lyria 3.5, and its cover from Nano Banana when the listening view opens.
  */
 export const { generateMusic, generateMusicCover } = createMusicFunctions({

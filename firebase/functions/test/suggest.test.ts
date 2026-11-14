@@ -6,7 +6,7 @@ import type { CallerAuth } from "../src/clinician";
 import { MAX_PLACES, buildSuggestRequest, parseModelSuggestions, parsePlaces, type PlacesRequest } from "../src/suggest";
 import { suggestTodayHandler, type SuggestStore } from "../src/suggestFunctions";
 import { newPatientDoc, type PatientDoc, type Summary } from "../src/types";
-import { CLINICIAN_EMAIL, FakeTextModel, PATIENT_ID, failingTextModel } from "./fakes";
+import { CLINICIAN_EMAIL, FakeTextModel, PATIENT_ID, failingTextModel, verifiedToken } from "./fakes";
 
 // The Places text search recorded in the #6 spike.
 const recorded = JSON.parse(readFileSync(join(__dirname, "..", "..", "..", "fixtures", "spike", "maps", "places-searchText.json"), "utf8"));
@@ -39,7 +39,7 @@ const store: SuggestStore = {
   recentDays: async () => [],
   recentSuggestions: async () => [],
 };
-const anyone: CallerAuth = { uid: "someone-else", token: {} };
+const anyone: CallerAuth = { uid: "someone-else", token: verifiedToken("someone-else@example.com") };
 
 function suggest(patientId: string, auth: CallerAuth | undefined, options: { textModel?: FakeTextModel; placesFail?: boolean } = {}) {
   const searches: PlacesRequest[] = [];
@@ -113,7 +113,7 @@ describe("suggestToday", () => {
   });
 
   it("searches nowhere for a Patient without a location", async () => {
-    const { result, searches } = suggest(PATIENT_ID, { uid: PATIENT_ID, token: {} });
+    const { result, searches } = suggest(PATIENT_ID, { uid: PATIENT_ID, token: verifiedToken("patient-1@example.com") });
     const response = await result;
     expect(response.location).toBeNull();
     expect(response.suggestions.map((s) => s.places)).toEqual([[], []]);

@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { API_REVISION, buildArtworkRequest, buildMusicRequest, fetchMusicClient, generateMusicCoverHandler, generateMusicHandler, INTERACTIONS_URL, parseMusic, type MusicClient } from "../src/music";
-import { FakeCheckInStore, PATIENT_ID } from "./fakes";
+import { FakeCheckInStore, PATIENT_ID, verifiedToken } from "./fakes";
 
 const recorded = JSON.parse(readFileSync(join(__dirname, "..", "..", "..", "fixtures", "spike", "music", "lyria-3.5.json"), "utf8"));
 const DATA = { patientId: PATIENT_ID, mood: " tired and a bit tense after a long week " };
@@ -23,9 +23,9 @@ function music(body: unknown = recorded.response.body) {
   return { client, sent };
 }
 const call = (data: unknown, uid: string | null = PATIENT_ID, fake = music()) =>
-  generateMusicHandler({ data, auth: uid ? { uid, token: {} } : undefined }, { store: new FakeCheckInStore(), music: fake.client });
+  generateMusicHandler({ data, auth: uid ? { uid, token: verifiedToken(`${uid}@example.com`) } : undefined }, { store: new FakeCheckInStore(), music: fake.client });
 const coverCall = (data: unknown, uid: string | null = PATIENT_ID, fake = music(imageResponse())) =>
-  generateMusicCoverHandler({ data, auth: uid ? { uid, token: {} } : undefined }, { store: new FakeCheckInStore(), music: fake.client });
+  generateMusicCoverHandler({ data, auth: uid ? { uid, token: verifiedToken(`${uid}@example.com`) } : undefined }, { store: new FakeCheckInStore(), music: fake.client });
 
 describe("generateMusic", () => {
   it("asks Lyria 3.5, storage off, for calm instrumental music around the mood only", () => {

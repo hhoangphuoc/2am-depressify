@@ -39,8 +39,13 @@ import {
   SUBCOLLECTIONS,
   allowlisted,
   appCreates,
+  asAccountWithoutClaim,
+  asAnonymousPatient,
   asClinician,
+  asGooglePatient,
   asPatient,
+  asUnverifiedClinician,
+  asUnverifiedPatient,
   checkIn,
   crisisFlag,
   mail,
@@ -640,8 +645,8 @@ describe("Ratings, Voice cues, the crisis marker, the assessment and the Outcome
   });
 });
 
-describe("Any signed-in user can read and write a Patient marked synthetic", () => {
-  it("anyoneSignedInCanActAsSyntheticPatient: reads the record and every collection", async () => {
+describe("Any verified account can read and write a Patient marked synthetic", () => {
+  it("anyVerifiedAccountCanActAsSyntheticPatient: reads the record and every collection", async () => {
     for (const db of [asPatient(env, STRANGER), asPatient(env, ALICE), asClinician(env, OTHER_CLINICIAN)]) {
       for (const path of readPaths(DEMO)) await assertSucceeds(getDoc(doc(db, path)));
       await assertSucceeds(getDocs(query(collection(db, "patients"), where("synthetic", "==", true))));
@@ -740,5 +745,97 @@ describe("Everything outside the data contract is denied", () => {
     const db = asPatient(env, ALICE);
     await assertFails(setDoc(doc(db, `patients/${ALICE}/notes/n1`), { text: "hello" }));
     await assertFails(getDoc(doc(db, `patients/${ALICE}/notes/n1`)));
+  });
+});
+
+describe("Patients sign in with their own account (ADR 0010)", () => {
+  const carol = () => newPatientDoc("Live patient", CLINICIAN);
+
+  it("an anonymous user cannot create a Patient record", async () => {
+    const db = asAnonymousPatient(env, "carol");
+    await assertSucceeds(getDoc(doc(db, "patients/carol"))); // the app's check that it exists still works
+    await assertFails(setDoc(doc(db, "patients/carol"), carol()));
+  });
+
+  it("an email and password account cannot create one before the email is verified", async () => {
+    await assertFails(setDoc(doc(asUnverifiedPatient(env, "carol"), "patients/carol"), carol()));
+  });
+
+  it("a verified email and password account and a Google account can", async () => {
+    await assertSucceeds(setDoc(doc(asPatient(env, "carol"), "patients/carol"), carol()));
+    await assertSucceeds(setDoc(doc(asGooglePatient(env, "dave"), "patients/dave"), carol()));
+  });
+
+  it("a record made while the account was anonymous stays usable by its owner: reads, the phone's fields and every writable collection", async () => {
+    // Created before ADR 0010, under the old rules; here with the Admin SDK.
+    const created = () =>
+      env.withSecurityRulesDisabled(async (ctx) => {
+        await setDoc(doc(ctx.firestore(), "patients/early"), newPatientDoc("Early patient", CLINICIAN));
+        for (const sub of SUBCOLLECTIONS) await setDoc(doc(ctx.firestore(), samplePath("early", sub)), SAMPLES[sub].data);
+      });
+    // Still anonymous, and later upgraded with linkWithCredential but not yet verified: same uid, same record.
+    for (const db of [asAnonymousPatient(env, "early"), asUnverifiedPatient(env, "early")]) {
+      await created();
+      await assertSucceeds(getDoc(doc(db, "patients/early")));
+      await assertSucceeds(updateDoc(doc(db, "patients/early"), { lastSeenAtMillis: 1_700_000_400_000, quietHoursStart: 22 }));
+      for (const sub of PATIENT_WRITABLE) for (const write of await writes(db, "early", sub, false)) await assertSucceeds(write());
+      await assertSucceeds(getDocs(collection(db, "patients/early/daily")));
+    }
+    // Their sharing choice still saves, and their Clinician then reads them as before.
+    const atMillis = 1_700_000_500_000;
+    await assertSucceeds(updateDoc(doc(asAnonymousPatient(env, "early"), "patients/early"), { sharingConsent: "granted", sharingChangedAtMillis: atMillis }));
+    await assertSucceeds(getDoc(doc(asClinician(env, CLINICIAN), "patients/early")));
+  });
+
+  it("an anonymous account still cannot read or write another Patient", async () => {
+    const db = asAnonymousPatient(env, "early");
+    for (const path of readPaths(ALICE)) await assertFails(getDoc(doc(db, path)));
+    await assertFails(updateDoc(doc(db, `patients/${ALICE}`), { lastSeenAtMillis: 1 }));
+  });
+
+  it("an anonymous or unverified account cannot use the demo shortcut", async () => {
+    for (const db of [asAnonymousPatient(env, STRANGER), asUnverifiedPatient(env, STRANGER)]) {
+      for (const path of readPaths(DEMO)) await assertFails(getDoc(doc(db, path)));
+      await assertFails(getDocs(query(collection(db, "patients"), where("synthetic", "==", true))));
+      await assertFails(updateDoc(doc(db, `patients/${DEMO}`), { lastSeenAtMillis: 1 }));
+      for (const write of await writes(db, DEMO, "daily", false)) await assertFails(write());
+    }
+    await assertSucceeds(getDoc(doc(asGooglePatient(env, STRANGER), `patients/${DEMO}`)));
+  });
+});
+
+describe("Only an account with the Clinician claim and a verified email reads as the Clinician", () => {
+  it("a Patient whose verified email matches clinicianEmail, but without the claim, reads and writes nothing as the Clinician", async () => {
+    const db = asAccountWithoutClaim(env, CLINICIAN);
+    for (const path of readPaths(ALICE)) await assertFails(getDoc(doc(db, path)));
+    await assertFails(getDocs(dashboardList(db, CLINICIAN)));
+    await assertFails(setDoc(doc(db, `patients/${ALICE}/visits/v2`), visit));
+    await assertFails(updateDoc(doc(db, `patients/${ALICE}`), { tmsEndDate: "2026-10-01" }));
+    await assertFails(updateDoc(doc(db, samplePath(ALICE, "flags")), { clearedAtMillis: 1_700_000_500_000 }));
+  });
+
+  it("a Patient signed in with Google under the Clinician's email cannot read the Clinician's other Patients", async () => {
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), "patients/erin"), { ...newPatientDoc("Erin", CLINICIAN), sharingConsent: "granted", sharingChangedAtMillis: SHARED_AT });
+    });
+    const db = env
+      .authenticatedContext(ALICE, { email: CLINICIAN, email_verified: true, firebase: { sign_in_provider: "google.com" } })
+      .firestore();
+    await assertFails(getDocs(dashboardList(db, CLINICIAN)));
+    await assertFails(getDoc(doc(db, "patients/erin")));
+    await assertSucceeds(getDoc(doc(db, `patients/${ALICE}`))); // her own record, as its owner
+  });
+
+  it("an account with the claim but an unverified email reads and writes nothing", async () => {
+    const db = asUnverifiedClinician(env, CLINICIAN);
+    for (const path of readPaths(ALICE)) await assertFails(getDoc(doc(db, path)));
+    await assertFails(getDocs(dashboardList(db, CLINICIAN)));
+    await assertFails(setDoc(doc(db, `patients/${ALICE}/visits/v2`), visit));
+  });
+
+  it("the claim with a verified email reads the dashboard's list and the Patient, as before", async () => {
+    const db = asClinician(env, CLINICIAN);
+    await assertSucceeds(getDocs(dashboardList(db, CLINICIAN)));
+    for (const path of readPaths(ALICE)) await assertSucceeds(getDoc(doc(db, path)));
   });
 });

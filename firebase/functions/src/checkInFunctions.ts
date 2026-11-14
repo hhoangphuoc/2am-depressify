@@ -1,4 +1,4 @@
-// The Check-in callables, both for the Patient (or anyone signed in on a Demo Patient):
+// The Check-in callables, both for the Patient (or any verified account on a Demo Patient):
 //
 //   startCheckIn   {patientId, brief, mode?} -> {checkInId, token, model, endpoint, mode,
 //                                                connectByMillis, expiresAtMillis}
@@ -314,7 +314,7 @@ export async function finishCheckInHandler(call: IntakeCall, deps: FinishCheckIn
   const patient = await readOrUnavailable("finishCheckIn", ids, () => deps.store.getPatient(patientId));
   assertActsAsPatient(patientId, patient, auth);
   if (auth.uid !== patientId) {
-    // The demo shortcut lets anyone signed in act as a Demo Patient. Only the caller who started
+    // The demo shortcut lets any verified account act as a Demo Patient. Only the caller who started
     // this Check-in may finish it, so nobody can overwrite the Demo Patient's other Summaries.
     const startedBy = await readOrUnavailable("finishCheckIn", ids, () => deps.store.getStart(patientId, checkInId));
     if (startedBy?.uid !== auth.uid) throw new HttpsError("permission-denied", "Only the phone that started this Check-in can finish it.");

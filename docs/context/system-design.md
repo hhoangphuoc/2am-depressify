@@ -69,8 +69,9 @@ Raw sensor samples, audio and transcripts are never stored outside the phone ([A
 
 ## Roles and sign-in
 
-- The Patient signs in anonymously for the demo. The Clinician signs in with email and password.
-- The Invite that links a Patient to a Clinician is deferred. In the demo there is one Clinician, and a new Patient is linked to them when the app first opens.
+- The Patient signs in with an account of their own: email and password (verified by email before the Patient record is created) or Google ([ADR 0010](../adr/0010-patients-sign-in-with-their-own-account.md)). Patients who signed in anonymously before keep their records.
+- The Clinician signs in with email and password. The Admin marks the account as the Clinician's with a custom claim (`npm run allow-clinician`); an email alone grants nothing.
+- The Invite that links a Patient to a Clinician is deferred. In the demo there is one Clinician, and a new Patient is linked to them when their record is created.
 - The Clinician adds the Intake on the dashboard. For the demo it is a fictional clinical report; Gemini extracts the highlights the Companion needs.
 - The Clinician records each Visit, with an optional Questionnaire score (PHQ-2 or PHQ-9), and enters the TMS end date.
 

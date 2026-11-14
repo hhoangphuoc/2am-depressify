@@ -33,8 +33,14 @@ const admin = getFirestore(app);
 /** @type {import("@firebase/rules-unit-testing").RulesTestEnvironment} */
 let rules;
 
-/** @param {string} email */
-const firestoreAs = (email) => /** @type {any} */ (rules.authenticatedContext(`uid-${email}`, { email }).firestore());
+/**
+ * The Clinician signed in as `npm run allow-clinician` leaves the account (ADR 0010).
+ * @param {string} email
+ */
+const firestoreAs = (email) =>
+  /** @type {any} */ (
+    rules.authenticatedContext(`uid-${email}`, { email, email_verified: true, role: "clinician", firebase: { sign_in_provider: "password" } }).firestore()
+  );
 
 /**
  * One Patient's flags as the dashboard holds them: through the dashboard's own query, with the

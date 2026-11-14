@@ -1,4 +1,4 @@
-// The Suggest today callable, for the Patient (or anyone signed in on a Demo Patient):
+// The Suggest today callable, for the Patient (or any verified account on a Demo Patient):
 //
 //   suggestToday  {patientId} -> {location, suggestions: [{kind, details, reason, placeQuery, music, places}]}
 //                 One call to the text model (storage off, structured output) with the Patient's

@@ -16,7 +16,8 @@ Kept up to date as PRs are opened and merged. Each PR also updates its own rows 
 | #61 | `codex/find-places` → `main` | #18: the `mapTool` callable (`find_places` with real nearby places, `get_weather`) and `generateMusic` | Open |
 | #69 | `feat/26-daily-job-rules` (from `main`) | #26, `core` only: the daily job's pure pipeline (daily record, Baseline, sign of life, Signal flag rules, write plan) | Tested (core 124, seed 105, dashboard 310); the app's background work, debug action and device check are still to do |
 | #68 | `feat/27-nudge-rules` → `feat/26-daily-job-rules` (stacked on #69) | #27, `core` part: Nudge rules, Nudge text, quiet hours, and the `core` purity check | Open; tested (core 161) |
-| #70 | `feat/live-demo-patient` → `main` | Live demo Patient: `npm run seed-live-patient` gives one real Patient account six weeks of seeded history | Open; tested (seed 151 after merging `main`). A rerun with `--display-name` also renames the existing account. **Run on `junction26hel-7400` on 14 November 2026** for the team's test Gmail account: account created (verified, no password), 42 daily, 24 Check-ins and Summaries, 24 Suggestions, 3 flags (level amber), 2 Visits, 12 Consents. Seeded before the Intake label: `--reset` once to add it. |
+| #67 | `feat/patient-accounts` → `main` | Patients sign in with their own account ([ADR 0010](adr/0010-patients-sign-in-with-their-own-account.md)), backend half: rules, callables, `allow-clinician`, dashboard | Open; tested (see the PR). Not deployed; the app's sign-in is the app team's half. |
+| #70 | `feat/live-demo-patient` → `main` | Live demo Patient: `npm run seed-live-patient` gives one real Patient account six weeks of seeded history | Merged; tested (seed 155). A rerun with `--display-name` also renames the existing account. **Run on `junction26hel-7400` on 14 November 2026** for the team's test Gmail account: account created (verified, no password), 42 daily, 24 Check-ins and Summaries, 24 Suggestions, 3 flags (level amber), 2 Visits, 12 Consents. Seeded before the Intake label: `--reset` once to add it. |
 
 **Deployed on `junction26hel-7400`:**
 - Rules and indexes.
@@ -43,7 +44,7 @@ Left behind: the stack's own Patient screens, theme, app shell, startup screen a
 
 ### What the Patient app does with the backend
 
-- On start it signs in anonymously and creates the Patient record linked to the configured Clinician. A Patient who has not chosen yet is taken to the welcome and the sharing choice.
+- On start it signs in anonymously and creates the Patient record linked to the configured Clinician. A Patient who has not chosen yet is taken to the welcome and the sharing choice. Under the ADR 0010 rules a new anonymous record is refused, so this changes with the app's [Patient sign-in](../README.md#patient-sign-in).
 - "Share my progress", "Continue without sharing", "Stop sharing" and "Share future progress" save the sharing Consent before the screen changes. A failed save changes nothing and shows a notice.
 - "Explore the demo" records no sharing choice.
 - When Firebase cannot be reached at start (no emulator, no network), the app stays on local demo data, as on `main`.
@@ -67,16 +68,26 @@ Left behind: the stack's own Patient screens, theme, app shell, startup screen a
 | | Writes `daily`, `consents`, `checkIns` (timing only) and `suggestions` (status and booked only). |
 | | Raises flags but never lowers them. |
 | | Can't write Summaries, Visits, Digests, ratings, Voice cues, the crisis marker, the assessment or Outcome fields. |
-| Clinician (email matches `clinicianEmail` and sharing is `granted`) | Reads only records stamped `sharedWithClinician == true`. |
+| Clinician (custom claim `role: "clinician"`, verified email matching `clinicianEmail`, sharing `granted`) | Reads only records stamped `sharedWithClinician == true`. |
 | | Writes Visits, the TMS end date and the display name. |
 | | Clears a flag by setting `clearedAtMillis` only, and can reset the Patient's level and reasons. |
-| Anyone signed in, on a Patient marked synthetic | The Patient's access (demo shortcut). |
-| Patient, creating their record | Links only to a Clinician whose email has a document in `clinicians` (the allowlist). |
+| Any verified account, on a Patient marked synthetic | The Patient's access (demo shortcut). Anonymous and unverified accounts have none. |
+| Patient, creating their record | Needs a verified account (not anonymous, email verified). Links only to a Clinician whose email has a document in `clinicians` (the allowlist). |
 | Everyone | No client reads or writes `mail` or `clinicians`. Signed-out users read nothing. |
 
 The Clinician's email is configuration, never code: the rules check the `clinicians/{email}` allowlist, which only the Admin SDK writes (`npm run allow-clinician`, and the seed for the Clinician it seeds for). The app reads the email from `secrets.properties` (Android) or `Secrets.plist` (iOS).
 
-Not enforced for the demo: `email_verified`. Production must require it (see the comment in the rules).
+### Accounts ([ADR 0010](adr/0010-patients-sign-in-with-their-own-account.md))
+
+| Part | Status |
+|---|---|
+| Rules: a new Patient record, and the demo shortcut, need a verified account; the Clinician needs the `role: "clinician"` claim and a verified email; existing records stay their owners' (anonymous included) | **Built**, rules tests 74 (6 new) |
+| `assertActsAsPatient` (Start and Finish Check-in): verified account, else `failed-precondition` "Verify your account to continue." | **Built**, `test/accounts.test.ts` and the Functions emulator |
+| `assertClinicianOf` (Intake, Digest): claim and verified email | **Built** |
+| `npm run allow-clinician`: also sets the claim and marks the email verified; says so when the account does not exist yet; refuses an unverified account unless `--uid` names it | **Built**, Auth emulator tests |
+| Dashboard: an account without the claim or a verified email is signed out with "This account isn't set up as a Clinician yet…" | **Built**, `node --test` and the walking skeleton |
+| App: sign-up, verification gate, Google, password reset, `PatientSession` | **Not built** (app team); contract in the [README](../README.md#patient-sign-in) |
+
 
 ### Sharing (issue #29 and the review decisions)
 
@@ -95,7 +106,7 @@ Not enforced for the demo: `email_verified`. Production must require it (see the
 |---|---|---|
 | Extract Intake | **Built:** `extractIntake` and `saveIntake` (#13) | Clinician-only callables. Extraction writes nothing; saving writes only `intakeHighlights` (at most 120 words). The report is never stored or logged, and a spy test checks this. |
 | Weekly Digest | **Built:** `weeklyDigest` (Mondays 07:00 Helsinki) and `generateDigest` (callable) (#23) | Document key is the ISO week (`2026-W46`). Uses only shared records. A week with no Check-ins gets fixed text and never calls the model. Patients who aren't sharing get no Digest. |
-| Start Check-in (Live token) | **Built:** `startCheckIn` (#14, backend part), callable in `europe-north1`, deployed | Caller rule (`assertActsAsPatient` in `src/patientCaller.ts`, mirroring `actsAsPatient` in the rules): `auth.uid == patientId`, or anyone signed in when the Patient is `synthetic: true`; signed out is `unauthenticated`, anyone else or a missing Patient `permission-denied`. Request `{patientId, brief, mode?}` (Brief 1 to 12,000 characters, mode `typed` or `spoken`), response `{checkInId, token, model, endpoint, mode, connectByMillis, expiresAtMillis}`. Mints a single-use token with the recorded `bidiGenerateContentSetup` + `fieldMask` body, locked to `gemini-3.8-live`, the Brief plus fixed safety rules, the tool declarations (`src/tools.ts`, nine BLOCKING tools the phone runs in `CompanionTools`), AUDIO output and both transcriptions; 60 s to connect, 10-minute lifetime. At most 10 starts an hour per Patient record (`patientLimits`), then `resource-exhausted` without minting. Creates `checkIns/{id}` (function-only fields empty, `sharingStamp`). A real mint and a typed turn on that token were checked by hand. Client contract in the [README](../README.md#check-in-start-and-finish). |
+| Start Check-in (Live token) | **Built:** `startCheckIn` (#14, backend part), callable in `europe-north1`, deployed | Caller rule (`assertActsAsPatient` in `src/patientCaller.ts`, mirroring `actsAsPatient` in the rules): `auth.uid == patientId`, or any verified account when the Patient is `synthetic: true`; signed out is `unauthenticated`, anyone else or a missing Patient `permission-denied`. Request `{patientId, brief, mode?}` (Brief 1 to 12,000 characters, mode `typed` or `spoken`), response `{checkInId, token, model, endpoint, mode, connectByMillis, expiresAtMillis}`. Mints a single-use token with the recorded `bidiGenerateContentSetup` + `fieldMask` body, locked to `gemini-3.8-live`, the Brief plus fixed safety rules, the tool declarations (`src/tools.ts`, nine BLOCKING tools the phone runs in `CompanionTools`), AUDIO output and both transcriptions; 60 s to connect, 10-minute lifetime. At most 10 starts an hour per Patient record (`patientLimits`), then `resource-exhausted` without minting. Creates `checkIns/{id}` (function-only fields empty, `sharingStamp`). A real mint and a typed turn on that token were checked by hand. Client contract in the [README](../README.md#check-in-start-and-finish). |
 | Finish Check-in | **Built:** `finishCheckIn` (#14, backend part; #20 Decisions in #62; #21 the Outcome on this branch), callable in `europe-north1`; #14's version deployed, the Decisions call and the Outcome not yet | Same caller rule as Start Check-in. Request `{patientId, checkInId, draft, todayLines?, lastSuggestionId?}`, response `{checkInId, summary, minimal}` (never a flag, level or assessment); a Check-in Start Check-in never created is `not-found`. The text model (storage off, structured output) and the Decisions API (#20) run at the same time on the same in-memory transcript. Writes the Summary (keyed by the Check-in, a retry overwrites, stamp kept; a retry without model output keeps what the model wrote before; the stamp is true only when the Check-in's is and the Patient still shares), the ratings, Voice cues (from the draft), crisis marker, `assessment`, `previousTried` and end time, new flags at `<kind>-<checkInId>`, and the Patient's `lastCheckInAtMillis` / `lastSeenAtMillis` and raised `flagLevel` / `flagReasons`, in one transaction. Silent Check-ins (no model or Decisions call), a request the model refuses and bad model output give a minimal Summary; a text model timeout or server error answers `unavailable` and saves nothing but the flags the judgment raised (in their own transaction), so the phone retries and a crisis is not lost. **Decisions routing** (`src/decisions.ts`, starting values in `DECISION_THRESHOLDS`): crisis ≥ 0.5 or the draft's crisis marker gives red `crisis`; decline ≥ 0.6 amber `decline`; an HTTP 400 safety refusal amber `unassessed` ("A Check-in could not be assessed automatically."); a timeout or any other failure no flag and `assessment: "unavailable"`, and the Summary is saved as usual. `triedLast` (asked only when there was a previous Suggestion) gives `previousTried` true (≥ 0.6), false (≤ 0.4) or null. The three write rules hold: no new flag while one of the kind with the same stamp is open (the phone's own crisis flag counts), the level never goes down, only flags stamped true count. On a Demo Patient only the caller who started the Check-in may finish it. The draft is never written or logged; the spy test covers the Decisions success, refusal, timeout and error paths, and the Outcome paths (recorded, retried, an answer about another Suggestion: no transcript, feeling text or Suggestion details logged). **The Outcome (#21,** `src/outcomes.ts`, pure**)**, in the same transaction: the function finds the target (the most recent accepted Suggestion made before the Check-in started, not in the draft, with no Outcome yet; a proposed or declined one never) and writes only when `lastSuggestionId` is absent or names it, and only if the transaction finds the same target. The answer: the text model's `previousTried` / `previousFelt` / `previousPreferNotToSay` first, the Decisions "tried" only when the text model is unsure, nothing (the Outcome stays open) when neither knows. It sets `tried`, `felt`, `objectiveChange` (the Suggestion's day's stored `vsBaseline.steps`, else computed from the daily records by the shared Baseline rule in `src/baseline.ts`; `null` without steps or with `consents/steps` off), `outcomeScore` and the new `outcomeCheckInId`, once per Suggestion: a retry keeps the first Outcome and a late retry never overwrites a later Check-in's. Only those fields change; the Suggestion's stamp stays. |
 | Suggest today | **Built:** `suggestToday`, callable in `europe-north1`, deployed | Same caller rule as Start Check-in. One `gemini-4-hydrogen` call (storage off, structured output) over the Patient's Context gives up to three Suggestions; each one with a `placeQuery` gets a Places API (New) text search around the Patient's `location`; music Suggestions name albums or tracks. Reads only, stores nothing, logs ids and statuses only. Only Demo Patients have a `location` (written by the seed). The app shows them on Today, with a Google map on Android when `maps.apiKey` is set. See the README, "Suggest today". |
 | Music | Built, not deployed | `suggest_music` makes about a minute of calm instrumental music with Lyria 3.5 through the `generateMusic` callable, in the background, and the Check-in card plays it from memory. It replaced the YouTube Music search link. iOS playback compiles but has not run on a device. |
@@ -263,7 +274,7 @@ Write plan, mirroring `raisedAttention` and `hasOpenFlag` in the functions:
 | Live tokens and Decisions need `v1beta` | Gemini research, API versions | Holds: both are called with `fetch` on `v1beta` (`src/live.ts`, `src/decisionsApi.ts`); the SDK, used only for the text model, defaults to `v1`. |
 | EU region | System design, ADR 0008 | `europe-north1` for the functions and the dashboard; the scheduled `weeklyDigest` and `silenceCheck` run in `europe-west1`, because Cloud Scheduler has no `europe-north1` location. |
 | GitLive `firebase-kotlin-sdk` 2.8.0 in shared code | ADR 0008 | Holds. |
-| Anonymous Patient sign-in, linked to the one Clinician on first open | System design, roles | Holds, now behind `main`'s screens. |
+| Anonymous Patient sign-in, linked to the one Clinician on first open | System design, roles | Replaced by [ADR 0010](adr/0010-patients-sign-in-with-their-own-account.md): the Patient signs in with a verified account. The app still signs in anonymously until its half ships. |
 | Attention flag: three levels, written reasons, never a number; a refusal is amber, a failure is never green | ADR 0009, spec #5 | Holds for Finish Check-in's flags (#20): fixed reason sentences, no score stored or shown, `assessment: "unavailable"` instead of a made-up green. |
 | The Patient never sees a flag | Spec #5 | Holds for Finish Check-in: its response carries only the Summary; `assessment` and the flags are on documents the app does not show. |
 
@@ -314,6 +325,17 @@ The end-to-end run on the Android emulator:
 4. With the connection to Firestore cut, "Stop sharing" showed "Your sharing choice could not be saved" after the timeout, and both the screen and the record stayed on `granted`.
 5. After a restart the app opened on Today with the stored choice, and the Patient was listed again.
 
+### Patient accounts (ADR 0010), on `feat/patient-accounts`
+
+| Suite | Result |
+|---|---|
+| `cd firebase/functions && npm test` | 311 pass (20 new in `test/accounts.test.ts`) |
+| `cd firebase/hosting && node --test` | 311 pass (3 new) |
+| `cd firebase/seed && npm test` | 91 pass (2 new) |
+| Functions emulator suite (`auth,firestore,functions`) | 104 pass, 1 skipped (the opt-in real Gemini run); 6 new rules tests, an anonymous Patient refused by both Check-in callables, sign-up before and after verification and the dashboard's claim check in the walking skeleton |
+| Seed emulator suite (`auth,firestore`) | 18 pass (2 new: `allow-clinician` against the Auth emulator) |
+| `./gradlew :core:jvmTest :shared:testAndroidHostTest :androidApp:assembleDebug` | core 39 and shared 16 pass, the APK builds; the app is unchanged |
+
 ### Live deployment (14 November 2026)
 
 The real project `junction26hel-7400` ("Hack Junction 2026-7400", Blaze plan) is set up. It was deployed from the backend stack (`chore/real-project-config`), whose `firebase/` matches this branch's:
@@ -335,6 +357,7 @@ Deploy notes:
 `redFlagAlert` and `silenceCheck` are not deployed yet: deploy them with `firebase deploy --only functions:redFlagAlert,functions:silenceCheck --project prod` together with the Trigger Email extension. The `finishCheckIn` of #62 and of this branch (#21) needs `firebase deploy --only functions:finishCheckIn,firestore:rules --project prod` once #60, #62 and this PR are merged; it uses the same `GEMINI_API_KEY` secret. The rules change only adds `outcomeCheckInId` to the fields a client may not set on a new Suggestion (absent is still accepted).
 
 **Not verified (needs a person, hardware or credentials):**
+- Patient accounts (ADR 0010): real Google sign-in on a device (the Google provider is enabled on `junction26hel-7400`; the app's half is still to do), a real verification email arriving, and the new rules deployed. `allow-clinician` has run against the real project: the live Clinician has `role: "clinician"` and a verified email. Deploy the new rules only once the app ships the new sign-in.
 - The Patient app against the real project, and on iOS beyond the build.
 - A full Intake extraction or Digest through the deployed callables, signed in as the Clinician. Only the one direct call to `gemini-4-hydrogen` above has been made.
 - The app on the S24+ and on an iPhone.

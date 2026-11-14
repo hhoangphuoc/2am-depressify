@@ -9,7 +9,7 @@ import { collection, onSnapshot, query, where } from "https://www.gstatic.com/fi
 import { createAlerts } from "./alerts.js";
 import { initFirebase } from "./firebase.js";
 import { digestCalls, intakeCalls } from "./functions.js";
-import { signInErrorMessage } from "./lib/auth.js";
+import { clinicianAccessProblem, signInErrorMessage } from "./lib/auth.js";
 import { COLLECTIONS } from "./lib/contract.js";
 import { clinicianListFilters } from "./lib/sharing.js";
 import { parseRoute } from "./lib/route.js";
@@ -114,12 +114,24 @@ async function main() {
   const { auth, db } = firebase;
   wireSignIn(auth);
   alerts = createAlerts({ toggle: $("sound-toggle"), note: $("sound-note"), announcer: $("attention-announcer") });
-  window.addEventListener("hashchange", () => applyRoute(firebase, Boolean(auth.currentUser?.email)));
-  onAuthStateChanged(auth, (user) => {
-    show("starting", false);
+  let signedIn = false; // signed in with a Clinician's account, past the check below
+  window.addEventListener("hashchange", () => applyRoute(firebase, signedIn));
+  onAuthStateChanged(auth, async (user) => {
     stopPatients?.();
     stopPatients = null;
-    const signedIn = Boolean(user?.email);
+    signedIn = false;
+    if (user) {
+      // Only a Clinician's account (ADR 0010); any other is signed out with the reason.
+      const problem = await clinicianAccessProblem(user);
+      if (auth.currentUser !== user) return; // signed out or switched while the token was read
+      if (problem) {
+        $("sign-in-error").textContent = problem;
+        await signOut(auth); // runs this again, signed out
+        return;
+      }
+    }
+    show("starting", false);
+    signedIn = Boolean(user?.email);
     show("sign-in", !signedIn);
     show("account", signedIn);
     if (!signedIn) show("sound-note", false);

@@ -30,12 +30,19 @@ Options:
   --today <date>       the last day of history (default: today in Europe/Helsinki)
   --seed <n>           pseudo-random seed (default: ${DEFAULT_SEED})`;
 
-export const ALLOW_USAGE = `Usage: npm run allow-clinician -- --email <email> [--project id]
+export const ALLOW_USAGE = `Usage: npm run allow-clinician -- --email <email> [--uid uid] [--project id]
 
 Adds a Clinician to the clinicians allowlist (clinicians/{email}), so a new Patient's app may link
-to them. Writing it again changes nothing.
+to them, and gives the sign-in account with that email the custom claim role "clinician" and a
+verified email, so the security rules and functions treat it as the Clinician's. If no account has
+the email yet, says so and still writes the allowlist; run it again once the account exists.
+An account whose email is not verified yet could have been made by anyone, so it needs --uid: the
+User UID of the account you added in the console (Authentication → Users).
+Running it again changes nothing. The Clinician signs out and in again (or reloads the dashboard)
+to pick up the claim.
 
-${TARGET_HELP}`;
+${TARGET_HELP}
+  With the emulator, the Auth emulator at $FIREBASE_AUTH_EMULATOR_HOST, or ${DEFAULT_AUTH_EMULATOR_HOST}.`;
 
 export const SILENCE_USAGE = `Usage: npm run silence-test -- --patient <id> [--project id]
 
@@ -93,7 +100,9 @@ Options:
  * @property {boolean} help
  * @property {string} projectId
  * @property {string | null} emulatorHost null for a real project
+ * @property {string | null} authEmulatorHost the Auth emulator, used whenever the Firestore one is; null for a real project
  * @property {string} email
+ * @property {string | null} uid the unverified account the admin vouches for, or null
  */
 
 /**
@@ -283,6 +292,7 @@ export function parseAllowCommand(argv, env) {
     args: argv,
     options: {
       email: { type: "string" },
+      uid: { type: "string" },
       project: { type: "string" },
       help: { type: "boolean", short: "h" },
     },
@@ -290,9 +300,11 @@ export function parseAllowCommand(argv, env) {
   });
   const help = values.help ?? false;
   const target = resolveTarget(values.project, env);
-  if (help) return { help, ...target, email: "" };
+  const authEmulatorHost = target.emulatorHost ? env.FIREBASE_AUTH_EMULATOR_HOST || DEFAULT_AUTH_EMULATOR_HOST : null;
+  const uid = values.uid ?? null;
+  if (help) return { help, ...target, authEmulatorHost, email: "", uid };
   if (values.email === undefined) throw new Error("--email <email> is required: the Clinician to allow");
-  return { help, ...target, email: clinicianEmail(values.email, "--email", target) };
+  return { help, ...target, authEmulatorHost, email: clinicianEmail(values.email, "--email", target), uid };
 }
 
 /** A single Firestore document id: no "/", not "." or "..", not reserved (`__...__`). */

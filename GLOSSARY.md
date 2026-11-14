@@ -22,6 +22,14 @@ _Avoid_: Test account, mock patient
 A care professional who follows the progress of the Patients linked to them.
 _Avoid_: Doctor, therapist, admin
 
+**Admin**:
+The team member who runs the Firebase project and marks a Clinician's account as the Clinician's (`npm run allow-clinician`). Not a role in the app, and never the Clinician.
+_Avoid_: Operator, superuser
+
+**Verified account**:
+A person's own sign-in account: not anonymous, and its email verified, by the link in the verification email or by Google. Creating a Patient record and starting a Check-in need one.
+_Avoid_: Real account, registered user
+
 **Companion**:
 The AI the Patient talks with. It supports and suggests; it never diagnoses or advises on treatment.
 _Avoid_: Voice agent, bot, assistant, therapist

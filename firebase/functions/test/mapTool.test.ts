@@ -13,7 +13,7 @@ import {
   type MapsClient,
   type MapsMethod,
 } from "../src/mapTool";
-import { FakeCheckInStore, PATIENT_ID } from "./fakes";
+import { FakeCheckInStore, PATIENT_ID, verifiedToken } from "./fakes";
 
 const fixture = (method: MapsMethod) =>
   JSON.parse(readFileSync(join(__dirname, "..", "..", "..", "fixtures", "spike", "maps", "mapstools-" + method + ".json"), "utf8"));
@@ -38,7 +38,7 @@ function maps(override: Partial<Record<MapsMethod, unknown>> = {}) {
   return { client, calls };
 }
 const call = (data: unknown, uid: string | null = PATIENT_ID, fake = maps()) =>
-  mapToolHandler({ data, auth: uid ? { uid, token: {} } : undefined }, { store: new FakeCheckInStore(), maps: fake.client });
+  mapToolHandler({ data, auth: uid ? { uid, token: verifiedToken(`${uid}@example.com`) } : undefined }, { store: new FakeCheckInStore(), maps: fake.client });
 
 describe("mapTool", () => {
   it("builds the three requests that were recorded", () => {
