@@ -8,6 +8,7 @@ import { adminDigestStore, createDigestFunctions } from "./digestFunctions";
 import { healthStatus } from "./health";
 import { adminPatientStore, createIntakeFunctions } from "./intakeFunctions";
 import { REGION } from "./region";
+import { adminSilenceStore, createSilenceFunctions } from "./silenceFunctions";
 
 // All functions run in the Firestore database's region (src/region.ts).
 setGlobalOptions({ region: REGION });
@@ -49,4 +50,12 @@ export const { weeklyDigest, generateDigest } = createDigestFunctions({
 export const { redFlagAlert } = createAlertFunctions({
   store: () => adminAlertStore(adminDb()),
   dashboardUrl: dashboardUrlFromParams,
+});
+
+/**
+ * Silence check: every hour, a red `silent` flag for each sharing, live Patient whose phone has
+ * shown no sign of life for over 24 hours. `redFlagAlert` then emails the Clinician.
+ */
+export const { silenceCheck } = createSilenceFunctions({
+  store: () => adminSilenceStore(adminDb()),
 });

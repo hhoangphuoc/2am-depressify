@@ -4,7 +4,9 @@ import type { CallerAuth } from "../src/clinician";
 import type { AlertStore } from "../src/alertFunctions";
 import type { DigestStore } from "../src/digestFunctions";
 import type { PatientStore } from "../src/intakeFunctions";
-import { newPatientDoc, type DailyDoc, type Digest, type MailDoc, type PatientDoc, type Summary } from "../src/types";
+import type { SilencePlan, StoredFlag } from "../src/silence";
+import type { SilenceStore } from "../src/silenceFunctions";
+import { newPatientDoc, type DailyDoc, type Digest, type Flag, type MailDoc, type PatientDoc, type Summary } from "../src/types";
 
 export const CLINICIAN_EMAIL = "clinician@example.com";
 export const OTHER_CLINICIAN_EMAIL = "other-clinician@example.com";
@@ -127,5 +129,54 @@ export class FakeAlertStore implements AlertStore {
     if (this.mail.has(id)) return false;
     this.mail.set(id, mail);
     return true;
+  }
+}
+
+/**
+ * Patient records and their flags, for the silence check. `raiseSilent` behaves like the Admin SDK
+ * store's transaction: it reads the record as it is now and the Patient's silent flags, and applies
+ * the plan's flag create and Patient update together, or nothing.
+ */
+export class FakeSilenceStore implements SilenceStore {
+  readonly patients = new Map<string, Partial<PatientDoc>>();
+  readonly flags = new Map<string, Map<string, Flag>>();
+  /** Patient ids whose transaction throws, with a message that echoes the record. */
+  failFor = new Set<string>();
+  /** Changes a record between the listing and the transaction, as a phone checking in would. */
+  beforeTransaction: ((patientId: string, store: FakeSilenceStore) => void) | null = null;
+  transactions = 0;
+
+  constructor(patients: Record<string, Partial<PatientDoc>>, flags: Record<string, Record<string, Flag>> = {}) {
+    for (const [id, doc] of Object.entries(patients)) this.patients.set(id, { ...doc });
+    for (const [id, docs] of Object.entries(flags)) this.flags.set(id, new Map(Object.entries(docs)));
+  }
+
+  flagsOf(patientId: string): Map<string, Flag> {
+    if (!this.flags.has(patientId)) this.flags.set(patientId, new Map());
+    return this.flags.get(patientId)!;
+  }
+
+  async listPatients() {
+    return [...this.patients.entries()].map(([id, p]) => ({
+      id,
+      patient: { sharingConsent: p.sharingConsent, synthetic: p.synthetic, lastSeenAtMillis: p.lastSeenAtMillis },
+    }));
+  }
+
+  async raiseSilent(patientId: string, plan: (patient: Partial<PatientDoc> | undefined, silentFlags: StoredFlag[]) => SilencePlan) {
+    this.transactions += 1;
+    this.beforeTransaction?.(patientId, this);
+    const patient = this.patients.get(patientId);
+    if (this.failFor.has(patientId)) throw new Error(`transaction failed for ${JSON.stringify(patient)}`);
+    const silent = [...this.flagsOf(patientId).entries()]
+      .filter(([, flag]) => flag.kind === "silent")
+      .map(([id, flag]) => ({ id, flag: { ...flag } }));
+    const result = plan(patient ? { ...patient } : undefined, silent);
+    if (result.raise) {
+      if (this.flagsOf(patientId).has(result.flagId)) throw Object.assign(new Error("already exists"), { code: 6 });
+      this.flagsOf(patientId).set(result.flagId, result.flag);
+      this.patients.set(patientId, { ...patient, ...result.update });
+    }
+    return result;
   }
 }
