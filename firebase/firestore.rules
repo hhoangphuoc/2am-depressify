@@ -1,0 +1,334 @@
+rules_version = '2';
+
+// Security rules for the whole data contract (issue #8). The collections and fields are listed in
+// docs/firestore-schema.md; the tests are firebase/functions/test/rules/firestore-rules.test.ts.
+//
+// Who may see a Patient's progress: the Patient themselves, their Clinician, and, as a demo
+// shortcut, any signed-in user for a Patient marked synthetic.
+//
+//   Patient    reads and writes their own record and its collections. Summaries, Visits and
+//              Digests are read-only to them; flags are append-only (only the Clinician clears
+//              one); on a Check-in they own only the times, and on a Suggestion only its status
+//              and booking (ratings, Voice cues, the crisis marker and the Outcome are written by
+//              functions); on the record they write only the fields the phone owns, and may raise
+//              but never lower their own flag level.
+//   Clinician  reads the record, Consents and Visits of the Patients whose clinicianEmail is their
+//              sign-in email, while that Patient's sharing Consent is granted, and of the other
+//              collections only the documents stamped `sharedWithClinician` (saved while the
+//              Patient was sharing). Writes Visits, the TMS end date and display name, the
+//              cleared time on a flag they can see, and resets the Patient's flag level and
+//              reasons after follow-up. Nothing else.
+//   Demo       any signed-in user acts as the Patient on a record marked synthetic.
+//   mail       no client access. Functions write it with the Admin SDK, which bypasses rules.
+//   clinicians the allowlist of Clinicians a new Patient may link to, one document per email.
+//              No client access; only the Admin SDK writes it (`npm run allow-clinician` and the
+//              seed in firebase/seed). The real Clinician's email lives there, never in this file.
+//
+// Functions (Finish Check-in, Intake, Digest, silence check) and the seed use the Admin SDK and
+// are not bound by these rules. Everything not matched below is denied.
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ---------------------------------------------------------------------------------------
+    // Who is asking
+    // ---------------------------------------------------------------------------------------
+
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    // The sign-in email, or null for an anonymous Patient.
+    //
+    // DEMO ONLY: the email is trusted without `request.auth.token.email_verified == true`,
+    // because accounts created in the Auth emulator are unverified. PRODUCTION MUST ALSO REQUIRE
+    // email_verified, or anyone who registers an unverified account with a Clinician's address
+    // can read that Clinician's Patients.
+    function authEmail() {
+      return signedIn() ? request.auth.token.get('email', null) : null;
+    }
+
+    // ---------------------------------------------------------------------------------------
+    // Relationships to a Patient record `patient` (its data map)
+    // ---------------------------------------------------------------------------------------
+
+    function isOwner(patientId) {
+      return signedIn() && request.auth.uid == patientId;
+    }
+
+    // The demo shortcut: any signed-in user may act as a Demo Patient.
+    function isDemoPatient(patient) {
+      return signedIn() && patient.synthetic == true;
+    }
+
+    // Acting as the Patient: the Patient themselves, or anyone signed in on a Demo Patient.
+    function actsAsPatient(patientId, patient) {
+      return isOwner(patientId) || isDemoPatient(patient);
+    }
+
+    function isClinicianOf(patient) {
+      return authEmail() != null && patient.clinicianEmail == authEmail();
+    }
+
+    // The one place that decides whether the Clinician may see this Patient. Every Clinician
+    // read and write of the record and its collections goes through it.
+    //
+    // Sharing Consent (issue #29): the Clinician sees the Patient only while the Patient has
+    // granted sharing. Undecided and declined both mean no access, and withdrawing takes effect
+    // on the next read, including open listeners. The dashboard's list query filters on
+    // `sharingConsent == 'granted'` too, or Firestore rejects the query.
+    function clinicianCanRead(patient) {
+      return isClinicianOf(patient) && patient.sharingConsent == 'granted';
+    }
+
+    function clinicianCanWrite(patient) {
+      return clinicianCanRead(patient);
+    }
+
+    // ---------------------------------------------------------------------------------------
+    // Values
+    // ---------------------------------------------------------------------------------------
+
+    // A Clinician a new Patient may link to: their email has a document in the `clinicians`
+    // allowlist. The app's email comes from configuration (secrets.properties on Android, a plist
+    // on iOS) and must match one there. The Invite will replace this.
+    function isLinkableClinician(email) {
+      return email is string
+        && exists(/databases/$(database)/documents/clinicians/$(email));
+    }
+
+    function flagLevels() {
+      return ['green', 'amber', 'red'];
+    }
+
+    function flagRank(level) {
+      return level == 'red' ? 2 : (level == 'amber' ? 1 : 0);
+    }
+
+    function isDate(value) {
+      return value is string && value.matches('[0-9]{4}-[0-9]{2}-[0-9]{2}');
+    }
+
+    function changedKeys() {
+      return request.resource.data.diff(resource.data).affectedKeys();
+    }
+
+    // ---------------------------------------------------------------------------------------
+    // The Patient record
+    // ---------------------------------------------------------------------------------------
+
+    // A new record as the app writes it (PatientSession): the Patient's own id, linked to an
+    // allowlisted Clinician, not synthetic, and with nothing yet in the Clinician's fields.
+    function validNewPatient(patient) {
+      return isLinkableClinician(patient.clinicianEmail)
+        && patient.synthetic == false
+        && patient.tmsEndDate == null
+        && patient.intakeHighlights == ''
+        && patient.flagLevel in flagLevels();
+    }
+
+    // The fields the phone owns. Display name, Clinician link, Intake highlights, TMS end date
+    // and the synthetic marker are never the Patient's to change.
+    function patientUpdate() {
+      let after = request.resource.data;
+      return changedKeys().hasOnly([
+          'quietHoursStart', 'quietHoursEnd', 'lastSeenAtMillis', 'lastCheckInAtMillis',
+          'healthSource', 'sharingConsent', 'sharingChangedAtMillis', 'flagLevel', 'flagReasons'])
+        && after.healthSource in ['device', 'synthetic']
+        && after.sharingConsent in ['undecided', 'granted', 'declined']
+        && (!changedKeys().hasAny(['sharingConsent']) || sharingDecided())
+        && (!changedKeys().hasAny(['flagLevel', 'flagReasons']) || flagRaisedOnly());
+    }
+
+    // A change of sharing Consent is a decision: granted or declined, written with the new time
+    // it was made. Nothing moves a Patient back to undecided.
+    function sharingDecided() {
+      let after = request.resource.data;
+      return after.sharingConsent in ['granted', 'declined']
+        && changedKeys().hasAll(['sharingConsent', 'sharingChangedAtMillis'])
+        && after.sharingChangedAtMillis is int;
+    }
+
+    // The phone raises flags (its daily rules and the crisis tool) and sets the level to the
+    // highest uncleared flag the Clinician can see (stamped `sharedWithClinician`); a flag raised
+    // while not sharing leaves the level and reasons alone, so the record never carries its
+    // reason. Nothing but the Clinician lowers a level, so from the phone the level may only stay
+    // or rise, and existing reasons are kept.
+    function flagRaisedOnly() {
+      let after = request.resource.data;
+      return after.flagLevel in flagLevels()
+        && flagRank(after.flagLevel) >= flagRank(resource.data.flagLevel)
+        && after.flagReasons is list
+        && after.flagReasons.hasAll(resource.data.flagReasons);
+    }
+
+    // The Clinician renames the Patient, sets the TMS end date, and after follow-up resets the
+    // level to the highest remaining uncleared flag, or green, with its reasons. The Clinician can
+    // read every flag that counts toward the level (those stamped `sharedWithClinician`), so the
+    // reset is computed from all of them.
+    function clinicianUpdate() {
+      let after = request.resource.data;
+      return changedKeys().hasOnly(['displayName', 'tmsEndDate', 'flagLevel', 'flagReasons'])
+        && after.displayName is string && after.displayName.size() > 0
+        && (after.tmsEndDate == null || isDate(after.tmsEndDate))
+        && after.flagLevel in flagLevels()
+        && after.flagReasons is list;
+    }
+
+    match /patients/{patientId} {
+      // `resource` is null when the record does not exist yet. The app checks for its own record
+      // before creating it, so the owner test comes first and short-circuits.
+      allow read: if isOwner(patientId)
+        || isDemoPatient(resource.data)
+        || clinicianCanRead(resource.data);
+
+      allow create: if isOwner(patientId) && validNewPatient(request.resource.data);
+
+      allow update: if (actsAsPatient(patientId, resource.data) && patientUpdate())
+        || (clinicianCanWrite(resource.data) && clinicianUpdate());
+
+      // Records are never deleted by a client; the seed resets Demo Patients with the Admin SDK.
+      allow delete: if false;
+
+      // ---- Collections under the record ----------------------------------------------------
+
+      function patient() {
+        return get(/databases/$(database)/documents/patients/$(patientId)).data;
+      }
+
+      // The owner test needs no lookup, so it comes first.
+      function patientAccess() {
+        return isOwner(patientId) || isDemoPatient(patient());
+      }
+
+      function canRead() {
+        return patientAccess() || clinicianCanRead(patient());
+      }
+
+      // ---- The sharing stamp ---------------------------------------------------------------
+      //
+      // Re-consent shares future records only. Every document in daily, checkIns, summaries,
+      // suggestions, flags and digests carries `sharedWithClinician`: whether the Patient's
+      // sharing Consent was granted when the document was created. It never changes. The Clinician
+      // reads only documents stamped true, so what was saved while sharing was off never reaches
+      // them, and what was saved during an earlier sharing period is visible again once the
+      // Patient shares again. Consents, Visits and the record itself are not stamped.
+      //
+      // A Clinician query on a stamped collection must filter on `sharedWithClinician == true`
+      // (`clinicianCollectionFilters` in hosting/js/lib/sharing.js), or Firestore rejects it.
+      // Functions stamp with `sharingStamp` (functions/src/sharing.ts). On a Demo Patient any
+      // signed-in user has the Patient's access, so there only the dashboard's filter hides
+      // unshared documents.
+
+      // A Clinician `get` of a missing document is refused like a hidden one, so a refusal never
+      // tells that a document exists. The dashboard only queries these collections.
+      function canReadStamped() {
+        return patientAccess()
+          || (clinicianCanRead(patient()) && resource.data.sharedWithClinician == true);
+      }
+
+      // A new document stamped with whether the Patient shares right now (before this write).
+      function stampedNow() {
+        return request.resource.data.sharedWithClinician == (patient().sharingConsent == 'granted');
+      }
+
+      function stampKept() {
+        return !changedKeys().hasAny(['sharedWithClinician']);
+      }
+
+      // ---- The collections -----------------------------------------------------------------
+
+      // The Patient's own records. The Clinician only reads them.
+      match /daily/{date} {
+        allow read: if canReadStamped();
+        allow create: if patientAccess() && stampedNow();
+        allow update: if patientAccess() && stampKept();
+        allow delete: if patientAccess();
+      }
+      match /consents/{subject} {
+        allow read: if canRead();
+        allow write: if patientAccess();
+      }
+
+      // The app creates a Check-in and owns only its times. The ratings, Voice cues and crisis
+      // marker are written by Finish Check-in (Admin SDK) from the draft, so they are empty when
+      // the app creates the Check-in and the app never changes them.
+      match /checkIns/{checkInId} {
+        allow read: if canReadStamped();
+        allow create: if patientAccess() && stampedNow() && checkInAsAppCreatesIt();
+        allow update: if patientAccess() && changedKeys().hasOnly(['startedAtMillis', 'endedAtMillis']);
+        allow delete: if patientAccess();
+      }
+
+      function checkInAsAppCreatesIt() {
+        let c = request.resource.data;
+        return c.mood == null && c.energy == null && c.sleepQuality == null
+          && c.voiceCues is list && c.voiceCues.size() == 0
+          && c.crisis == false;
+      }
+
+      // Written only by Finish Check-in (Admin SDK) from the Check-in itself. Read-only to every
+      // client, the Patient included, so what the Clinician reads cannot be edited by hand.
+      match /summaries/{checkInId} {
+        allow read: if canReadStamped();
+      }
+
+      // The app records a Suggestion and changes only its status and booking. The Outcome (tried,
+      // felt, objective change, Outcome score) is written by functions only.
+      match /suggestions/{suggestionId} {
+        allow read: if canReadStamped();
+        allow create: if patientAccess() && stampedNow() && noOutcomeYet();
+        allow update: if patientAccess() && changedKeys().hasOnly(['status', 'booked']);
+        allow delete: if patientAccess();
+      }
+
+      function noOutcomeYet() {
+        let s = request.resource.data;
+        return s.tried == null && s.felt == null && s.objectiveChange == null && s.outcomeScore == null;
+      }
+
+      // Flags are history. The phone appends uncleared flags (a retried write that changes
+      // nothing is allowed); only the Clinician clears one they can see, by setting its cleared
+      // time and nothing else. No client deletes a flag.
+      match /flags/{flagId} {
+        allow read: if canReadStamped();
+        allow create: if patientAccess()
+          && stampedNow()
+          && request.resource.data.level in flagLevels()
+          && request.resource.data.clearedAtMillis == null;
+        allow update: if (patientAccess() && changedKeys().size() == 0)
+          || (clinicianCanWrite(patient())
+              && resource.data.sharedWithClinician == true
+              && changedKeys().hasOnly(['clearedAtMillis'])
+              && request.resource.data.clearedAtMillis is int);
+        allow delete: if false;
+      }
+
+      // Recorded by the Clinician at a Visit. Read-only to the Patient.
+      match /visits/{visitId} {
+        allow read: if canRead();
+        allow create, update: if clinicianCanWrite(patient())
+          && isDate(request.resource.data.date)
+          && (request.resource.data.questionnaire == null
+              || request.resource.data.questionnaire in ['phq2', 'phq9'])
+          && (request.resource.data.score == null || request.resource.data.score is int);
+        allow delete: if clinicianCanWrite(patient());
+      }
+
+      // Written by the weekly Digest function (Admin SDK). Read-only to every client.
+      match /digests/{isoWeek} {
+        allow read: if canReadStamped();
+      }
+    }
+
+    // Flag emails for the Trigger Email extension. Written by functions only; no client access.
+    match /mail/{mailId} {
+      allow read, write: if false;
+    }
+
+    // The Clinician allowlist, keyed by email. Written with the Admin SDK only; no client may read
+    // it (so it never lists who the Clinicians are) or write it. Rules read it through exists().
+    match /clinicians/{email} {
+      allow read, write: if false;
+    }
+  }
+}

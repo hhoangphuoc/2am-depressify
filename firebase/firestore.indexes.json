@@ -1,0 +1,13 @@
+{
+  "indexes": [
+    {
+      "collectionGroup": "digests",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "sharedWithClinician", "order": "ASCENDING" },
+        { "fieldPath": "isoWeek", "order": "DESCENDING" }
+      ]
+    }
+  ],
+  "fieldOverrides": []
+}

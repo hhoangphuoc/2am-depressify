@@ -1,0 +1,10 @@
+{
+  "direction": "server->client",
+  "websocketFrame": "binary",
+  "tMs": 2181,
+  "message": {
+    "serverContent": {
+      "generationComplete": true
+    }
+  }
+}

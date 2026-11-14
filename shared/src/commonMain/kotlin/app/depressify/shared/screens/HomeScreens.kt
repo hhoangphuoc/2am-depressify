@@ -141,15 +141,15 @@ fun WelcomeScreen(vm: PatientViewModel) {
         Txt("A little support,\nat home.", DepressifyType.display, c.ink, heading = true)
         Txt("A few minutes with an AI Companion, between Visits.", DepressifyType.body)
         PrimaryButton("Get started", { vm.open(Route.Sharing) }, icon = null)
-        TextLink("Explore the demo", { vm.finishWelcome(share = true) }, Modifier.align(Alignment.CenterHorizontally))
+        TextLink("Explore the demo", vm::exploreDemo, Modifier.align(Alignment.CenterHorizontally))
         Txt("Wellbeing support. Not clinical treatment.", DepressifyType.small, c.muted)
     }
 }
 
 @Composable
-fun SharingScreen(vm: PatientViewModel) {
+fun SharingScreen(vm: PatientViewModel, s: PatientState) {
     val c = Theme.colors
-    Page(top = { TopBar("Sharing", vm::back) }) {
+    Page(top = { TopBar("Sharing", vm::back) }, notice = s.notice) {
         Txt("You choose what\nyou share.", DepressifyType.display, c.ink, heading = true)
         Txt("Your Clinician can see your Summaries and the Signals you allow.", DepressifyType.body)
         SoftCard {

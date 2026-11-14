@@ -1,0 +1,10 @@
+{
+  "direction": "server->client",
+  "websocketFrame": "binary",
+  "tMs": 23071,
+  "message": {
+    "serverContent": {
+      "interrupted": true
+    }
+  }
+}

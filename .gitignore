@@ -85,3 +85,23 @@ xcuserdata/
 DerivedData/
 iosApp/Depressify.xcodeproj/
 iosApp/Depressify/Info.plist
+
+# --- Firebase and app secrets (never committed) ---
+google-services.json
+GoogleService-Info.plist
+secrets.properties
+iosApp/Depressify/Secrets.plist
+
+# --- Firebase tooling ---
+firebase/functions/lib/
+firebase/functions/.secret.local
+**/.secret.local
+# Extension parameters written by `firebase ext:install` (the Trigger Email one holds SMTP details)
+firebase/extensions/*.env
+.firebase/
+firebase-debug.log*
+firestore-debug.log*
+ui-debug.log*
+database-debug.log*
+pubsub-debug.log*
+emulator-data/

@@ -1,0 +1,11 @@
+{
+  "direction": "server->client",
+  "websocketFrame": "binary",
+  "tMs": 1045,
+  "message": {
+    "sessionResumptionUpdate": {
+      "newHandle": "REDACTED_RESUMPTION_HANDLE",
+      "resumable": true
+    }
+  }
+}

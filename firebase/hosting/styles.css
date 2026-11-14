@@ -1,0 +1,317 @@
+/* Small Step direction for the dashboard: paper-white ground, deep blue-green ink, system sans,
+   pill primary buttons, flat surfaces. Attention flag colours always sit beside the level word. */
+:root {
+  --paper: #f7f5f0;
+  --surface: #ffffff;
+  --ink: #173f45;
+  --ink-muted: #4d6a6e;
+  --hairline: #d9dedb;
+  --on-ink: #f7f5f0;
+  --danger-text: #8a2a24;
+  --red-bg: #f6dcd8;
+  --red-ink: #7a1f18;
+  --amber-bg: #f8e7c4;
+  --amber-ink: #6b4500;
+  --green-bg: #dcebe0;
+  --green-ink: #1f5132;
+  --min-target: 48px;
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  color: var(--ink);
+  background: var(--paper);
+}
+
+* { box-sizing: border-box; }
+/* `hidden` must win over the display set on cards, tables and the phone-width layout. */
+[hidden] { display: none !important; }
+body { margin: 0; background: var(--paper); color: var(--ink); }
+main { max-width: 960px; margin: 0 auto; padding: 24px 16px; }
+
+.bar {
+  display: flex; align-items: center; justify-content: space-between; gap: 16px;
+  padding: 12px 16px; background: var(--surface); border-bottom: 1px solid var(--hairline);
+}
+.bar h1 { font-size: 1.25rem; margin: 0; }
+#account { display: flex; align-items: center; gap: 12px; color: var(--ink-muted); }
+
+.card {
+  max-width: 400px; margin: 48px auto; padding: 24px; display: grid; gap: 8px;
+  background: var(--surface); border: 1px solid var(--hairline); border-radius: 12px;
+}
+.card h2 { margin: 0 0 8px; font-size: 1.25rem; }
+label { font-weight: 600; margin-top: 8px; }
+input {
+  min-height: var(--min-target); padding: 0 12px; font: inherit; color: var(--ink);
+  border: 1px solid var(--ink-muted); border-radius: 8px; background: var(--surface);
+}
+input:focus-visible, button:focus-visible { outline: 3px solid var(--ink); outline-offset: 2px; }
+
+button { font: inherit; cursor: pointer; min-height: var(--min-target); }
+.primary {
+  margin-top: 8px; border: 0; border-radius: 999px; padding: 0 24px;
+  background: var(--ink); color: var(--on-ink); font-weight: 600;
+}
+.primary[disabled] { opacity: 0.6; cursor: progress; }
+.link { background: none; border: 0; color: var(--ink); text-decoration: underline; padding: 0 8px; }
+
+.error { color: var(--danger-text); min-height: 1.5em; margin: 4px 0 0; }
+.muted { color: var(--ink-muted); }
+
+table { width: 100%; border-collapse: collapse; background: var(--surface); border: 1px solid var(--hairline); }
+th, td { text-align: left; padding: 12px 16px; border-bottom: 1px solid var(--hairline); vertical-align: top; }
+th { font-size: 0.875rem; color: var(--ink-muted); font-weight: 600; }
+
+.visually-hidden {
+  position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden;
+  clip: rect(0 0 0 0); white-space: nowrap; border: 0;
+}
+
+/* Patient page and Intake */
+.back { display: inline-flex; align-items: center; min-height: var(--min-target); color: var(--ink); }
+#patient-name { margin: 8px 0 16px; font-size: 1.5rem; }
+#patient-name:focus { outline: none; }
+.panel {
+  display: grid; gap: 8px; padding: 24px; background: var(--surface);
+  border: 1px solid var(--hairline); border-radius: 12px;
+}
+.panel h3 { margin: 0; font-size: 1.125rem; }
+.panel p { margin: 0; }
+.intake-form { display: grid; gap: 8px; }
+.hint { font-size: 0.875rem; }
+textarea {
+  width: 100%; padding: 12px; font: inherit; line-height: 1.5; color: var(--ink); resize: vertical;
+  border: 1px solid var(--ink-muted); border-radius: 8px; background: var(--surface);
+}
+textarea:focus-visible, a:focus-visible { outline: 3px solid var(--ink); outline-offset: 2px; }
+textarea[readonly] { background: var(--paper); }
+.highlights { white-space: pre-wrap; line-height: 1.5; padding: 12px 0; }
+.notice { padding: 8px 12px; border-left: 3px solid var(--ink); background: var(--paper); }
+.actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 8px; }
+.actions .primary { margin-top: 0; }
+.secondary {
+  border: 1px solid var(--ink); border-radius: 999px; padding: 0 24px;
+  background: var(--surface); color: var(--ink); font-weight: 600;
+}
+button[disabled] { cursor: not-allowed; }
+.primary[aria-busy="true"] { cursor: progress; }
+
+
+tbody th { font-size: 1rem; color: var(--ink); }
+.level {
+  display: inline-block; padding: 2px 10px; border-radius: 999px; font-weight: 600; font-size: 0.875rem;
+}
+.level-red { background: var(--red-bg); color: var(--red-ink); }
+.level-amber { background: var(--amber-bg); color: var(--amber-ink); }
+.level-green { background: var(--green-bg); color: var(--green-ink); }
+.reasons { margin: 0; padding: 0; list-style: none; display: grid; gap: 4px; }
+.stale { color: var(--danger-text); }
+
+/* At phone width each Patient becomes a stacked card; nothing is hidden. */
+@media (max-width: 600px) {
+  table, tbody, tr, th, td { display: block; }
+  thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+  tr { padding: 12px 16px; border-bottom: 1px solid var(--hairline); }
+  tbody th, td { padding: 4px 0; border: 0; }
+}
+
+/* Attention work queue (#10): the red banner, search and level filter, the sound switch. */
+.banner {
+  margin: 0 0 16px; padding: 16px 20px; display: grid; gap: 8px;
+  background: var(--red-bg); color: var(--red-ink); border-left: 6px solid var(--red-ink); border-radius: 12px;
+}
+.banner h2 { margin: 0; font-size: 1.125rem; }
+.banner p { margin: 0; }
+.banner-about { font-size: 0.875rem; }
+.banner-items { margin: 0; padding: 0; list-style: none; display: grid; gap: 8px; }
+.banner-items li {
+  display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 16px;
+  padding-top: 8px; border-top: 1px solid rgba(122, 31, 24, 0.25);
+}
+.banner-items li p { flex: 1 1 240px; }
+.banner-more { font-size: 0.875rem; }
+.button-link {
+  display: inline-flex; align-items: center; min-height: var(--min-target); padding: 0 20px;
+  border-radius: 999px; background: var(--red-ink); color: var(--surface); font-weight: 600; text-decoration: none;
+}
+.button-link:focus-visible { outline: 3px solid var(--ink); outline-offset: 2px; }
+
+.list-controls { display: flex; flex-wrap: wrap; gap: 8px 16px; margin: 0 0 8px; }
+.field { display: grid; gap: 4px; flex: 1 1 200px; }
+.field label { margin-top: 0; }
+.list-controls .field:last-child { flex: 0 1 200px; }
+select {
+  min-height: var(--min-target); padding: 0 12px; font: inherit; color: var(--ink);
+  border: 1px solid var(--ink-muted); border-radius: 8px; background: var(--surface);
+}
+select:focus-visible { outline: 3px solid var(--ink); outline-offset: 2px; }
+#patients-status:empty { display: none; }
+#clear-filters { margin: 0 0 16px; }
+
+#sound-toggle[aria-checked="true"] { font-weight: 600; }
+.sound-note { margin: 0; padding: 8px 16px; background: var(--amber-bg); color: var(--amber-ink); text-align: center; }
+
+/* Flag detail and the "Clear after follow-up" dialog */
+.attention { margin-bottom: 16px; }
+.attention h4 { margin: 8px 0 0; font-size: 1rem; }
+.attention-level { display: flex; align-items: center; gap: 8px; }
+.flag-list { margin: 0; padding: 0; list-style: none; display: grid; gap: 8px; }
+.flag { display: grid; gap: 4px; padding: 12px 0; border-top: 1px solid var(--hairline); }
+.flag .secondary { justify-self: start; margin-top: 4px; }
+.flag-reason { line-height: 1.5; }
+.flag-meta { font-size: 0.875rem; }
+.flag-history .flag-reason { color: var(--ink-muted); }
+
+.dialog {
+  width: min(520px, calc(100vw - 32px)); max-height: calc(100vh - 32px); overflow: auto;
+  padding: 24px; border: 1px solid var(--hairline); border-radius: 12px;
+  background: var(--surface); color: var(--ink);
+}
+.dialog::backdrop { background: rgba(23, 63, 69, 0.45); }
+.dialog h2 { margin: 0 0 8px; font-size: 1.25rem; }
+.dialog p { margin: 0 0 8px; line-height: 1.5; }
+.dialog .reasons { margin: 0 0 8px; padding-left: 20px; list-style: disc; }
+.flag-box { padding: 12px; margin: 0 0 8px; background: var(--paper); border-radius: 8px; }
+.flag-box p { margin: 0; }
+.after p { margin-bottom: 4px; }
+.notice-changed { border-left-color: var(--amber-ink); background: var(--amber-bg); color: var(--amber-ink); }
+[aria-disabled="true"] { opacity: 0.6; cursor: progress; }
+
+/* Patient page sections (views/patient.js). Each section stacks its blocks; empty slots take no room. */
+:root {
+  --phase-odd: #eef3f1;
+  --phase-even: #f7f5f0;
+  --mood: #173f45;
+  --phq9: #8a4b00;
+  --phq2: #5b3f8c;
+  --grid: #e3e7e4;
+}
+.section-menu {
+  position: sticky; top: 0; z-index: 1; margin: 0 -16px 16px; padding: 4px 16px;
+  background: var(--paper); border-bottom: 1px solid var(--hairline);
+}
+.section-menu ul { display: flex; flex-wrap: wrap; gap: 0 8px; margin: 0; padding: 0; list-style: none; }
+.section-menu .link { padding: 0 8px; }
+.patient-sections { display: grid; gap: 32px; }
+.patient-section { display: grid; gap: 12px; scroll-margin-top: 64px; }
+.patient-section > h3 { margin: 0; font-size: 1.25rem; }
+.patient-section > h3:focus { outline: none; }
+.patient-section > h3:focus-visible { outline: 3px solid var(--ink); outline-offset: 2px; }
+.section-body { display: grid; gap: 16px; min-width: 0; }
+.slot { min-width: 0; }
+.slot:empty { display: none; }
+/* Intake and Visits side by side when there is room. */
+@media (min-width: 900px) {
+  .section-body-intake-visits { grid-template-columns: 1fr 1fr; align-items: start; }
+}
+.panel h4 { margin: 0; font-size: 1.125rem; }
+.panel h5 { margin: 16px 0 0; font-size: 1rem; }
+
+.attention-row { display: flex; flex-wrap: wrap; align-items: baseline; gap: 12px; }
+
+.tms-prompt { display: grid; gap: 8px; }
+.inline-form { display: grid; gap: 4px; max-width: 320px; }
+.tms-end .actions p { margin: 0; }
+.phase-list { margin: 0; padding-left: 1.25rem; display: grid; gap: 4px; }
+.chart { width: 100%; min-width: 0; overflow: hidden; }
+.timeline-chart { display: block; font-size: 12px; }
+.timeline-chart .phase-band-odd { fill: var(--phase-odd); }
+.timeline-chart .phase-band-even { fill: var(--phase-even); }
+.timeline-chart .phase-label, .timeline-chart .lane-title { fill: var(--ink); font-weight: 600; }
+.timeline-chart .axis-label, .timeline-chart .axis-title, .timeline-chart .lane-empty { fill: var(--ink-muted); }
+.timeline-chart .lane { fill: none; stroke: var(--hairline); }
+.timeline-chart .grid-week, .timeline-chart .grid-value { stroke: var(--grid); }
+.timeline-chart .mood-line { fill: none; stroke: var(--mood); stroke-width: 2; }
+.timeline-chart .mood-point { fill: var(--mood); }
+.timeline-chart .q-phq9 { fill: var(--phq9); }
+.timeline-chart .q-phq2 { fill: var(--phq2); }
+.timeline-chart .q-label { fill: var(--ink); font-weight: 600; }
+.timeline-chart .visit-line { stroke: var(--ink); stroke-width: 1.5; stroke-dasharray: 4 3; }
+details.timeline-data summary { cursor: pointer; min-height: var(--min-target); display: flex; align-items: center; font-weight: 600; }
+details.timeline-data summary:focus-visible { outline: 3px solid var(--ink); outline-offset: 2px; }
+.table-scroll { overflow-x: auto; }
+.table-scroll:focus-visible { outline: 3px solid var(--ink); outline-offset: 2px; }
+.timeline-table caption { text-align: left; padding: 8px 0; color: var(--ink-muted); }
+
+.visit-form { display: grid; gap: 4px; max-width: 360px; }
+fieldset { margin: 8px 0 0; padding: 8px 12px 12px; border: 1px solid var(--hairline); border-radius: 8px; display: grid; gap: 4px; }
+legend { font-weight: 600; padding: 0 4px; }
+.radios { display: flex; flex-wrap: wrap; gap: 0 16px; }
+.radio { display: inline-flex; align-items: center; gap: 8px; min-height: var(--min-target); margin: 0; font-weight: 400; }
+.radio input { width: 20px; height: 20px; min-height: 0; margin: 0; }
+input.score { max-width: 120px; }
+input[disabled] { background: var(--paper); }
+input[aria-invalid="true"] { border-color: var(--danger-text); border-width: 2px; }
+.visit-list { margin: 0; padding: 0; list-style: none; display: grid; gap: 0; }
+.visit-list li { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: var(--min-target); border-bottom: 1px solid var(--hairline); }
+
+/* Signals, Summaries and what seems to help (views/signals.js, views/summaries.js, views/what-helps.js). */
+:root {
+  --value: #173f45;
+  --baseline: #4d6a6e;
+  --band: #e3ece8;
+}
+select {
+  min-height: var(--min-target); padding: 0 12px; font: inherit; color: var(--ink); max-width: 100%;
+  border: 1px solid var(--ink-muted); border-radius: 8px; background: var(--surface);
+}
+select:focus-visible, .summary-index:focus-visible { outline: 3px solid var(--ink); outline-offset: 2px; }
+.signal-controls { display: grid; gap: 4px; max-width: 440px; }
+.signal-grid { display: grid; gap: 16px; grid-template-columns: repeat(auto-fill, minmax(min(100%, 360px), 1fr)); min-width: 0; }
+.signal-card {
+  display: grid; gap: 6px; align-content: start; min-width: 0; padding: 16px;
+  border: 1px solid var(--hairline); border-radius: 8px; background: var(--surface);
+}
+.signal-card h5 { margin: 0; font-size: 1rem; }
+.signal-unit, .signal-meta { font-size: 0.875rem; color: var(--ink-muted); }
+.stale-notice { border-left-color: var(--danger-text); color: var(--danger-text); }
+.signal-chart { display: block; font-size: 11px; }
+.signal-chart .plot { fill: none; stroke: var(--hairline); }
+.signal-chart .grid-value { stroke: var(--grid); }
+.signal-chart .axis-label { fill: var(--ink-muted); }
+.signal-chart .baseline-band { fill: var(--band); }
+.signal-chart .baseline-line { fill: none; stroke: var(--baseline); stroke-width: 1.5; stroke-dasharray: 5 3; }
+.signal-chart .value-line { fill: none; stroke: var(--value); stroke-width: 2; }
+.signal-chart .value-point { fill: var(--value); }
+.signal-chart .gap-mark { stroke: var(--ink-muted); stroke-width: 1.5; }
+
+.summaries-layout { display: grid; gap: 16px; min-width: 0; }
+@media (min-width: 760px) {
+  .summaries-layout { grid-template-columns: minmax(200px, 260px) minmax(0, 1fr); align-items: start; }
+}
+.summary-index { max-height: 520px; overflow-y: auto; border: 1px solid var(--hairline); border-radius: 8px; }
+.summary-buttons { list-style: none; margin: 0; padding: 0; }
+.summary-button {
+  width: 100%; display: flex; flex-wrap: wrap; justify-content: space-between; gap: 0 8px; align-items: center;
+  text-align: left; padding: 8px 12px; background: var(--surface); color: var(--ink);
+  border: 0; border-bottom: 1px solid var(--hairline);
+}
+.summary-button[aria-pressed="true"] { background: var(--phase-odd); font-weight: 600; box-shadow: inset 4px 0 0 var(--ink); }
+.summary-button-mood { color: var(--ink-muted); font-size: 0.875rem; white-space: nowrap; }
+.summary-detail { display: grid; gap: 12px; min-width: 0; }
+.summary-detail h5 { margin: 0; font-size: 1rem; }
+.summary-ratings { display: flex; flex-wrap: wrap; gap: 8px 24px; margin: 0; }
+.summary-ratings dt { font-size: 0.875rem; color: var(--ink-muted); }
+.summary-ratings dd { margin: 0; font-weight: 600; }
+.summary-label { font-size: 0.875rem; font-weight: 600; color: var(--ink-muted); margin: 0 0 2px; }
+.panel .summary-label { margin: 0 0 2px; }
+.summary-list { margin: 0; padding-left: 1.25rem; display: grid; gap: 2px; }
+.summary-list.themes { list-style: none; padding: 0; display: flex; flex-wrap: wrap; gap: 6px; }
+.summary-list.themes li { padding: 2px 10px; border-radius: 999px; background: var(--phase-odd); }
+.summary-quotes { display: grid; gap: 6px; }
+.summary-quotes blockquote { margin: 0; padding: 2px 12px; border-left: 3px solid var(--hairline); font-style: italic; }
+.all-summaries { justify-self: start; }
+@media (max-width: 759px) {
+  .summary-index { max-height: 240px; }
+}
+@media (max-width: 600px) {
+  .signal-table caption { display: block; padding: 8px 16px; }
+  .signal-table td[data-label]::before, .what-helps-table td[data-label]::before {
+    content: attr(data-label) ": "; font-weight: 600; color: var(--ink-muted);
+  }
+}
+
+/* At phone width the timeline table's rows become cards; each cell names its column. */
+@media (max-width: 600px) {
+  .panel { padding: 16px; }
+  .timeline-table caption { display: block; padding: 8px 16px; }
+  .timeline-table td[data-label]::before { content: attr(data-label) ": "; font-weight: 600; color: var(--ink-muted); }
+}

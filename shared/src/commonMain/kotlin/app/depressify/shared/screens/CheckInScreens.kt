@@ -37,6 +37,8 @@ import app.depressify.core.Outcome
 import app.depressify.core.SignalId
 import app.depressify.core.SuggestionKind
 import app.depressify.shared.voice.*
+import app.depressify.shared.voice.live.ToolCard
+import androidx.compose.ui.platform.LocalUriHandler
 import kotlinx.coroutines.delay
 
 @Composable
@@ -73,8 +75,9 @@ private fun VoiceCheckInScreen(vm: PatientViewModel, s: PatientState, snap: Live
     val state = snap.shownState
     val line = snap.event.speaker?.let { sp -> snap.event.text?.let { TranscriptLine(sp, it) } }
     val compact = snap.offer != null
+    val isLive = vm.live.isLive
     Page(
-        top = { TopBar(null, onBack = { vm.showSheet(Sheet.Leave) }, center = { CheckSteps(snap.event.step) }, trailing = { Spacer(Modifier.width(48.dp)) }) },
+        top = { TopBar(null, onBack = { vm.showSheet(Sheet.Leave) }, center = { if (!isLive) CheckSteps(snap.event.step) }, trailing = { Spacer(Modifier.width(48.dp)) }) },
         bottom = { LiveControls(muted = snap.muted, onType = { vm.setTyped(true) }, onMic = { vm.live.setMuted(!snap.muted) }, onEnd = vm::finishCheckIn) },
     ) {
         if (!snap.connected) {
@@ -112,10 +115,12 @@ private fun VoiceCheckInScreen(vm: PatientViewModel, s: PatientState, snap: Live
             }
         }
         snap.offer?.let { kind ->
-            SuggestionCard(kind, accepted = snap.accepted, booked = s.booking != null, showFinish = false,
+            SuggestionCard(kind, accepted = snap.accepted, booked = s.booking != null, showFinish = false, detail = snap.offerDetails,
                 onAccept = { vm.reply(Reply.Accept) }, onSmaller = { vm.reply(Reply.Smaller) }, onDecline = { vm.reply(Reply.Decline) },
                 onBook = { vm.showSheet(Sheet.Booking) }, onFinish = vm::finishCheckIn)
         }
+        // What the Companion's tool calls found or opened, newest first.
+        snap.cards.asReversed().forEach { ToolCardView(it) }
         if (snap.wrapped) PrimaryButton(if (s.consents[SignalId.Ratings] == true) "Continue to ratings" else "Finish Check-in", vm::finishCheckIn)
         if (snap.transcript.isNotEmpty()) {
             Disclosure("Transcript so far") {
@@ -124,7 +129,34 @@ private fun VoiceCheckInScreen(vm: PatientViewModel, s: PatientState, snap: Live
                 }
             }
         }
-        MapsNotice { vm.showSheet(Sheet.MapsSources) }
+        if (!isLive || snap.cards.any { it is ToolCard.Places }) MapsNotice { vm.showSheet(Sheet.MapsSources) }
+    }
+}
+
+/** A card a tool call puts on the Check-in screen: what the Companion read, or something to open. */
+@Composable
+private fun ToolCardView(card: ToolCard) {
+    val c = Theme.colors
+    val uri = LocalUriHandler.current
+    SoftCard(Modifier.semantics { liveRegion = LiveRegionMode.Polite }) {
+        when (card) {
+            is ToolCard.Insight -> {
+                Txt(card.title, DepressifyType.meta, c.muted)
+                card.lines.forEach { Txt(it, DepressifyType.meta, c.ink) }
+                Txt("From your own records · compared with your usual, never with anyone else", DepressifyType.small, c.muted)
+            }
+            is ToolCard.Music -> {
+                Txt("A little music", DepressifyType.meta, c.muted)
+                Txt(card.query, DepressifyType.bodyStrong, c.ink)
+                TextLink("Open in your music app", { uri.openUri(card.url) })
+            }
+            is ToolCard.Places -> {
+                Txt("A place nearby", DepressifyType.meta, c.muted)
+                Txt(card.query, DepressifyType.bodyStrong, c.ink)
+                TextLink("Open in Google Maps", { uri.openUri(card.url) })
+                Txt("Results come from Google Maps", DepressifyType.small, c.muted)
+            }
+        }
     }
 }
 
@@ -136,7 +168,7 @@ private fun TypedCheckInScreen(vm: PatientViewModel, s: PatientState) {
         top = { TopBar("Check-in", onBack = { vm.showSheet(Sheet.Leave) }, trailing = { TextLink("Finish", vm::finishCheckIn, Modifier.padding(end = 12.dp)) }) },
         bottom = { Composer(onSend = vm::sendTyped, onVoice = if (s.scenario == Scenario.MicDeclined) null else ({ vm.setTyped(false) })) },
     ) {
-        Txt("Typing · demo conversation", DepressifyType.small, c.muted, Modifier.semantics { liveRegion = LiveRegionMode.Polite })
+        Txt(if (vm.live.isLive) "Typing · live with your Companion" else "Typing · demo conversation", DepressifyType.small, c.muted, Modifier.semantics { liveRegion = LiveRegionMode.Polite })
         t.lines.forEach { l ->
             if (l.speaker == Speaker.You) {
                 Column(Modifier.padding(start = 20.dp).fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(c.soft).padding(16.dp)) {
@@ -144,7 +176,7 @@ private fun TypedCheckInScreen(vm: PatientViewModel, s: PatientState) {
                 }
             } else Column { Txt(l.speaker.label, DepressifyType.small, c.muted); Txt(l.text, DepressifyType.caption, c.ink) }
         }
-        if (t.outcome == null && t.offer == null && s.hasHistory) {
+        if (t.outcome == null && t.offer == null && s.hasHistory && !vm.live.isLive) {
             Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 SecondaryButton("I tried it", { vm.typedOutcome(Outcome.Tried(null), "I tried the walk.") })
                 TextLink("Not this time", { vm.typedOutcome(Outcome.NotThisTime, "Not this time.") })
@@ -157,7 +189,7 @@ private fun TypedCheckInScreen(vm: PatientViewModel, s: PatientState) {
             RatingRow(o.feeling, vm::typedFeeling, "Not helpful", "Very helpful", "Feeling")
         }
         t.offer?.let { kind ->
-            SuggestionCard(kind, accepted = t.accepted, booked = s.booking != null, showFinish = true,
+            SuggestionCard(kind, accepted = t.accepted, booked = s.booking != null, showFinish = true, detail = t.offerDetails,
                 onAccept = { vm.reply(Reply.Accept) }, onSmaller = { vm.reply(Reply.Smaller) }, onDecline = { vm.reply(Reply.Decline) },
                 onBook = { vm.showSheet(Sheet.Booking) }, onFinish = vm::finishCheckIn)
         }
@@ -169,12 +201,13 @@ private fun TypedCheckInScreen(vm: PatientViewModel, s: PatientState) {
 fun SuggestionCard(
     kind: SuggestionKind, accepted: Boolean, booked: Boolean, showFinish: Boolean,
     onAccept: () -> Unit, onSmaller: () -> Unit, onDecline: () -> Unit, onBook: () -> Unit, onFinish: () -> Unit,
+    detail: String? = null,
 ) {
     val c = Theme.colors
     SoftCard(Modifier.semantics { liveRegion = LiveRegionMode.Polite }) {
         Txt("Your Suggestion", DepressifyType.meta, c.muted)
         Txt(kind.title, DepressifyType.title.copy(fontSize = DepressifyType.caption.fontSize), c.ink, heading = true)
-        Txt(kind.detail, DepressifyType.meta)
+        Txt(detail ?: kind.detail, DepressifyType.meta)
         if (accepted) {
             Row(verticalAlignment = Alignment.CenterVertically) { Icon(PhosphorIcons.check, 16.dp, c.ok); Spacer(Modifier.width(8.dp)); Txt("A small plan, chosen by you.", DepressifyType.meta, c.ok) }
             TextLink(if (booked) "View calendar plan" else "Add to calendar", onBook)

@@ -12,6 +12,7 @@ import androidx.navigation3.ui.NavDisplay
 import app.depressify.core.BookingPlan
 import app.depressify.core.LocalMinutes
 import app.depressify.core.isNightHour
+import app.depressify.shared.data.PatientBackend
 import app.depressify.shared.screens.*
 import app.depressify.shared.state.*
 import app.depressify.shared.ui.*
@@ -20,10 +21,13 @@ import app.depressify.shared.ui.theme.Theme
 import app.depressify.shared.ui.theme.DepressifyTheme
 import app.depressify.shared.ui.theme.DepressifyType
 
-/** Patient app root, shared by Android and iOS. [onNightChange] lets each platform match its system bars. */
+/**
+ * Patient app root, shared by Android and iOS. [backend] is the platform's Firebase access, or null
+ * to run on demo data only. [onNightChange] lets each platform match its system bars.
+ */
 @Composable
-fun DepressifyApp(onNightChange: (Boolean) -> Unit = {}) {
-    val vm = viewModel { PatientViewModel() }
+fun DepressifyApp(backend: PatientBackend? = null, onNightChange: (Boolean) -> Unit = {}) {
+    val vm = viewModel { PatientViewModel(backend) }
     val s by vm.ui.collectAsStateWithLifecycle()
     val hour = remember { localHour() }
     val night = when (s.themeMode) { ThemeMode.Auto -> isNightHour(hour); ThemeMode.Day -> false; ThemeMode.Night -> true }
@@ -40,7 +44,7 @@ fun DepressifyApp(onNightChange: (Boolean) -> Unit = {}) {
                     entry<Route.History> { HistoryScreen(vm, s) }
                     entry<Route.Settings> { SettingsScreen(vm, s) }
                     entry<Route.Welcome> { WelcomeScreen(vm) }
-                    entry<Route.Sharing> { SharingScreen(vm) }
+                    entry<Route.Sharing> { SharingScreen(vm, s) }
                     entry<Route.CheckInIntro> { CheckInIntroScreen(vm, s) }
                     entry<Route.CheckIn> { CheckInScreen(vm, s) }
                     entry<Route.Ratings> { RatingsScreen(vm, s) }

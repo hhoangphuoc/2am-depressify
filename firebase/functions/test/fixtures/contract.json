@@ -1,0 +1,231 @@
+{
+    "signals": [
+        {
+            "key": "sleepMinutes",
+            "direction": "higher_is_better"
+        },
+        {
+            "key": "steps",
+            "direction": "higher_is_better"
+        },
+        {
+            "key": "meanHeartRate",
+            "direction": "none"
+        },
+        {
+            "key": "restingHeartRate",
+            "direction": "lower_is_better"
+        },
+        {
+            "key": "hrv",
+            "direction": "higher_is_better"
+        },
+        {
+            "key": "timeAtHomeMinutes",
+            "direction": "lower_is_better"
+        },
+        {
+            "key": "movementRadiusKm",
+            "direction": "higher_is_better"
+        },
+        {
+            "key": "calendarBusyMinutes",
+            "direction": "none"
+        },
+        {
+            "key": "lateNightScreenMinutes",
+            "direction": "lower_is_better"
+        }
+    ],
+    "enums": {
+        "SignalDirection": [
+            "higher_is_better",
+            "lower_is_better",
+            "none"
+        ],
+        "FlagLevel": [
+            "green",
+            "amber",
+            "red"
+        ],
+        "FlagKind": [
+            "drift",
+            "low_mood",
+            "poor_sleep",
+            "decline",
+            "unassessed",
+            "sleep_collapse",
+            "inactive",
+            "silent",
+            "crisis"
+        ],
+        "SuggestionKind": [
+            "walk",
+            "nature",
+            "music",
+            "social_call",
+            "breathing",
+            "class_activity",
+            "daylight"
+        ],
+        "SuggestionStatus": [
+            "proposed",
+            "accepted",
+            "declined"
+        ],
+        "HealthSource": [
+            "device",
+            "synthetic"
+        ],
+        "SharingConsent": [
+            "undecided",
+            "granted",
+            "declined"
+        ],
+        "ConsentPurpose": [
+            "sharing",
+            "ratings",
+            "voice_cues"
+        ],
+        "QuestionnaireKind": [
+            "phq2",
+            "phq9"
+        ]
+    },
+    "collections": {
+        "patients": "patients",
+        "patientSubcollections": [
+            "daily",
+            "consents",
+            "checkIns",
+            "summaries",
+            "suggestions",
+            "flags",
+            "visits",
+            "digests"
+        ],
+        "mail": "mail"
+    },
+    "documents": {
+        "PatientDoc": [
+            "displayName",
+            "clinicianEmail",
+            "intakeHighlights",
+            "tmsEndDate",
+            "flagLevel",
+            "flagReasons",
+            "quietHoursStart",
+            "quietHoursEnd",
+            "lastSeenAtMillis",
+            "lastCheckInAtMillis",
+            "healthSource",
+            "synthetic",
+            "sharingConsent",
+            "sharingChangedAtMillis"
+        ],
+        "DailyDoc": [
+            "date",
+            "values",
+            "vsBaseline",
+            "composite",
+            "demoOverride",
+            "sharedWithClinician"
+        ],
+        "Consent": [
+            "subject",
+            "granted",
+            "changedAtMillis"
+        ],
+        "VoiceCue": [
+            "label",
+            "intensity",
+            "heard"
+        ],
+        "CheckIn": [
+            "id",
+            "startedAtMillis",
+            "endedAtMillis",
+            "mood",
+            "energy",
+            "sleepQuality",
+            "voiceCues",
+            "crisis",
+            "sharedWithClinician"
+        ],
+        "Summary": [
+            "checkInId",
+            "createdAtMillis",
+            "mood",
+            "energy",
+            "sleepQuality",
+            "sleepLine",
+            "themes",
+            "voiceCues",
+            "suggestion",
+            "previousOutcome",
+            "quotes",
+            "sharedWithClinician"
+        ],
+        "Suggestion": [
+            "id",
+            "kind",
+            "details",
+            "suggestedAtMillis",
+            "status",
+            "booked",
+            "tried",
+            "felt",
+            "objectiveChange",
+            "outcomeScore",
+            "sharedWithClinician"
+        ],
+        "Flag": [
+            "level",
+            "kind",
+            "reason",
+            "raisedAtMillis",
+            "clearedAtMillis",
+            "sharedWithClinician"
+        ],
+        "Visit": [
+            "date",
+            "questionnaire",
+            "score"
+        ],
+        "Digest": [
+            "isoWeek",
+            "weekStart",
+            "weekEnd",
+            "summaryCount",
+            "text",
+            "generatedAtMillis",
+            "sharedWithClinician"
+        ],
+        "MailMessage": [
+            "subject",
+            "text"
+        ],
+        "MailDoc": [
+            "to",
+            "message"
+        ]
+    },
+    "defaults": {
+        "newPatient": {
+            "displayName": "Live patient",
+            "clinicianEmail": "clinician@example.com",
+            "intakeHighlights": "",
+            "tmsEndDate": null,
+            "flagLevel": "green",
+            "flagReasons": [],
+            "quietHoursStart": 21,
+            "quietHoursEnd": 9,
+            "lastSeenAtMillis": null,
+            "lastCheckInAtMillis": null,
+            "healthSource": "device",
+            "synthetic": false,
+            "sharingConsent": "undecided",
+            "sharingChangedAtMillis": null
+        }
+    }
+}

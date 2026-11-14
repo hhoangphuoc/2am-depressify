@@ -1,0 +1,22 @@
+{
+  "request": {
+    "method": "POST",
+    "url": "https://generativelanguage.googleapis.com/v1beta/auth_tokens",
+    "headers": {
+      "x-goog-api-key": "REDACTED",
+      "content-type": "application/json"
+    },
+    "body": {
+      "uses": 1,
+      "expireTime": "2026-11-14T11:58:28.747Z",
+      "newSessionExpireTime": "2026-11-14T11:29:28.747Z"
+    }
+  },
+  "response": {
+    "status": 200,
+    "latencyMs": 541,
+    "body": {
+      "name": "auth_tokens/REDACTED"
+    }
+  }
+}

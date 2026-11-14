@@ -1,7 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
+    <uses-permission android:name="android.permission.INTERNET" />
+    <!-- The microphone, only while a spoken Check-in runs. Audio is streamed to Gemini Live and never saved. -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+
     <application
+        android:name=".DepressifyApplication"
         android:allowBackup="false"
         android:label="Depressify"
         android:supportsRtl="true"

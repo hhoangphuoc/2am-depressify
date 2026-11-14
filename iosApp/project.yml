@@ -4,11 +4,25 @@ options:
   bundleIdPrefix: app.depressify
   deploymentTarget:
     iOS: "17.0"
+packages:
+  # The native SDK the GitLive Kotlin bindings in `shared` link against.
+  Firebase:
+    url: https://github.com/firebase/firebase-ios-sdk
+    from: 12.19.3
 targets:
   Depressify:
     type: application
     platform: iOS
     sources: [Depressify]
+    dependencies:
+      - package: Firebase
+        product: FirebaseCore
+      - package: Firebase
+        product: FirebaseAuth
+      - package: Firebase
+        product: FirebaseFirestore
+      - package: Firebase
+        product: FirebaseFunctions
     info:
       path: Depressify/Info.plist
       properties:
@@ -17,6 +31,9 @@ targets:
         UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait]
         NSMicrophoneUsageDescription: Depressify uses the microphone only during a voice Check-in with your Companion.
         CADisableMinimumFrameDurationOnPhone: true
+        # Local Firebase emulators speak plain HTTP on 127.0.0.1 during development.
+        NSAppTransportSecurity:
+          NSAllowsLocalNetworking: true
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: app.depressify.patient

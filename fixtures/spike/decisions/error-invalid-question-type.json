@@ -1,0 +1,25 @@
+{
+  "request": {
+    "method": "POST",
+    "url": "https://generativelanguage.googleapis.com/v1beta/decisions",
+    "body": {
+      "model": "gemini-decision-1",
+      "input": "A fictional note.",
+      "questions": {
+        "bad": {
+          "type": "yesno",
+          "instructions": "Is this a note?"
+        }
+      }
+    }
+  },
+  "response": {
+    "status": 400,
+    "body": {
+      "error": {
+        "message": "The value 'yesno' is not supported for 'type' at 'questions.bad'. Supported values: 'choice', 'noul', 'score'.",
+        "code": "invalid_request"
+      }
+    }
+  }
+}
