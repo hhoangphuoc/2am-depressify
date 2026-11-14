@@ -104,6 +104,10 @@ _Avoid_: Screening, assessment, risk score
 A level on a Patient (green, amber or red), always with written reasons and never a number, telling the Clinician whether this person may need a call. The Clinician clears it after acting.
 _Avoid_: Risk score, alert, diagnosis
 
+**Assessment** (of a Check-in):
+Whether the automatic review after a Check-in could judge it: assessed, unassessed (it declined to judge, which raises an amber Attention flag) or unavailable (it failed, so the Patient keeps the last known level). It records how the review went, never a result about the Patient; a Mood rating or Questionnaire score is never called an assessment.
+_Avoid_: Risk assessment, screening
+
 **Crisis notice**:
 The screen shown to the Patient when a Check-in shows signs of self-harm risk, with one-tap buttons to call for help. The Patient places the call; the app never dials.
 _Avoid_: Emergency mode, intervention

@@ -24,6 +24,21 @@ export function flagSource(kind) {
 }
 
 /**
+ * The note shown beside the level when the automatic review of the latest reviewed Check-in failed
+ * (`assessment: "unavailable"`, #20): the level shown is the last known one, never a new green.
+ * Check-ins with no review (`assessment` null, nothing was said) are skipped. Null: nothing to say.
+ * @param {{ startedAtMillis?: unknown, assessment?: unknown }[] | null | undefined} checkIns
+ */
+export function assessmentNote(checkIns) {
+  const [latest] = (checkIns ?? [])
+    .filter((c) => typeof c.assessment === "string" && typeof c.startedAtMillis === "number")
+    .sort((a, b) => Number(b.startedAtMillis) - Number(a.startedAtMillis));
+  return latest?.assessment === "unavailable"
+    ? "Assessment unavailable: the latest Check-in could not be reviewed automatically. The level shown is the last known one."
+    : null;
+}
+
+/**
  * A reason as a plain sentence: trimmed, capitalised, ending with a full stop.
  * @param {unknown} reason
  */

@@ -8,6 +8,8 @@
     <application
         android:name=".DepressifyApplication"
         android:allowBackup="false"
+        android:icon="@mipmap/ic_launcher"
+        android:roundIcon="@mipmap/ic_launcher"
         android:label="Depressify"
         android:supportsRtl="true"
         android:theme="@style/Theme.Depressify">

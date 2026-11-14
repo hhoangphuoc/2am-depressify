@@ -201,6 +201,8 @@ With two developers, Dev 2 takes the Firebase track after the core logic, and Ta
 
 ### Task 5: Nudge rules
 
+> As built (#27, PR #68): `NudgeDecision.decide(NudgeInput): NudgeOutcome` in `NudgeRules.kt`, tested by `NudgeDecisionTest`, with `NudgeReason` `RoughNights`, `FreeHourGoodWeather`, `NoCheckInByEvening` and a `NoNudgeReason` when none goes out. Every reason posts the same text, `NudgeNotification.Invitation`. See [implementation-status.md](../implementation-status.md). The interfaces below are the original plan.
+
 **Files:**
 - Create: `core/src/commonMain/kotlin/app/depressify/core/nudge/NudgeRules.kt`
 - Test: `.../core/nudge/NudgeRulesTest.kt`
@@ -636,7 +638,7 @@ With two developers, Dev 2 takes the Firebase track after the core logic, and Ta
   - `object DailyPipeline { fun run(history: List<Day>, today: Day, last24h: Pair<Double?, Double?>, recentMoods: List<Int?>, openFlags: List<Flag>, nudge: NudgeInput, crisisActive: Boolean): DailyResult }`
   - `data class DailyResult(val doc: DailyDoc, val newFlags: List<FlagDraft>, val nudge: NudgeReason?, val level: FlagLevel, val reasons: List<String>)`
   - `class DailyJob`: builds today and yesterday, runs the pipeline, writes the daily document, new flags and the heartbeat, fills `objectiveChange` and `outcomeScore` on yesterday's answered Suggestions, and posts a Nudge through `Notifier`.
-  - `interface Notifier { fun nudge(reason: NudgeReason) }`. Tapping the notification opens the Check-in. The wording per reason is gentle and never mentions a flag.
+  - `interface Notifier { fun nudge(reason: NudgeReason) }`. Tapping the notification opens the Check-in. Every reason posts the same gentle text, `NudgeNotification.Invitation`, which never mentions a reason or a flag.
   - `DailyWorker`: WorkManager periodic work every 6 hours, plus `runNow()`.
 - The phone never lowers a level that a function or the Clinician set: it only raises, and only the Clinician clears.
 
@@ -679,7 +681,7 @@ With two developers, Dev 2 takes the Firebase track after the core logic, and Ta
 **Interfaces:**
 - Produces `DebugPanel`, opened by tapping the title five times in a demo build:
   - "Run daily job now"
-  - "Simulate two rough nights" (sleep 240 minutes on the last two nights and late-night screen 90 minutes, giving amber and a Nudge)
+  - "Simulate two rough nights" (sleep 240 minutes on the last two nights and late-night screen 90 minutes, giving a Nudge). Two nights are the Nudge's rule (#27); amber `poor_sleep` needs three, and against a usual 7 hours 240 minutes is far enough below Baseline to raise red `sleep_collapse`. For amber, simulate three nights a little below usual instead.
   - "Simulate next day" (clock offset of one day, so the Companion asks about yesterday's Suggestion)
   - "Silence test" (sets `lastSeenAtMillis` to 25 hours ago once; `checkSilence` then raises red)
   - "Act as Demo Patient" (the picker)

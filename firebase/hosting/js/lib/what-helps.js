@@ -2,7 +2,9 @@
 // Patient said it felt, over a stated window. Pure, no Firebase imports, so `node --test` can run it.
 //
 // Rules (spec #5, "Learning what helps"):
-//   - Only scored Suggestions count: those with an Outcome score. Unanswered and declined ones do not.
+//   - Only scored Suggestions count: those with an Outcome score, which Finish Check-in writes (#21).
+//     Unanswered, declined and "prefer not to say" ones do not. Waiting: accepted with no Outcome
+//     recorded yet (no `outcomeCheckInId` and no score), so "prefer not to say" is not waiting.
 //   - Kinds are sorted by their mean Outcome score, then by count. The mean only orders the list;
 //     it is never shown. The dashboard states counts and reported feelings, with no effectiveness
 //     percentage and no number that reads as a grade of the Patient.
@@ -63,7 +65,7 @@ export function feelingGroup({ tried, felt }) {
 const isNumber = (value) => typeof value === "number" && Number.isFinite(value);
 
 /**
- * @param {{ kind?: unknown, suggestedAtMillis?: unknown, status?: unknown, tried?: unknown, felt?: unknown, outcomeScore?: unknown }[]} suggestions
+ * @param {{ kind?: unknown, suggestedAtMillis?: unknown, status?: unknown, tried?: unknown, felt?: unknown, outcomeScore?: unknown, outcomeCheckInId?: unknown }[]} suggestions
  * @param {{ start: string, end: string, timeZone?: string }} window
  * @returns {{ rows: WhatHelpsRow[], waiting: number }} `waiting`: accepted in the window, no Outcome yet
  */
@@ -76,7 +78,7 @@ export function whatHelps(suggestions, { start, end, timeZone }) {
     const date = dateInZone(s.suggestedAtMillis, timeZone);
     if (date < start || date > end) continue;
     if (!isNumber(s.outcomeScore)) {
-      if (s.status === "accepted") waiting++;
+      if (s.status === "accepted" && typeof s.outcomeCheckInId !== "string") waiting++;
       continue;
     }
     const kind = /** @type {string} */ (s.kind);

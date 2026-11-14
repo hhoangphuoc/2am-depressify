@@ -233,6 +233,8 @@ With the spec's starting thresholds (crisis ≥ 0.5, decline ≥ 0.6, tried ≥ 
 
 ## 5. Maps (#18)
 
+**Update, 14 November 2026: the Maps agent tools are enabled and verified.** `mapstools.googleapis.com` ("Maps Experience agent tools") is now enabled on `junction26hel-7400`. With the stored `MAPS_API_KEY`, `v1:lookupWeather`, `v1:searchText` and `v1:computeRoutes` all returned HTTP 200. The key `depressify-maps` allows mapstools, places, weather and routes. #18 (the Map tool) is being built by a teammate. The 403 results below are what the spike saw before the API was enabled.
+
 The Maps key is in Secret Manager as `MAPS_API_KEY`. Its API restrictions already allow `mapstools.googleapis.com`, `routes.googleapis.com`, `places.googleapis.com` and `weather.googleapis.com`. The key was sent only in the `X-Goog-Api-Key` header.
 
 Enabled on the project at the time of the spike: `places.googleapis.com` and `weather.googleapis.com`. Not enabled: `mapstools.googleapis.com` and `routes.googleapis.com`.
@@ -270,7 +272,7 @@ The mapstools request bodies above follow the reference pages, but the nested `L
 
 | | Maps agent tools (`mapstools`) | Direct Places (New) + Weather + Routes |
 |---|---|---|
-| Works today | No: enable `mapstools.googleapis.com` | Places and Weather yes; Routes needs `routes.googleapis.com` enabled |
+| Works today | Yes since 14 November (enabled; all three calls answered HTTP 200). At the spike: no | Places and Weather yes; Routes needs `routes.googleapis.com` enabled |
 | Services to call | One (weather, places and routes) | Three, each with its own request shape and field masks |
 | Price for one place search | Essentials: 10,000 free a month, then $7 per 1,000 | Text Search Pro (needed for names and Maps links): 5,000 free a month, then $32 per 1,000 |
 | Price for weather and a route | Same SKU as above | Weather: 10,000 free, then $0.15 per 1,000. Routes Essentials: 10,000 free, then $5 per 1,000 |
