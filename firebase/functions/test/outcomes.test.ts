@@ -6,20 +6,18 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import {
   NOT_TRIED_SCORE,
-  guidance,
   objectiveChange,
   outcomeDailyNeeded,
   outcomeDay,
   outcomeScore,
   outcomeTarget,
   outcomeWrite,
-  rankKinds,
   resolveOutcome,
   type HeardOutcome,
   type OutcomePlan,
   type StoredSuggestion,
 } from "../src/outcomes";
-import type { DailyDoc, Suggestion, SuggestionKind } from "../src/types";
+import type { DailyDoc, Suggestion } from "../src/types";
 
 const fixture = JSON.parse(readFileSync(join(__dirname, "..", "..", "..", "fixtures", "outcomes", "outcome-cases.json"), "utf8"));
 const tolerance: number = fixture.rule.tolerance;
@@ -30,29 +28,10 @@ function expectClose(actual: number | null, expected: number | null) {
   expect(Math.abs(actual! - expected)).toBeLessThanOrEqual(tolerance);
 }
 
-type History = { kind: SuggestionKind; outcomeScore: number | null }[];
-
 describe("the shared Outcome fixture", () => {
   it.each(fixture.scores as { name: string; tried: boolean | null; felt: number | null; objectiveChange: number | null; expected: number | null }[])(
     "score: $name",
     (c) => expectClose(outcomeScore(c.tried, c.felt, c.objectiveChange), c.expected),
-  );
-
-  it.each(fixture.rankings as { name: string; history: History; expected: { kind: string; mean: number; n: number }[] }[])("rank: $name", (c) => {
-    const ranked = rankKinds(c.history);
-    expect(ranked.map((r) => [r.kind, r.n])).toEqual(c.expected.map((e) => [e.kind, e.n]));
-    ranked.forEach((r, i) => expectClose(r.mean, c.expected[i]!.mean));
-  });
-
-  it.each(fixture.guidance as { name: string; history: History; random: number; expected: { preferred: string[]; tryNew: string | null } }[])(
-    "guidance: $name",
-    (c) => {
-      let calls = 0;
-      const result = guidance(c.history, () => (calls++, c.random));
-      expect(result.preferred.map((p) => p.kind)).toEqual(c.expected.preferred);
-      expect(result.tryNew).toBe(c.expected.tryNew);
-      expect(calls).toBe(1);
-    },
   );
 
   it.each(

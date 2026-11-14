@@ -1,16 +1,16 @@
-// Outcomes and learning what helps (#21; spec #5, "Learning what helps" and "Suggestion
-// lifecycle"), all pure: which Suggestion a Check-in's answer belongs to, which answer counts, the
-// day's steps against Baseline, the Outcome score, and the ranking of kinds. No Firebase, no
-// network, no clock, no logging.
+// Outcomes (#21; spec #5, "Learning what helps" and "Suggestion lifecycle"), all pure: which
+// Suggestion a Check-in's answer belongs to, which answer counts, the day's steps against Baseline
+// and the Outcome score. No Firebase, no network, no clock, no logging. Ranking kinds for the Brief
+// is the phone's job (core's SuggestionRanker); the functions only write the scores it ranks.
 //
-// The score and the ranking are pinned by the shared fixture fixtures/outcomes/outcome-cases.json,
-// which core's Kotlin tests (app.depressify.core.learning) and the seed's tests also read: the phone
-// ranks kinds for its Brief, the seed writes scores, Finish Check-in writes the real ones. Change the
-// rule only by changing the fixture and every copy together.
+// The score and the target are pinned by the shared fixture fixtures/outcomes/outcome-cases.json,
+// which core's Kotlin tests (app.depressify.core.learning) and the seed's tests also read: the seed
+// writes scores, Finish Check-in writes the real ones. Change the rule only by changing the fixture
+// and every copy together.
 import { WINDOW_DAYS, compareWithBaseline, oriented } from "./baseline";
 import type { Tried } from "./decisions";
 import { addDays, dateInZone } from "./digest";
-import { SUGGESTION_KINDS, type DailyDoc, type Suggestion, type SuggestionKind } from "./types";
+import type { DailyDoc, Suggestion } from "./types";
 
 // ---------------------------------------------------------------------------------------------
 // The Outcome score
@@ -206,62 +206,4 @@ export function outcomeWrite(
     id: target.id,
     fields: { tried, felt, objectiveChange: change, outcomeScore: outcomeScore(tried, felt, change), outcomeCheckInId: checkInId },
   };
-}
-
-// ---------------------------------------------------------------------------------------------
-// Ranking: which kinds help this Patient
-// ---------------------------------------------------------------------------------------------
-
-/** How many kinds go into the Brief. */
-export const PREFERRED_KINDS = 3;
-/** About one Check-in in five tries something new. */
-export const TRY_NEW_RATE = 0.2;
-
-export interface KindScore {
-  kind: SuggestionKind;
-  /** Mean Outcome score; for ordering only, never shown to anyone. */
-  mean: number;
-  /** Scored Suggestions of this kind. */
-  n: number;
-}
-
-export interface Guidance {
-  /** The best kinds, at most three. */
-  preferred: KindScore[];
-  /** A kind to try for something new, or null. */
-  tryNew: SuggestionKind | null;
-}
-
-/**
- * Kinds by their mean Outcome score, then by how many were scored, both descending; ties in the
- * kinds' contract order. Only scored Suggestions count: unanswered, declined and "prefer not to say"
- * have no score.
- */
-export function rankKinds(history: readonly Partial<Pick<Suggestion, "kind" | "outcomeScore">>[]): KindScore[] {
-  const scores = new Map<SuggestionKind, number[]>();
-  for (const s of history) {
-    if (!SUGGESTION_KINDS.includes(s.kind as SuggestionKind) || !isNumber(s.outcomeScore)) continue;
-    const kind = s.kind as SuggestionKind;
-    scores.set(kind, [...(scores.get(kind) ?? []), s.outcomeScore]);
-  }
-  return [...scores.entries()]
-    .map(([kind, values]) => ({ kind, mean: values.reduce((sum, v) => sum + v, 0) / values.length, n: values.length }))
-    .sort((a, b) => b.mean - a.mean || b.n - a.n || SUGGESTION_KINDS.indexOf(a.kind) - SUGGESTION_KINDS.indexOf(b.kind));
-}
-
-/**
- * What the Brief gets: the top three kinds and, when the injected `random()` is below 0.2, one kind
- * to try: the first kind in contract order with no score yet, or else the least-scored kind outside
- * the top three. `random` is called exactly once.
- */
-export function guidance(history: readonly Partial<Pick<Suggestion, "kind" | "outcomeScore">>[], random: () => number): Guidance {
-  const ranked = rankKinds(history);
-  const preferred = ranked.slice(0, PREFERRED_KINDS);
-  if (random() >= TRY_NEW_RATE) return { preferred, tryNew: null };
-  const untried = SUGGESTION_KINDS.find((kind) => !ranked.some((r) => r.kind === kind));
-  if (untried !== undefined) return { preferred, tryNew: untried };
-  const rest = ranked
-    .filter((r) => !preferred.includes(r))
-    .sort((a, b) => a.n - b.n || SUGGESTION_KINDS.indexOf(a.kind) - SUGGESTION_KINDS.indexOf(b.kind));
-  return { preferred, tryNew: rest[0]?.kind ?? null };
 }

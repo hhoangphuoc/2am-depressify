@@ -14,8 +14,8 @@ data class Guidance(val preferred: List<KindScore>, val tryNew: SuggestionKind?)
  * scores, for the phone's Brief builder. [random] is injected so tests are deterministic; it returns
  * a value in [0, 1), like `Random.nextDouble()`.
  *
- * The functions' copy is `rankKinds` / `guidance` in firebase/functions/src/outcomes.ts; the shared
- * fixture fixtures/outcomes/outcome-cases.json pins both.
+ * The only copy of the ranking: the functions write the scores, the phone ranks them. The shared
+ * fixture fixtures/outcomes/outcome-cases.json pins it.
  */
 class SuggestionRanker(private val random: () -> Double) {
 
