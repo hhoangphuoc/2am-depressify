@@ -53,10 +53,10 @@ clinicians/{email}                   (allowlist)     the Clinicians a new Patien
 | `intakeHighlights` | string | `""` | Extracted from the Intake, at most 120 words, reviewed by the Clinician. Written only by the `saveIntake` function (Clinician only); no client writes it. The report itself is never stored. |
 | `tmsEndDate` | date string or null | `null` | Set by the Clinician. Week 1 starts the day after. |
 | `flagLevel` | FlagLevel | `green` | The highest uncleared flag stamped `sharedWithClinician: true`. A flag raised while the Patient was not sharing never counts. Never shown to the Patient. |
-| `flagReasons` | string[] | `[]` | The reasons of those flags, highest level first, then newest. Plain sentences, never a number. |
+| `flagReasons` | string[] | `[]` | The reasons of those flags, highest level first, then newest. Plain sentences: never a score or a decimal number (a plain duration such as "under 3 hours" is fine). |
 | `quietHoursStart` | int 0..23 | `21` | No Nudges inside quiet hours; the window may cross midnight. |
 | `quietHoursEnd` | int 0..23 | `9` | |
-| `lastSeenAtMillis` | int or null | `null` | Last sign of life from the phone. The hourly silence check (`silenceCheck`, #28) reads it: older than 24 hours on a sharing, non-synthetic Patient raises red `silent`. `null` (never seen) is not silent. Finish Check-in moves it to the time of the finish (never back). |
+| `lastSeenAtMillis` | int or null | `null` | Last sign of life from the phone. The hourly silence check (`silenceCheck`, #28) reads it: older than 24 hours on a sharing, non-synthetic Patient raises red `silent`. `null` (never seen) is not silent. Finish Check-in moves it to the time of the finish, and the phone's daily job (#26) to the time of each run (never back). |
 | `lastCheckInAtMillis` | int or null | `null` | The end of the latest finished Check-in. Finish Check-in moves it forward (never back). `null` means no Check-in has finished yet: Start Check-in then adds the first-Check-in AI disclosure to the token's instruction. |
 | `healthSource` | HealthSource | `device` | Exactly one source per Patient. |
 | `synthetic` | boolean | `false` | `true` for Demo Patients. |

@@ -16,7 +16,7 @@ Kept up to date as PRs are opened and merged. Each PR also updates its own rows 
 | #55 | `docs/session-handoff-on-49` | Session handoff, and this overview | Open |
 | #56 | `docs/cloud-setup-on-49` | Firebase and Google Cloud setup record | Open |
 | #57 | `feat/14-typed-checkin-on-49` (on #50, merges #52) | #14, backend: `startCheckIn`, `finishCheckIn`, and `LiveProtocol` in `core` | Open; tested (functions 249, core 39, emulators 87 + 14). Not deployed. |
-| to open | `feat/26-daily-job-rules` (from `main`) | #26, `core` only: the daily job's pure pipeline (daily record, Baseline, sign of life, Signal flag rules, write plan) | Tested (core 102); the app's background work, debug action and device check are still to do |
+| #69 | `feat/26-daily-job-rules` (from `main`) | #26, `core` only: the daily job's pure pipeline (daily record, Baseline, sign of life, Signal flag rules, write plan) | Tested (core 105, seed 91); the app's background work, debug action and device check are still to do |
 | — | — | #20 (Decisions into flags), then #21 (Outcomes) | Next, after #14 |
 | — | — | #18 (Map tool) | Waits on enabling `mapstools.googleapis.com` and the #17 tool catalog |
 
@@ -135,7 +135,7 @@ The callables are reached through the Firebase SDK (`httpsCallable` in `europe-n
 |---|---|
 | `SignalBaseline` | The contract's Baseline: the 14 calendar dates strictly before the day with a value, at least 5, median centre, spread `max(sample SD, 0.05 x \|median\|, 0.001)`. `vsBaseline` keeps the measured sign; `oriented` flips lower-is-better Signals and drops Signals with no direction; `composite` is the mean of the oriented values that exist. `BaselineFixtureTest` (JVM) runs every case of `fixtures/baseline/baseline-cases.json` (14 comparisons, 5 oriented, 3 composites). |
 | `DailyRecordBuilder` | Today's `DailyDoc`: every Signal key, null when not consented, missing or not a finite number (a real zero stays zero), the comparisons and the composite. |
-| `SignalFlagRules`, `DailyThresholds`, `FlagReasons` | The five rules below. Thresholds in one object, the spec's starred ones marked STARTING VALUE; reasons are the seed's sentences, with no decimal numbers. |
+| `SignalFlagRules`, `DailyThresholds`, `FlagReasons` | The five rules below. Thresholds in one object, the spec's starred ones marked STARTING VALUE; reasons are plain sentences with no score and no decimal number. The thresholds and reasons are pinned, with the seed's `flags.js`, by `fixtures/flags/signal-rules.json` (`SignalRulesFixtureTest` and the seed's `flags.test.js`). |
 | `FlagWriteRules` | The write plan: the new flags (uncleared, stamped with `PatientDoc.sharingStamp()`, id `<kind>-<date>`, or `<kind>-<date>-unshared` for a flag stamped false), the record's new `flagLevel` / `flagReasons` (or none), and the sign of life. |
 | `DailyJob` | Composes the above. |
 
@@ -145,7 +145,7 @@ The callables are reached through the Firebase SDK (`httpsCallable` in `europe-n
 | Red `inactive` | Steps and screen-on minutes in the last 24 hours both exactly 0 | Both present; each needs its Consent (Steps; usage, `lateNightScreenMinutes`) |
 | Amber `poor_sleep` | Oriented sleep at or below -1.0* on each of the last 3 calendar nights | All 3 present; a night without a record breaks the run |
 | Amber `low_mood` | Mood 2 or lower at each of the last 3 finished Check-ins | A null rating breaks the run |
-| Amber `drift` | Composite at or below -1.0* on each of the last 3* calendar days | All present. A constant history gives 0 and a short one (under 5 days) none, so neither raises drift |
+| Amber `drift` | Composite at or below -1.0* on each of the last 3* calendar days, each made up of at least 2* Signals | All present. A day with one Signal's comparison does not count, so sleep alone is `poor_sleep`, never drift too. A constant history gives 0 and a short one (under 5 days) none, so neither raises drift |
 
 Earlier days' comparisons are recomputed from their stored values (each against the days before it, as the seed and dashboard do), so the job needs the previous 16 daily records (`DailyThresholds.HISTORY_DAYS_NEEDED`).
 
@@ -234,12 +234,12 @@ Results on `feat/14-typed-checkin-on-49` (on #50, with #52's spike fixtures merg
 
 | Suite | Command | Result |
 |---|---|---|
-| Kotlin `core` (contract, `CoreRulesTest`, `LiveProtocolTest`, `LiveProtocolFixturesTest`, and on `feat/26-daily-job-rules` the daily pipeline and `BaselineFixtureTest`) | `./gradlew :core:jvmTest` | 39 pass; 102 on `feat/26-daily-job-rules` (63 new). The exported contract is unchanged |
+| Kotlin `core` (contract, `CoreRulesTest`, `LiveProtocolTest`, `LiveProtocolFixturesTest`, and on `feat/26-daily-job-rules` the daily pipeline, `BaselineFixtureTest` and `SignalRulesFixtureTest`) | `./gradlew :core:jvmTest` | 39 pass; 105 on `feat/26-daily-job-rules` (66 new). The exported contract is unchanged |
 | Kotlin `shared` (session and view model wiring, with fakes) | `./gradlew :shared:testAndroidHostTest` | 10 pass; 16 on `feat/26-daily-job-rules` (from `main`) |
 | Android build | `./gradlew :androidApp:assembleDebug` | APK builds |
 | iOS build | `xcodegen generate`, then `xcodebuild` for the arm64 simulator | Builds and links with the Firebase iOS SDK |
 | Functions | `cd firebase/functions && npm test` | 206 pass; 291 on `feat/26-daily-job-rules` (from `main`, after `npx -y npm@10 ci`), with the contract drift guard |
-| Seed | `cd firebase/seed && npm test` | 89 pass |
+| Seed | `cd firebase/seed && npm test` | 89 pass; 91 on `feat/26-daily-job-rules` (`flags.test.js`) |
 | Dashboard helpers | `cd firebase/hosting && node --test` | 308 pass |
 | Rules, functions and end-to-end on the emulators | `firebase emulators:exec --only auth,firestore,functions --project demo-twoam "npm --prefix functions run test:emulator"` | 86 pass with Firebase CLI 15.36.0, including the `redFlagAlert` trigger and the silence test raising red with one email |
 | Seed on the emulator | `... "npm --prefix seed run test:emulator"` | 16 pass (with the Functions emulator; the seeded Demo Patients' red flags are skipped as synthetic) |

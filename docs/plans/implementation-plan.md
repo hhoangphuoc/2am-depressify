@@ -679,7 +679,7 @@ With two developers, Dev 2 takes the Firebase track after the core logic, and Ta
 **Interfaces:**
 - Produces `DebugPanel`, opened by tapping the title five times in a demo build:
   - "Run daily job now"
-  - "Simulate two rough nights" (sleep 240 minutes on the last two nights and late-night screen 90 minutes, giving amber and a Nudge)
+  - "Simulate two rough nights" (sleep 240 minutes on the last two nights and late-night screen 90 minutes, giving a Nudge). Two nights are the Nudge's rule (#27); amber `poor_sleep` needs three, and against a usual 7 hours 240 minutes is far enough below Baseline to raise red `sleep_collapse`. For amber, simulate three nights a little below usual instead.
   - "Simulate next day" (clock offset of one day, so the Companion asks about yesterday's Suggestion)
   - "Silence test" (sets `lastSeenAtMillis` to 25 hours ago once; `checkSilence` then raises red)
   - "Act as Demo Patient" (the picker)
