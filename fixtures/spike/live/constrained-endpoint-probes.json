@@ -1,0 +1,71 @@
+{
+  "emptySetup": {
+    "frames": [],
+    "setupComplete": true,
+    "close": {
+      "code": 1000,
+      "reason": ""
+    }
+  },
+  "otherModelInSetup": {
+    "frames": [],
+    "setupComplete": true,
+    "close": {
+      "code": 1000,
+      "reason": ""
+    }
+  },
+  "tamperedSystemInstruction": {
+    "frames": [],
+    "setupComplete": true,
+    "said": "Hello! I hope you are having a wonderful and peaceful day.",
+    "close": {
+      "code": 1000,
+      "reason": ""
+    }
+  },
+  "firstUse": {
+    "frames": [],
+    "setupComplete": true,
+    "close": {
+      "code": 1000,
+      "reason": ""
+    }
+  },
+  "secondUseSameToken": {
+    "frames": [],
+    "close": {
+      "code": 1011,
+      "reason": "Token has been used too many times"
+    }
+  },
+  "mint_expire21h": {
+    "status": 400,
+    "body": {
+      "error": {
+        "code": 400,
+        "message": "expire_time is too far in the future. Maximum lifetime is 20h",
+        "status": "INVALID_ARGUMENT"
+      }
+    }
+  },
+  "mint_newSessionAfterExpire": {
+    "status": 200,
+    "body": {
+      "name": "auth_tokens/REDACTED"
+    }
+  },
+  "mint_noTimes": {
+    "status": 200,
+    "body": {
+      "name": "auth_tokens/REDACTED"
+    }
+  },
+  "connectAfterNewSessionWindow": {
+    "frames": [],
+    "close": {
+      "code": 1011,
+      "reason": "new_session_expire_time deadline exceeded"
+    }
+  }
+}

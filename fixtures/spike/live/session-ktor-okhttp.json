@@ -1,0 +1,7316 @@
+{
+  "engine": "okhttp",
+  "tokenPlacement": "QUERY",
+  "closeReason": null,
+  "notes": [
+    "[1046 ms] setupComplete after 657 ms",
+    "[2183 ms] text: generationComplete after 1134 ms",
+    "[5673 ms] text: first audio 564 ms, turnComplete 4624 ms; heard='' said='Hello! I'm doing very well, thank you for asking. How are you today?'",
+    "[13779 ms] audio (latency from end of speech): generationComplete after 1790 ms",
+    "[17733 ms] audio (latency from end of speech): first audio 1382 ms, turnComplete 6144 ms; heard='Hi there. I slept badly last night, but I went for a short walk this morning and that helped a little.' said='I'm sorry you slept poorly, but it's great that a walk helped you feel a bit better today.'",
+    "[18025 ms] tool: toolCall get_time after 289 ms",
+    "[18866 ms] after toolResponse: generationComplete after 841 ms",
+    "[21536 ms] after toolResponse: first audio 401 ms, turnComplete 3511 ms; heard='' said='The current time in Helsinki is fourteen oh five.'",
+    "[23071 ms] interrupted 239 ms after barge-in speech started",
+    "[30139 ms] reply after barge-in: generationComplete after 6488 ms",
+    "[32711 ms] reply after barge-in: first audio 6352 ms, turnComplete 9878 ms; heard='Sorry, wait. Can you stop for a second? I want to ask something else.' said='Of course, I'm happy to wait. What would you like to ask now?'"
+  ],
+  "frames": [
+    {
+      "tMs": 390,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "setup": {
+          "model": "models/gemini-3.8-live"
+        }
+      }
+    },
+    {
+      "tMs": 1045,
+      "dir": "in",
+      "frameType": "binary",
+      "msg": {
+        "setupComplete": {}
+      }
+    },
+    {
+      "tMs": 1045,
+      "dir": "in",
+      "frameType": "binary",
+      "msg": {
+        "sessionResumptionUpdate": {
+          "newHandle": "REDACTED_RESUMPTION_HANDLE",
+          "resumable": true
+        }
+      }
+    },
+    {
+      "tMs": 1047,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "text": "Hello! This is a short test. How are you?"
+        }
+      }
+    },
+    {
+      "tMs": 1449,
+      "dir": "in",
+      "frameType": "binary",
+      "msg": {}
+    },
+    {
+      "tMs": 1452,
+      "dir": "in",
+      "frameType": "binary",
+      "msg": {
+        "serverContent": {}
+      }
+    },
+    {
+      "tMs": 1609,
+      "dir": "in",
+      "frameType": "binary",
+      "msg": {}
+    },
+    {
+      "tMs": 1609,
+      "dir": "in",
+      "frameType": "binary",
+      "msg": {}
+    },
+    {
+      "tMs": 1611,
+      "dir": "in",
+      "frameType": "binary",
+      "msg": {
+        "serverContent": {
+          "modelTurn": {
+            "parts": [
+              {
+                "inlineData": {
+                  "mimeType": "audio/pcm;rate=24000",
+                  "data": "AAA="
+                }
+              }
+            ],
+            "role": "model"
+          },
+          "outputTranscription": {
+            "text": "Hello! I'm doing "
+          }
+        }
+      }
+    },
+    {
+      "tMs": 1612,
+      "dir": "in",
+      "frameType": "binary",
+      "msg": {
+        "serverContent": {
+          "modelTurn": {
+            "parts": [
+              {
+                "inlineData": {
+                  "mimeType": "audio/pcm;rate=24000",
+                  "data": "NgAzADsANwA+ADoAQQA9AEQAQABGAEIASABDAEkAQwBIAEQA...<8960 base64 chars truncated>"
+                }
+              }
+            ],
+            "role": "model"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 1617,
+      "dir": "in",
+      "frameType": "binary",
+      "msg": {}
+    },
+    {
+      "tMs": 1623,
+      "dir": "in",
+      "frameType": "binary",
+      "msg": {
+        "serverContent": {
+          "modelTurn": {
+            "parts": [
+              {
+                "inlineData": {
+                  "mimeType": "audio/pcm;rate=24000",
+                  "data": "Ev7e/zgBCwaRBdwDmwOTAeoBhARWByAKcg+HFLUYMx8xIUsl...<10240 base64 chars truncated>"
+                }
+              }
+            ],
+            "role": "model"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 1658,
+      "dir": "in",
+      "frameType": "binary",
+      "msg": {}
+    },
+    {
+      "tMs": 1662,
+      "dir": "in",
+      "frameType": "binary",
+      "msg": {
+        "serverContent": {
+          "modelTurn": {
+            "parts": [
+              {
+                "inlineData": {
+                  "mimeType": "audio/pcm;rate=24000",
+                  "data": "CwQMDfoTMhdkGCAakx2iIAUhXR3aFpUQZAxTCaEG5QPqAA3/...<10240 base64 chars truncated>"
+                }
+              }
+            ],
+            "role": "model"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 1766,
+      "dir": "in",
+      "frameType": "binary",
+      "msg": {}
+    },
+    {
+      "tMs": 1771,
+      "dir": "in",
+      "frameType": "binary",
+      "msg": {
+        "serverContent": {
+          "modelTurn": {
+            "parts": [
+              {
+                "inlineData": {
+                  "mimeType": "audio/pcm;rate=24000",
+                  "data": "h/oR+nf5//h5+OH3OveO9rT1wvTR88HykPGO8JXv6e547jLu...<10240 base64 chars truncated>"
+                }
+              }
+            ],
+            "role": "model"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 1771,
+      "dir": "in",
+      "frameType": "binary",
+      "msg": {}
+    },
+    {
+      "tMs": 1772,
+      "dir": "in",
+      "frameType": "binary",
+      "msg": {
+        "serverContent": {
+          "modelTurn": {
+            "parts": [
+              {
+                "inlineData": {
+                  "mimeType": "audio/pcm;rate=24000",
+                  "data": "GgEkAy0EkQRwBBgElwNtAqwAs/7+/OX76fvB/Kb9Mf4+/iL+...<10240 base64 chars truncated>"
+                }
+              }
+            ],
+            "role": "model"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 1774,
+      "dir": "in",
+      "frameType": "binary",
+      "msg": {}
+    },
+    {
+      "tMs": 1785,
+      "dir": "in",
+      "frameType": "binary",
+      "msg": {
+        "serverContent": {
+          "modelTurn": {
+            "parts": [
+              {
+                "inlineData": {
+                  "mimeType": "audio/pcm;rate=24000",
+                  "data": "dema6yntdO7p8Bbz8vQh99f5Ffxa/jABlAPkBVQIdgpyDG4O...<2560 base64 chars truncated>"
+                }
+              }
+            ],
+            "role": "model"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 1785,
+      "dir": "in",
+      "frameType": "binary",
+      "msg": {}
+    },
+    {
+      "tMs": 1803,
+      "dir": "in",
+      "frameType": "binary",
+      "msg": {
+        "serverContent": {
+          "modelTurn": {
+            "parts": [
+              {
+                "inlineData": {
+                  "mimeType": "audio/pcm;rate=24000",
+                  "data": "iPVj9E7zfvIh8crv3e4+7ezrGevo6bLouOdR51HmhuUj5uLl...<20480 base64 chars truncated>"
+                }
+              }
+            ],
+            "role": "model"
+          },
+          "outputTranscription": {
+            "text": "very well, thank"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 1810,
+      "dir": "in",
+      "frameType": "binary",
+      "msg": {}
+    },
+    {
+      "tMs": 1816,
+      "dir": "in",
+      "frameType": "binary",
+      "msg": {
+        "serverContent": {
+          "modelTurn": {
+            "parts": [
+              {
+                "inlineData": {
+                  "mimeType": "audio/pcm;rate=24000",
+                  "data": "7+2z74vx0vMa9hD4zvqJ/bH/tQLhBCwHqQmfC80N0w/SEcMT...<23040 base64 chars truncated>"
+                }
+              }
+            ],
+            "role": "model"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 1849,
+      "dir": "in",
+      "frameType": "binary",
+      "msg": {}
+    },
+    {
+      "tMs": 1881,
+      "dir": "in",
+      "frameType": "binary",
+      "msg": {
+        "serverContent": {
+          "modelTurn": {
+            "parts": [
+              {
+                "inlineData": {
+                  "mimeType": "audio/pcm;rate=24000",
+                  "data": "gPli+lb7ffyw/fD+RgCLAdACFAQ/BUgGNgcQCKMINAmZCdQJ...<20480 base64 chars truncated>"
+                }
+              }
+            ],
+            "role": "model"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 1971,
+      "dir": "in",
+      "frameType": "binary",
+      "msg": {}
+    },
+    {
+      "tMs": 1997,
+      "dir": "in",
+      "frameType": "binary",
+      "msg": {
+        "serverContent": {
+          "modelTurn": {
+            "parts": [
+              {
+                "inlineData": {
+                  "mimeType": "audio/pcm;rate=24000",
+                  "data": "6v/o/+j/6P/n/+f/5//n/+b/5v/m/+f/5//m/+f/5//o/+r/...<43520 base64 chars truncated>"
+                }
+              }
+            ],
+            "role": "model"
+          },
+          "outputTranscription": {
+            "text": " you for asking. How"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 1998,
+      "dir": "in",
+      "frameType": "binary",
+      "msg": {}
+    },
+    {
+      "tMs": 2000,
+      "dir": "in",
+      "frameType": "binary",
+      "msg": {
+        "serverContent": {
+          "modelTurn": {
+            "parts": [
+              {
+                "inlineData": {
+                  "mimeType": "audio/pcm;rate=24000",
+                  "data": "of9ZALwAwgB2AA0A2f8eAKgAUABAALQAbACSAIcABwC2/7UA...<20480 base64 chars truncated>"
+                }
+              }
+            ],
+            "role": "model"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 2076,
+      "dir": "in",
+      "frameType": "binary",
+      "msg": {}
+    },
+    {
+      "tMs": 2093,
+      "dir": "in",
+      "frameType": "binary",
+      "msg": {
+        "serverContent": {
+          "modelTurn": {
+            "parts": [
+              {
+                "inlineData": {
+                  "mimeType": "audio/pcm;rate=24000",
+                  "data": "7v/v/+7/7f/t/+7/7v/v//D/8P/x//D/8f/x//H/8//z//T/...<35840 base64 chars truncated>"
+                }
+              }
+            ],
+            "role": "model"
+          },
+          "outputTranscription": {
+            "text": " are you today?"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 2127,
+      "dir": "in",
+      "frameType": "binary",
+      "msg": {}
+    },
+    {
+      "tMs": 2130,
+      "dir": "in",
+      "frameType": "binary",
+      "msg": {
+        "serverContent": {
+          "modelTurn": {
+            "parts": [
+              {
+                "inlineData": {
+                  "mimeType": "audio/pcm;rate=24000",
+                  "data": "HQAXAA8ADQACAAAA9v/0/+n/6P/f/97/1v/U/8z/zP/F/8j/...<20480 base64 chars truncated>"
+                }
+              }
+            ],
+            "role": "model"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 2167,
+      "dir": "in",
+      "frameType": "binary",
+      "msg": {}
+    },
+    {
+      "tMs": 2173,
+      "dir": "in",
+      "frameType": "binary",
+      "msg": {
+        "serverContent": {
+          "modelTurn": {
+            "parts": [
+              {
+                "inlineData": {
+                  "mimeType": "audio/pcm;rate=24000",
+                  "data": "jf95/6D/FQAAAAgABACi/xT/Nv9s//P+sf/p/yf/K/8n/zf/...<23040 base64 chars truncated>"
+                }
+              }
+            ],
+            "role": "model"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 2181,
+      "dir": "in",
+      "frameType": "binary",
+      "msg": {
+        "serverContent": {
+          "generationComplete": true
+        }
+      }
+    },
+    {
+      "tMs": 5670,
+      "dir": "in",
+      "frameType": "binary",
+      "msg": {
+        "serverContent": {
+          "turnComplete": true
+        },
+        "usageMetadata": {
+          "promptTokenCount": 640,
+          "responseTokenCount": 106,
+          "totalTokenCount": 746,
+          "promptTokensDetails": [
+            {
+              "modality": "TEXT",
+              "tokenCount": 379
+            },
+            {
+              "modality": "AUDIO",
+              "tokenCount": 222
+            }
+          ],
+          "responseTokensDetails": [
+            {
+              "modality": "AUDIO",
+              "tokenCount": 106
+            }
+          ],
+          "thoughtsTokenCount": 52
+        }
+      }
+    },
+    {
+      "tMs": 5674,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "IQAoABkAFgANAAkAAQD5//7/+v/u/+P/1//P/9D/5P/4/wYA...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 5719,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "Zv1h/in/EwJsApkChwQiBb4C8Pv8+Y/9Kv2m+jb75wDEBXkE...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 5764,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "gOwM5gjcRNmA4Bfooeut77f4pAAQAQP+xfpc98DzTPBI7Vjr...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 5806,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "cw5cG7kdWBu6GngWcAuQ/9321/Fb7rXqZukE68vrpuwO8br0...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 5851,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "6PSK793n2+OE8xYU7DJYRmJMukucRa42gCNKE8sJEAg9CiIG...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 5894,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "7fIrAjISwhheGrEdfyabNRJDjEo8R3ZA5T1vPeQ3Ti2jJGEc...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 5936,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "ePP98qHyOvLl8b3xuPGi8ZjxrPHD8c/x2PHu8QryLfJp8rry...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 5956,
+      "dir": "in",
+      "frameType": "binary",
+      "msg": {
+        "voiceActivity": {
+          "type": "ACTIVITY_START",
+          "audioOffset": "0.200s"
+        }
+      }
+    },
+    {
+      "tMs": 5982,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "Xh/LHUwZxRV1FEESmg2uDIgLLAbZAvoC2QJ7/gj7/ft7+kn3...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 6023,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "OASdAhEDff3A9arzvvM48hH16vvA/X77cPuZ/Pj94wDVAqIC...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 6068,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "rvJD9Gn3ofpw+8n7mv22/oD+9f7J/9z/jf+i/iv9ZfzJ+/z5...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 6109,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "l/mo+OH4WPgp9mzyNvHa+f4LzR/OMNc7gTsAMocrnjB8PzFQ...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 6155,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "XfjM+E75rfl8+pD7bPwH/Yz9NP6n/kz+t/1d/cH8YfzF/E39...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 6195,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "NQTsEdYfuynwLAMpmSAfGG8TzhSZG8gjhSjsJoweuBEGBZr8...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 6239,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "SQZYB3UIEwkaCdoIjwhjCH0IzQgnCVkJTAkGCZ0IIAh5B6AG...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 6285,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "+v8BAAMA/v8DAAMAAwAGAAgACAALAAsACAANAAsACQAIAAYA...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 6328,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "+//8//r/+v/5//v/+//9/////P8AAAEA//8CAAAAAAACAAIA...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 6371,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "+v/5//r//P/9/////v8BAAQABAACAAMAAwABAAAA/P/7//z/...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 6413,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "/f/9//3//f/9//z//P/+//7/////////AAABAAIAAQAAAAEA...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 6458,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "//8AAAAA///+/////v8AAAAAAQACAAEAAQABAAEAAAD///7/...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 6504,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "/v/9//v//P/8//7/AQABAAAAAwAEAAEAAQD///7//f/8//7/...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 6549,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "u/1bAMcBXfwn9t/1TfU/8O7tkfJP97v1iPHM8qj2UvWH8sby...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 6591,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "efdu+v/61/mF+yr9MPyM+2b65/gZ9fXvY+5D7jLpA+G44e70...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 6636,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "RvoH9zv2qfWT9eH0GPLT7jvu8fDM8Qzwb+4B7bHsDu4y70rt...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 6681,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "w/4x/oT+ov94/EYA9P32ALz9EQFN/qP+5ACT/EcJdfotAoQC...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 6727,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "BgTU/HYCrP/Q/jcAaf5fAtb+3AHy/t3/n//yADH/wgApAGr/...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 6770,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "QAHdAAIA1gHf/pD/QAD+/TEB6/8W/y4AU/5LANb/cADMAGz/...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 6815,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "cyv3KMMjnyLmJIwkpyA3HLgW/w7CBlwAj/vU9jjzRvNL9wT7...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 6861,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "KfwI9gju8+l+7YH7qxGuJ5c1k0NFUv9UVUNFLFQhHBsZE00M...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 6906,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "2vDI80Ty5u8U8XHxYuz65+Xo/+gD6D/q7O1V77Hwy/Lh87j1...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 6947,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "wgLxAjMDdQOoA9ID9gMQBBoEIQQsBDcEPwRDBEIELgQDBNID...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 6987,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "DAAAAPj/8v8JAP3/9P/6//H/+v/6//D/6v/t//P/8v/y/+3/...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 7030,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "BAD5/+L/9P8PABgADgD6/xMAAwDw/+7/7/8AAAIACAAGABwA...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 7073,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "kACiAPv/IwAbAEkAtP8C/8n/7//+/mL/JQDQ/53/B/7z/tX+...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 7118,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "LenR4QPggex3BGkbyihoL1czdDkvQfFFrUX8QKg6czIjI/UL...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 7158,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "rzBQHvoJP/eD7ULu9u8q6xXmTep8+B8NhiGhMjo8XTxjNgMs...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 7202,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "fDvyMz4l7BOsBSn/Ov2R/cb7mfgR9uXzRfJD8bTzUPhl/AT+...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 7244,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "RgbBBEYDyQFjAAv/uf12/DD77PnK+OP3F/dE9m31p/Tv80rz...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 7289,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "RwyMDRAQKBFJEwwVXBWAFsgWlhdMGIkYahg0GBsZ/hjoGHgY...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 7334,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "AvWk81zwJe6m7eDsquuO62fs1eyR7PTrJusT6pTo8eal5Vfl...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 7379,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "/vbt9VTzjfEk8fXuGe3V68Lpb+jb6ILoWuY85SPmW+ch5mfm...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 7424,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "2/gA+G34s/ni+Cb48fc59t/zXfP28oDwCu8/7uXsJOvb6oXq...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 7469,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "kitEK+AqDyutKsIomybDJEEiJB8wHPcYHxXlEVgP5AsWCIkF...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 7514,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "2exS8YT1r/WQ9+z7jv0p+ZfzbfEl72Hr4Ohk6mnsYO638hb1...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 7557,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "9Pf0+Zj5Wvnz+QT5I/bt8vrwHfFf8JztAu217/7v5u0k66Xn...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 7603,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "NS9aFfX8HO4d7B/wFvPa9An4j/7UBlYRrx12LGg5WD/GOocq...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 7647,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "phpQGR0YqxbhFgwZWBv5HIEeKh/yHdYc4h1qH9ceJB3WHJEc...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 7692,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "ZgGs/h3+hAJw/LYEmP3M/24EPfopAzT+AAGN/+P/cQHwACb/...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 7737,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "AQAAACUA8f8QAAMA8P8HAN//+v/m//D/4v/q/wgA5/8KAPX/...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 7781,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "Lvxp+rn4Bvc+9YPz7fGS8GfvQu4Q7QLsTOu86kXq9Om36bTp...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 7826,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "rD52P80/LD9jPcc6IjhNNZQx+CzyJ54jYh+jGi4WFxLIDWoJ...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 7868,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "WPBM8gf0rvUp94v4tvf29Mf0m/Vs8WPr0eqH633mG+Gw4qbm...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 7913,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "d/O08Ort3ut/7M7vpfOf9Sn2//YS9hPyxu6f7KTocuUt5Xnk...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 7959,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "e/lf+lz7Qfu3+p36qvrD9yfyafZADTYqKz4gSBJLJEhpPrws...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 8004,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "O/jb95/4b/op+6/6IfnP9zT51/uB/Cf7MPrw+Wn6ifvY/F/9...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 8049,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "BRfLGQUaIRpFHAsgMCPNI1siYyEKIskiIiJcIDceyxtHGeMW...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 8094,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "ZwEJAaIAPwDg/4T/Nv/u/pT+MP7g/aT9af0s/fD8s/x//GT8...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 8139,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "BgACAAIAAwADAAQAAwABAAEAAQABAAEA///9//7//P/7//z/...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 8184,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "+f/2//f/8//m/9v/7//y//j/CAASAAEA7f/2/wUABQDw/wgA...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 8226,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "+//+//3///8CAAEAAgAAAP7//P/6//j/9//4//b/+f/8//7/...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 8267,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "AAD+/wAA/v/9//3//f8AAP3//P8AAAAA/v///wAA/v////7/...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 8312,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "AQD8//v//P/8//7//v8BAAIAAwAFAAQAAwADAAEAAgAAAP3/...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 8353,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "/////////f/+/wAAAAABAAAAAAD//wAAAQAAAAEAAQAAAP//...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 8396,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "AQAEAAUABAAFAAQAAQD9//7/+//6//v/9//6//r//P8BAAEA...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 8442,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "sOhB6o7vXfDO7SPw/fJ68RnxoPKV8l3yw/Ge8KvxpfHL7k3v...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 8483,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "YvaP9bX1KfU38gHxivBt74TuZO/E8D/w6vDh8tjzCfMQ9Ff2...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 8528,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "FgIaAYH+Sv2l/c77CPr4+F33e/Ni8dPzl/Q382DykfKv8P7t...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 8570,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "uVRbTXA+CTCbIuYXzhSRE+QMMwNc/nUByAUWBy8MZBsXK2kw...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 8615,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "efMP86Hzz/Ju8efw4vG68QLx0PAP8lrzG/JU8ZjxTe7g6V30...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 8660,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "+/Mp9KTy5u467Djrs+gh5oDmU+h46MnoM+su7WPule/U8X/0...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 8704,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "g+ty7C7uhe948FzykPTg9dH2FvgV+T/5Gfk9+TX5dPjN9wz4...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 8745,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "3x/uH78fPx9pHkAdzRskGikY9xWyE1MR/g7CDJoKpgjXBiIF...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 8790,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "FzCOL9YxczQNNWA0QDJuLGgjmhn2DhUEIPzp9x72U/eg+34A...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 8834,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "Ew/kE2MVhhPVEB0QWw+GDRoNhQwHCYoEGAAF+qv0FPJk7zzs...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 8876,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "+OHI4LDfd9/u3/zfYuCl4afiEuOx42vkseTh5DflEeXL5DXl...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 8921,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "F/zw+877sfuZ+4b7fvuG+5n7r/u/+8z73/sA/Cr8Uvx3/Jv8...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 8966,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "w/9uAFIAff///7v/AQA7AKD/OAB8/8H/hgCG/8j/Yf8BAFMA...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 9012,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "gv9FA4YDnwW7AtoDigHu/vv+fPuM/GD7x/z7AIwCZAR0AyMC...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 9055,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "Eumg5rTj4eDP4Y/on/N/AiwVSShTNwZBKEaxRgRDAT3DNiMx...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 9100,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "FRL4CVQB9/iO78TnnePo4GDha+jp8Xj5ygD5BsAInQc5BSAB...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 9144,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "TTTlM084Gz/4RG1EfjoXKqAYyAl9/8v5j/d/94H3qvU08+by...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 9186,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "F/Hz7Y3nUOQo5ZrkeeOF5Fnlj+RB5APmjegA6zftm++p8if0...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 9231,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "9xM6FEkRZBGkDJkM2hCQCpsI+whuB+4G5wFFBPUAJv5V/mn+...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 9272,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "/98NDJkJ1v0j/sbuDhFWCtD2BO2mEhAQ/+lD9igKYxUp+GTm...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 9313,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "sfwE7OwOPwaSBVnsC/m6F0b5xwVV6YYHzRH+8kgE9PcBBmEC...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 9354,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "ZwGwBjMDI/wt92f5IgBn/vj4eP2J+pb2f/fI9RH1KO+G8Rr1...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 9397,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "lu/v74vuCe0h7SDtf+wW7ZLu2e9+8WDzl/Rg9Uz2YPaQ9cn0...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 9442,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "3fRx85fx6O+t7bLrXetU7KXtgu8l8qT0TPbY9lX2yPUS9X/z...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 9483,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "+eJi4VPhieSl6Mjqhuwz703wTu/C7m7vHvCV8Hnxw/JK9ET1...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 9528,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "uPt6+1D7Pfsp+wX72fqv+pX6ivp/+nL6hPrE+gb7IPsj+yv7...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 9568,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "M/+O/qb+C/+A/sj+if8dACYB1ACgAKIAhgCWAMX/WP9p/3b/...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 9613,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "xBR3FjAYxxlOG8IcDB5CHzYg9yB7IaohniFFIZ0gpB9iHusc...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 9658,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "P+Vn52/riu/o8WbzsPVb93n20PQX9bX1h/SS89P0kPbr9pf2...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 9703,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "6QIq66TX1stgytvTFeY++2AOxB5HLCY0ADOiKDsZBwpZ/Obv...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 9745,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "ovb38zHxVPBj8DfuK+1c7qnup+427oHtlet17Fn3IApSHGYq...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 9790,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "Tf0v/SD9Iv0q/Tf9QP1C/UD9Pf09/UD9Rf1M/VT9U/1T/Vj9...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 9835,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "jgCSAJAAdgBGACUAFwDz/9X/6/8eADsANAAuACsAEwDz//P/...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 9881,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "4/+i/7n/uADDAAUC1QIKAw0ErgEmAPUAwv8OAW0AxP8TAiMC...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 9926,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "Au8d7mnuSevA5xvovOlR6OfmHOlU60Drpuu27Y/wqvJx85n1...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 9966,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "UfPd9/f3xvuh/kcB6AMFBVUJDg0rEJEWSxmJGesabRyIIB4h...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 10011,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "qgIX/HUC2gBF+w4Frvz0/w8CKv0dAL//0AFe/zgBegBM/ogC...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 10056,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "+f/JAAP/1P8eAu793f+KAD8A9P4kAtf8DAJqAK/63wlg+moA...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 10098,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "pRfaGvQdLiFOJEQniio3LmExjjOHNdI3tznPOkY7hDuGO406...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 10143,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "BedR5yvoOulj6bLp/Op/6yzrlOsv7BLs0OsA7Arsr+tN6xPr...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 10185,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "huru5+TnJuqU7lz00PnQ/roDwgacBsAENAKd/cb2sfB07Pbn...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 10230,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "f/Qg+pEBgghRD9EUtxX0EUgM+QQv+1vxjOqp5r3kKOWg5wbr...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 10275,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "H/OE8D7uJOzv6RHmCeFv3c7bddvG3CHfHeHR4hLkKeSQ5KXm...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 10317,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "stpd24LbcNsU3LXc2Nwd3e7dj96n3krfaeAb4a3hveLm49vk...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 10361,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "2udL547oIuq9557myunK7CXrweqx7e7t2uvL7LDwyO8z7Kvs...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 10405,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "X+HH4UDidOIE4+LjOuTJ5KvlGOZu5kzn5ee45+znWOgU6L/n...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 10450,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "4umY6W/rI+s76VXpwOqq6QboGOhV6OPmLOav5izmwOVW5unm...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 10494,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "U/DW9GLz4O6H8Bv0wu/g58vrWgC0F/MiVySDJ/Iu/zWVPpFJ...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 10538,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "V/LV8UTxhfCi7+buKu7M7PLqxump6sbtz/E99c73nvpN/s4C...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 10583,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "lvEj8oby6vJD823zaPNh817zQfMO85fyIPLO8UPxU/Dt7rPt...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 10624,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "X+9k71LsTuo5+1oZay0yNds8jUIRRK1JsE/BTZpJDktiRvku...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 10666,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "jBb2MZNARUcmSmhKz0giRvRCoTwdN6cxAiJECSP1Tu5W8wf+...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 10711,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "cf2y/bv9wP36/Rb+Q/53/pb+j/6M/sn+0P7M/u7+MP8u/wP/...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 10753,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "3wM9CXgJogMj/Ff6rPzW+1355vsP/yX99/c794D/OQkdCAwF...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 10798,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "yfG08Njtmevf6lfq++cz5M7iT+L64CLfzt2V3RTcj9lu2T3b...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 10843,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "fOuy61/uL+8B74fvBfHr8+L0D/YE+hD8W/uD+5/7w/lz99L0...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 10888,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "ou7B69HpvehE6dLrLe8E89X3m/xm/yEAvgC9AJr9mvn59zb2...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 10934,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "7+657jzvSu9J77vwrvIi86bz9fWk9/b2T/ZD90b3WfXl88fz...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 10974,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "6v0S/jz+ZP6M/rL+1f74/hz/Pv9h/4T/p//L/+//FgA8AGQA...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 11019,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "//8JABAADgAXAA0AEgAYAA0ACAAGAP3/AAADAAgACwAHAAYA...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 11064,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "uATL/Y/+PgW1AJkDPgJt/+MKkQh6+NgG5QOpAeQDmwOfBQ4A...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 11110,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "5OrX6FTnXua15R/lB+Vt5D7i2ON77nb7ywOmDj8iVzWwPr5C...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 11155,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "qis4JyUjwx35F70Tzw/eC8QHGQVhA5UA5P2s+yr6N/jd9bL0...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 11200,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "ffJG8iTyHPID8qbxEfGe8H3wTvCk70Hveu9s79PugO7M7rnu...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 11245,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "t0dYSrZJrEoBSUI7fiZ+GCoRUwfy/Hb6mv2s/p/8vPlg9jDz...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 11288,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "NeU45YrlC+h26TrpveqK7d3tXu198Jv0+fR/9Fz3iPlC+Lb4...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 11333,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "qP+U/oz9efwp+9L50Pg5+K/31/bY9fj0iPRz9D70zPNY8zbz...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 11375,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "qffl+Pn5Wvm9+Dv5t/lQ+ZL4j/jR+AH4+Pap9hr2Q/Wt9Cz0...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 11416,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "nAC3AWYB7/89/wP/p/0d/bv9z/0h/xQAugAKA0oDBwNCBKQD...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 11459,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "o/08/eP70/uL+3b5U/jw9mT37vmM/MMCUArKErAdoCbcLnE1...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 11503,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "ygjqCJUJSgoqC2YL1AuDDGEMEwzAC+EK+gnUCDkH4wUrBCAC...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 11549,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "SP9P/1L/V/9V/1b/Xf9c/2D/Zv9r/3b/gP+I/5H/l/+b/5//...<1488 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 11589,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 11634,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 11679,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 11725,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 11770,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 11815,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 11860,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 11905,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 11946,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 11989,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 12030,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 12073,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 12118,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 12162,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 12203,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 12248,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 12289,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 12331,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 12376,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 12421,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 12466,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 12511,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 12557,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 12597,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 12642,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 12687,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 12729,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 12773,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 12818,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 12860,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 12904,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 12949,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 12970,
+      "dir": "in",
+      "frameType": "binary",
+      "msg": {
+        "serverContent": {
+          "inputTranscription": {
+            "text": "Hi there. I slept badly last night, but I went for a short walk this morning and that helped a little."
+          }
+        }
+      }
+    },
+    {
+      "tMs": 12971,
+      "dir": "in",
+      "frameType": "binary",
+      "msg": {
+        "voiceActivity": {
+          "type": "ACTIVITY_END",
+          "audioOffset": "6.600s"
+        }
+      }
+    },
+    {
+      "tMs": 12971,
+      "dir": "in",
+      "frameType": "binary",
+      "msg": {}
+    },
+    {
+      "tMs": 12971,
+      "dir": "in",
+      "frameType": "binary",
+      "msg": {}
+    },
+    {
+      "tMs": 12971,
+      "dir": "in",
+      "frameType": "binary",
+      "msg": {}
+    },
+    {
+      "tMs": 12971,
+      "dir": "in",
+      "frameType": "binary",
+      "msg": {}
+    },
+    {
+      "tMs": 12971,
+      "dir": "in",
+      "frameType": "binary",
+      "msg": {}
+    },
+    {
+      "tMs": 12971,
+      "dir": "in",
+      "frameType": "binary",
+      "msg": {}
+    },
+    {
+      "tMs": 12971,
+      "dir": "in",
+      "frameType": "binary",
+      "msg": {}
+    },
+    {
+      "tMs": 12971,
+      "dir": "in",
+      "frameType": "binary",
+      "msg": {}
+    },
+    {
+      "tMs": 12971,
+      "dir": "in",
+      "frameType": "binary",
+      "msg": {}
+    },
+    {
+      "tMs": 12971,
+      "dir": "in",
+      "frameType": "binary",
+      "msg": {
+        "serverContent": {}
+      }
+    },
+    {
+      "tMs": 12971,
+      "dir": "in",
+      "frameType": "binary",
+      "msg": {
+        "serverContent": {
+          "modelTurn": {
+            "parts": [
+              {
+                "inlineData": {
+                  "mimeType": "audio/pcm;rate=24000",
+                  "data": "HAAVABgAFAAXABAAFAAOABMADQAPAAoADQAKAAsABwAJAAYA...<5120 base64 chars truncated>"
+                }
+              }
+            ],
+            "role": "model"
+          },
+          "outputTranscription": {
+            "text": "I'm sorry you slept "
+          }
+        }
+      }
+    },
+    {
+      "tMs": 12974,
+      "dir": "in",
+      "frameType": "binary",
+      "msg": {
+        "serverContent": {
+          "modelTurn": {
+            "parts": [
+              {
+                "inlineData": {
+                  "mimeType": "audio/pcm;rate=24000",
+                  "data": "tPfb95L69vwi++H5dvmU+cn7WwKHBDABcPt5+tH4+/pW/VH7...<10240 base64 chars truncated>"
+                }
+              }
+            ],
+            "role": "model"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 12985,
+      "dir": "in",
+      "frameType": "binary",
+      "msg": {
+        "serverContent": {
+          "modelTurn": {
+            "parts": [
+              {
+                "inlineData": {
+                  "mimeType": "audio/pcm;rate=24000",
+                  "data": "8RZBF3UXbhcJF9YWaha2FRcVPxQDE/kRvBBFD9kNKwxNCpAI...<15360 base64 chars truncated>"
+                }
+              }
+            ],
+            "role": "model"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 12990,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 12990,
+      "dir": "in",
+      "frameType": "binary",
+      "msg": {
+        "serverContent": {
+          "modelTurn": {
+            "parts": [
+              {
+                "inlineData": {
+                  "mimeType": "audio/pcm;rate=24000",
+                  "data": "Iu+e7qDt2ezr6wXrK+oJ6Vvoyefl6Ivq/+0J8Zf2qPsxBZsO...<15360 base64 chars truncated>"
+                }
+              }
+            ],
+            "role": "model"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 12990,
+      "dir": "in",
+      "frameType": "binary",
+      "msg": {
+        "serverContent": {
+          "modelTurn": {
+            "parts": [
+              {
+                "inlineData": {
+                  "mimeType": "audio/pcm;rate=24000",
+                  "data": "KvWT9cT1dPXp9Oz0AfWA9ST2MPbj9cP1//X29j/4oPmc+d34...<5120 base64 chars truncated>"
+                }
+              }
+            ],
+            "role": "model"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 13001,
+      "dir": "in",
+      "frameType": "binary",
+      "msg": {
+        "serverContent": {
+          "modelTurn": {
+            "parts": [
+              {
+                "inlineData": {
+                  "mimeType": "audio/pcm;rate=24000",
+                  "data": "+f5S/xYAjgHcAUMB8AAGAjUDYgTYBkMIaQdRB8cHoQjnCr4M...<17920 base64 chars truncated>"
+                }
+              }
+            ],
+            "role": "model"
+          },
+          "outputTranscription": {
+            "text": "poorly, but it's great"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 13013,
+      "dir": "in",
+      "frameType": "binary",
+      "msg": {
+        "serverContent": {
+          "modelTurn": {
+            "parts": [
+              {
+                "inlineData": {
+                  "mimeType": "audio/pcm;rate=24000",
+                  "data": "UgAqAEkAUwBLAD4AEQDt/8P/4f/4/0oAXwBXAEAAGQAJACoA...<28160 base64 chars truncated>"
+                }
+              }
+            ],
+            "role": "model"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 13013,
+      "dir": "in",
+      "frameType": "binary",
+      "msg": {
+        "serverContent": {
+          "modelTurn": {
+            "parts": [
+              {
+                "inlineData": {
+                  "mimeType": "audio/pcm;rate=24000",
+                  "data": "CwFZAMP/R/8n/7/+8v1m/LP6e/kz+an5svph+2D7afq9+JT3...<17920 base64 chars truncated>"
+                }
+              }
+            ],
+            "role": "model"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 13014,
+      "dir": "in",
+      "frameType": "binary",
+      "msg": {}
+    },
+    {
+      "tMs": 13027,
+      "dir": "in",
+      "frameType": "binary",
+      "msg": {
+        "serverContent": {
+          "modelTurn": {
+            "parts": [
+              {
+                "inlineData": {
+                  "mimeType": "audio/pcm;rate=24000",
+                  "data": "YDJFNodC80c6SMpCNTPeJoggVRsTE6ALVgLN/K74LPkM96z1...<25600 base64 chars truncated>"
+                }
+              }
+            ],
+            "role": "model"
+          },
+          "outputTranscription": {
+            "text": " that a walk helped"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 13031,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 13045,
+      "dir": "in",
+      "frameType": "binary",
+      "msg": {}
+    },
+    {
+      "tMs": 13049,
+      "dir": "in",
+      "frameType": "binary",
+      "msg": {
+        "serverContent": {
+          "modelTurn": {
+            "parts": [
+              {
+                "inlineData": {
+                  "mimeType": "audio/pcm;rate=24000",
+                  "data": "8P/S/9//3v/d/9v/5v/d/93/4v/i/+L/5v/c/+H/2v/T/+H/...<23040 base64 chars truncated>"
+                }
+              }
+            ],
+            "role": "model"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 13076,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 13082,
+      "dir": "in",
+      "frameType": "binary",
+      "msg": {}
+    },
+    {
+      "tMs": 13086,
+      "dir": "in",
+      "frameType": "binary",
+      "msg": {
+        "serverContent": {
+          "modelTurn": {
+            "parts": [
+              {
+                "inlineData": {
+                  "mimeType": "audio/pcm;rate=24000",
+                  "data": "XeXg6FvvAvW0+38BzwIpASIDBAUDBV8GagXaAj0AcgAFAff/...<15360 base64 chars truncated>"
+                }
+              }
+            ],
+            "role": "model"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 13121,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 13166,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 13172,
+      "dir": "in",
+      "frameType": "binary",
+      "msg": {}
+    },
+    {
+      "tMs": 13181,
+      "dir": "in",
+      "frameType": "binary",
+      "msg": {
+        "serverContent": {
+          "modelTurn": {
+            "parts": [
+              {
+                "inlineData": {
+                  "mimeType": "audio/pcm;rate=24000",
+                  "data": "Ui7KMB8z+jRgNr02hTZVNVA00TLRMHIuQiuLJ9sjECBCHEQY...<23040 base64 chars truncated>"
+                }
+              }
+            ],
+            "role": "model"
+          },
+          "outputTranscription": {
+            "text": " you feel a bit better"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 13207,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 13249,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 13294,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 13308,
+      "dir": "in",
+      "frameType": "binary",
+      "msg": {}
+    },
+    {
+      "tMs": 13308,
+      "dir": "in",
+      "frameType": "binary",
+      "msg": {
+        "serverContent": {
+          "modelTurn": {
+            "parts": [
+              {
+                "inlineData": {
+                  "mimeType": "audio/pcm;rate=24000",
+                  "data": "0/7t/gT/D/8P/wr/C/8E/wL/6f7g/sz+r/6c/oX+bf5V/j/+...<33280 base64 chars truncated>"
+                }
+              }
+            ],
+            "role": "model"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 13308,
+      "dir": "in",
+      "frameType": "binary",
+      "msg": {}
+    },
+    {
+      "tMs": 13310,
+      "dir": "in",
+      "frameType": "binary",
+      "msg": {
+        "serverContent": {
+          "modelTurn": {
+            "parts": [
+              {
+                "inlineData": {
+                  "mimeType": "audio/pcm;rate=24000",
+                  "data": "ousQ7azulu/g7yvvU+8o8S7yzvKJ8svxSPEj8VjxY/Eu8Szx...<20480 base64 chars truncated>"
+                }
+              }
+            ],
+            "role": "model"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 13326,
+      "dir": "in",
+      "frameType": "binary",
+      "msg": {}
+    },
+    {
+      "tMs": 13335,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 13335,
+      "dir": "in",
+      "frameType": "binary",
+      "msg": {
+        "serverContent": {
+          "modelTurn": {
+            "parts": [
+              {
+                "inlineData": {
+                  "mimeType": "audio/pcm;rate=24000",
+                  "data": "cBWQGUoczR1jHqkeBB/yH/IgDiKTIt0huiDdHWQb6xccFckR...<20480 base64 chars truncated>"
+                }
+              }
+            ],
+            "role": "model"
+          },
+          "outputTranscription": {
+            "text": " today."
+          }
+        }
+      }
+    },
+    {
+      "tMs": 13348,
+      "dir": "in",
+      "frameType": "binary",
+      "msg": {}
+    },
+    {
+      "tMs": 13351,
+      "dir": "in",
+      "frameType": "binary",
+      "msg": {
+        "serverContent": {
+          "modelTurn": {
+            "parts": [
+              {
+                "inlineData": {
+                  "mimeType": "audio/pcm;rate=24000",
+                  "data": "9v9lAXgCxgJRA00EkgSbBR8I9gkpCzANCw8zEGIQ0g/RDTUM...<20480 base64 chars truncated>"
+                }
+              }
+            ],
+            "role": "model"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 13360,
+      "dir": "in",
+      "frameType": "binary",
+      "msg": {}
+    },
+    {
+      "tMs": 13363,
+      "dir": "in",
+      "frameType": "binary",
+      "msg": {
+        "serverContent": {
+          "modelTurn": {
+            "parts": [
+              {
+                "inlineData": {
+                  "mimeType": "audio/pcm;rate=24000",
+                  "data": "IwAgACEAIAAeAB4AHQAcABsAHAAaABsAGgAYABYAFAAWABMA...<7680 base64 chars truncated>"
+                }
+              }
+            ],
+            "role": "model"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 13378,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 13379,
+      "dir": "in",
+      "frameType": "binary",
+      "msg": {
+        "serverContent": {
+          "generationComplete": true
+        }
+      }
+    },
+    {
+      "tMs": 13421,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 13467,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 13512,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 13553,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 13598,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 13643,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 13688,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 13733,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 13778,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audioStreamEnd": true
+        }
+      }
+    },
+    {
+      "tMs": 17733,
+      "dir": "in",
+      "frameType": "binary",
+      "msg": {
+        "serverContent": {
+          "turnComplete": true
+        },
+        "usageMetadata": {
+          "promptTokenCount": 951,
+          "responseTokenCount": 124,
+          "totalTokenCount": 1075,
+          "promptTokensDetails": [
+            {
+              "modality": "TEXT",
+              "tokenCount": 422
+            },
+            {
+              "modality": "AUDIO",
+              "tokenCount": 470
+            }
+          ],
+          "responseTokensDetails": [
+            {
+              "modality": "AUDIO",
+              "tokenCount": 124
+            }
+          ],
+          "thoughtsTokenCount": 60
+        }
+      }
+    },
+    {
+      "tMs": 17733,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "text": "What time is it in Helsinki right now?"
+        }
+      }
+    },
+    {
+      "tMs": 18020,
+      "dir": "in",
+      "frameType": "binary",
+      "msg": {}
+    },
+    {
+      "tMs": 18021,
+      "dir": "in",
+      "frameType": "binary",
+      "msg": {
+        "serverContent": {}
+      }
+    },
+    {
+      "tMs": 18022,
+      "dir": "in",
+      "frameType": "binary",
+      "msg": {}
+    },
+    {
+      "tMs": 18022,
+      "dir": "in",
+      "frameType": "binary",
+      "msg": {
+        "toolCall": {
+          "functionCalls": [
+            {
+              "name": "get_time",
+              "args": {},
+              "id": "fc_18429171870273940054"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "tMs": 18025,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "toolResponse": {
+          "functionResponses": [
+            {
+              "id": "fc_18429171870273940054",
+              "name": "get_time",
+              "response": {
+                "time": "14:05"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "tMs": 18342,
+      "dir": "in",
+      "frameType": "binary",
+      "msg": {}
+    },
+    {
+      "tMs": 18426,
+      "dir": "in",
+      "frameType": "binary",
+      "msg": {}
+    },
+    {
+      "tMs": 18426,
+      "dir": "in",
+      "frameType": "binary",
+      "msg": {
+        "serverContent": {
+          "modelTurn": {
+            "parts": [
+              {
+                "inlineData": {
+                  "mimeType": "audio/pcm;rate=24000",
+                  "data": "AAA="
+                }
+              }
+            ],
+            "role": "model"
+          },
+          "outputTranscription": {
+            "text": "The current time "
+          }
+        }
+      }
+    },
+    {
+      "tMs": 18433,
+      "dir": "in",
+      "frameType": "binary",
+      "msg": {}
+    },
+    {
+      "tMs": 18433,
+      "dir": "in",
+      "frameType": "binary",
+      "msg": {
+        "serverContent": {
+          "modelTurn": {
+            "parts": [
+              {
+                "inlineData": {
+                  "mimeType": "audio/pcm;rate=24000",
+                  "data": "BQAGAAYABQAGAAkABgAEAAMABQAEAAUABgAFAAMABQAAAAUA...<6400 base64 chars truncated>"
+                }
+              }
+            ],
+            "role": "model"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 18539,
+      "dir": "in",
+      "frameType": "binary",
+      "msg": {}
+    },
+    {
+      "tMs": 18543,
+      "dir": "in",
+      "frameType": "binary",
+      "msg": {
+        "serverContent": {
+          "modelTurn": {
+            "parts": [
+              {
+                "inlineData": {
+                  "mimeType": "audio/pcm;rate=24000",
+                  "data": "XAF0Bwn+vgLLBJkFoQtOC2AP3BCBEPoTgBfJFNEY2REvDnwP...<10240 base64 chars truncated>"
+                }
+              }
+            ],
+            "role": "model"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 18543,
+      "dir": "in",
+      "frameType": "binary",
+      "msg": {}
+    },
+    {
+      "tMs": 18543,
+      "dir": "in",
+      "frameType": "binary",
+      "msg": {
+        "serverContent": {
+          "modelTurn": {
+            "parts": [
+              {
+                "inlineData": {
+                  "mimeType": "audio/pcm;rate=24000",
+                  "data": "0Pvq++P4YP7NAAT+CQThC14NYw/cC/AMeA3LCNsB3vvk+qD8...<17920 base64 chars truncated>"
+                }
+              }
+            ],
+            "role": "model"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 18543,
+      "dir": "in",
+      "frameType": "binary",
+      "msg": {}
+    },
+    {
+      "tMs": 18544,
+      "dir": "in",
+      "frameType": "binary",
+      "msg": {
+        "serverContent": {
+          "modelTurn": {
+            "parts": [
+              {
+                "inlineData": {
+                  "mimeType": "audio/pcm;rate=24000",
+                  "data": "6v/u//7/AgAAAPb/+v8GAAAA9/8EAAkA/f/3/////f/4/wQA...<10240 base64 chars truncated>"
+                }
+              }
+            ],
+            "role": "model"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 18544,
+      "dir": "in",
+      "frameType": "binary",
+      "msg": {}
+    },
+    {
+      "tMs": 18544,
+      "dir": "in",
+      "frameType": "binary",
+      "msg": {
+        "serverContent": {
+          "modelTurn": {
+            "parts": [
+              {
+                "inlineData": {
+                  "mimeType": "audio/pcm;rate=24000",
+                  "data": "mfp4/qT/YAT8BnUEQf/T/nn/qwZ2CSINdg5ICFAG4QYzBeAD...<2560 base64 chars truncated>"
+                }
+              }
+            ],
+            "role": "model"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 18579,
+      "dir": "in",
+      "frameType": "binary",
+      "msg": {}
+    },
+    {
+      "tMs": 18584,
+      "dir": "in",
+      "frameType": "binary",
+      "msg": {
+        "serverContent": {
+          "modelTurn": {
+            "parts": [
+              {
+                "inlineData": {
+                  "mimeType": "audio/pcm;rate=24000",
+                  "data": "sBIPEnERrxCjD3UOQA3uC6AKKgmwBzYGxgSQA0sCGQHn/8f+...<17920 base64 chars truncated>"
+                }
+              }
+            ],
+            "role": "model"
+          },
+          "outputTranscription": {
+            "text": "in Helsinki is"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 18615,
+      "dir": "in",
+      "frameType": "binary",
+      "msg": {}
+    },
+    {
+      "tMs": 18623,
+      "dir": "in",
+      "frameType": "binary",
+      "msg": {
+        "serverContent": {
+          "modelTurn": {
+            "parts": [
+              {
+                "inlineData": {
+                  "mimeType": "audio/pcm;rate=24000",
+                  "data": "SwUQ/1r26gD/A1T8oPsRAEj+0/yE/SD/S/7I+VYAJP2s/Hf7...<20480 base64 chars truncated>"
+                }
+              }
+            ],
+            "role": "model"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 18664,
+      "dir": "in",
+      "frameType": "binary",
+      "msg": {}
+    },
+    {
+      "tMs": 18668,
+      "dir": "in",
+      "frameType": "binary",
+      "msg": {
+        "serverContent": {
+          "modelTurn": {
+            "parts": [
+              {
+                "inlineData": {
+                  "mimeType": "audio/pcm;rate=24000",
+                  "data": "iO8j70HtLOeW7nH4e/h1+a/65PVR9kz7ZACDBI8GfAeyBvUF...<25600 base64 chars truncated>"
+                }
+              }
+            ],
+            "role": "model"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 18764,
+      "dir": "in",
+      "frameType": "binary",
+      "msg": {}
+    },
+    {
+      "tMs": 18764,
+      "dir": "in",
+      "frameType": "binary",
+      "msg": {}
+    },
+    {
+      "tMs": 18771,
+      "dir": "in",
+      "frameType": "binary",
+      "msg": {
+        "serverContent": {
+          "modelTurn": {
+            "parts": [
+              {
+                "inlineData": {
+                  "mimeType": "audio/pcm;rate=24000",
+                  "data": "ZQB4/yYAuQDD/5YBr/4lACYAk/9g/4MASv8TALb/PwFC/xEB...<23040 base64 chars truncated>"
+                }
+              }
+            ],
+            "role": "model"
+          },
+          "outputTranscription": {
+            "text": " fourteen oh five."
+          }
+        }
+      }
+    },
+    {
+      "tMs": 18772,
+      "dir": "in",
+      "frameType": "binary",
+      "msg": {
+        "serverContent": {
+          "modelTurn": {
+            "parts": [
+              {
+                "inlineData": {
+                  "mimeType": "audio/pcm;rate=24000",
+                  "data": "1P+f/wr/tQDl/rf8rvtRAXoHfQGv+gD77QGKBHX/1PoO/YkC...<20480 base64 chars truncated>"
+                }
+              }
+            ],
+            "role": "model"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 18797,
+      "dir": "in",
+      "frameType": "binary",
+      "msg": {}
+    },
+    {
+      "tMs": 18805,
+      "dir": "in",
+      "frameType": "binary",
+      "msg": {
+        "serverContent": {
+          "modelTurn": {
+            "parts": [
+              {
+                "inlineData": {
+                  "mimeType": "audio/pcm;rate=24000",
+                  "data": "EQHZAKkBMgGd/xn/8P6u////mP+Y/1//IABYAPP/+/8dAGP/...<20480 base64 chars truncated>"
+                }
+              }
+            ],
+            "role": "model"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 18848,
+      "dir": "in",
+      "frameType": "binary",
+      "msg": {}
+    },
+    {
+      "tMs": 18857,
+      "dir": "in",
+      "frameType": "binary",
+      "msg": {
+        "serverContent": {
+          "modelTurn": {
+            "parts": [
+              {
+                "inlineData": {
+                  "mimeType": "audio/pcm;rate=24000",
+                  "data": "z//T/8P/nP+T/0sA0f/G/9//8v8AAKv/BQBmADz/AAAdAEb/...<23040 base64 chars truncated>"
+                }
+              }
+            ],
+            "role": "model"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 18866,
+      "dir": "in",
+      "frameType": "binary",
+      "msg": {
+        "serverContent": {
+          "generationComplete": true
+        }
+      }
+    },
+    {
+      "tMs": 21536,
+      "dir": "in",
+      "frameType": "binary",
+      "msg": {
+        "serverContent": {
+          "turnComplete": true
+        },
+        "usageMetadata": {
+          "promptTokenCount": 2327,
+          "responseTokenCount": 90,
+          "totalTokenCount": 2417,
+          "promptTokensDetails": [
+            {
+              "modality": "TEXT",
+              "tokenCount": 963
+            },
+            {
+              "modality": "AUDIO",
+              "tokenCount": 1188
+            }
+          ],
+          "responseTokensDetails": [
+            {
+              "modality": "AUDIO",
+              "tokenCount": 84
+            }
+          ],
+          "thoughtsTokenCount": 98
+        }
+      }
+    },
+    {
+      "tMs": 21536,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "text": "Please tell me a long, slow story about a walk in a forest by the sea."
+        }
+      }
+    },
+    {
+      "tMs": 21863,
+      "dir": "in",
+      "frameType": "binary",
+      "msg": {}
+    },
+    {
+      "tMs": 21863,
+      "dir": "in",
+      "frameType": "binary",
+      "msg": {
+        "serverContent": {}
+      }
+    },
+    {
+      "tMs": 22031,
+      "dir": "in",
+      "frameType": "binary",
+      "msg": {}
+    },
+    {
+      "tMs": 22031,
+      "dir": "in",
+      "frameType": "binary",
+      "msg": {
+        "serverContent": {
+          "modelTurn": {
+            "parts": [
+              {
+                "inlineData": {
+                  "mimeType": "audio/pcm;rate=24000",
+                  "data": "AAA="
+                }
+              }
+            ],
+            "role": "model"
+          },
+          "outputTranscription": {
+            "text": "Picture a quiet path "
+          }
+        }
+      }
+    },
+    {
+      "tMs": 22047,
+      "dir": "in",
+      "frameType": "binary",
+      "msg": {}
+    },
+    {
+      "tMs": 22053,
+      "dir": "in",
+      "frameType": "binary",
+      "msg": {
+        "serverContent": {
+          "modelTurn": {
+            "parts": [
+              {
+                "inlineData": {
+                  "mimeType": "audio/pcm;rate=24000",
+                  "data": "+f/7//X//P/5//v/9//8//n//P/4//z//P/4//r//P/4//7/...<23040 base64 chars truncated>"
+                }
+              }
+            ],
+            "role": "model"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 22065,
+      "dir": "in",
+      "frameType": "binary",
+      "msg": {}
+    },
+    {
+      "tMs": 22072,
+      "dir": "in",
+      "frameType": "binary",
+      "msg": {
+        "serverContent": {
+          "modelTurn": {
+            "parts": [
+              {
+                "inlineData": {
+                  "mimeType": "audio/pcm;rate=24000",
+                  "data": "wBS1FeMU3RM1ErcPKQ6NC4EJ6wfaBZ8FwQQbBV0FiATuBKgD...<12800 base64 chars truncated>"
+                }
+              }
+            ],
+            "role": "model"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 22098,
+      "dir": "in",
+      "frameType": "binary",
+      "msg": {}
+    },
+    {
+      "tMs": 22101,
+      "dir": "in",
+      "frameType": "binary",
+      "msg": {
+        "serverContent": {
+          "modelTurn": {
+            "parts": [
+              {
+                "inlineData": {
+                  "mimeType": "audio/pcm;rate=24000",
+                  "data": "HwAfACAAIgAhAB8AIwAgACAAIAAhACAAHwAfAB0AIgAfACEA...<10240 base64 chars truncated>"
+                }
+              }
+            ],
+            "role": "model"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 22213,
+      "dir": "in",
+      "frameType": "binary",
+      "msg": {}
+    },
+    {
+      "tMs": 22214,
+      "dir": "in",
+      "frameType": "binary",
+      "msg": {
+        "serverContent": {
+          "modelTurn": {
+            "parts": [
+              {
+                "inlineData": {
+                  "mimeType": "audio/pcm;rate=24000",
+                  "data": "oefn5l/mhOZ75h3nMud85wzoX+hl6WbqS+sb7P7sLe257eTu...<15360 base64 chars truncated>"
+                }
+              }
+            ],
+            "role": "model"
+          },
+          "outputTranscription": {
+            "text": "winding through tall"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 22214,
+      "dir": "in",
+      "frameType": "binary",
+      "msg": {}
+    },
+    {
+      "tMs": 22214,
+      "dir": "in",
+      "frameType": "binary",
+      "msg": {
+        "serverContent": {
+          "modelTurn": {
+            "parts": [
+              {
+                "inlineData": {
+                  "mimeType": "audio/pcm;rate=24000",
+                  "data": "lgKGAjMC3gIlAyYF0QaDB7wHaghDCDoIewijBywHfAgsCAcH...<12800 base64 chars truncated>"
+                }
+              }
+            ],
+            "role": "model"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 22214,
+      "dir": "in",
+      "frameType": "binary",
+      "msg": {}
+    },
+    {
+      "tMs": 22214,
+      "dir": "in",
+      "frameType": "binary",
+      "msg": {
+        "serverContent": {
+          "modelTurn": {
+            "parts": [
+              {
+                "inlineData": {
+                  "mimeType": "audio/pcm;rate=24000",
+                  "data": "1gA5/YIB9gMwAj0DmQNsAMEA2wZ8DUoQYRBUCgwDT/91+5T5...<10240 base64 chars truncated>"
+                }
+              }
+            ],
+            "role": "model"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 22214,
+      "dir": "in",
+      "frameType": "binary",
+      "msg": {}
+    },
+    {
+      "tMs": 22217,
+      "dir": "in",
+      "frameType": "binary",
+      "msg": {
+        "serverContent": {
+          "modelTurn": {
+            "parts": [
+              {
+                "inlineData": {
+                  "mimeType": "audio/pcm;rate=24000",
+                  "data": "efoL+jb54fbb8+vykfIz88T1lvi2+RT7xfz1/IX/LgNMBNsE...<15360 base64 chars truncated>"
+                }
+              }
+            ],
+            "role": "model"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 22231,
+      "dir": "in",
+      "frameType": "binary",
+      "msg": {}
+    },
+    {
+      "tMs": 22236,
+      "dir": "in",
+      "frameType": "binary",
+      "msg": {
+        "serverContent": {
+          "modelTurn": {
+            "parts": [
+              {
+                "inlineData": {
+                  "mimeType": "audio/pcm;rate=24000",
+                  "data": "wgbQBtMG2AbKBsUGrwaVBoQGVwY6BgkG3AWlBWsFMwXoBLAE...<10240 base64 chars truncated>"
+                }
+              }
+            ],
+            "role": "model"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 22326,
+      "dir": "in",
+      "frameType": "binary",
+      "msg": {}
+    },
+    {
+      "tMs": 22331,
+      "dir": "in",
+      "frameType": "binary",
+      "msg": {
+        "serverContent": {
+          "modelTurn": {
+            "parts": [
+              {
+                "inlineData": {
+                  "mimeType": "audio/pcm;rate=24000",
+                  "data": "5dqF3GrZbNmZ14/bb9524FrfjtxH5EXwJvuABCgFwv7K/mYA...<28160 base64 chars truncated>"
+                }
+              }
+            ],
+            "role": "model"
+          },
+          "outputTranscription": {
+            "text": " pine trees,"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 22331,
+      "dir": "in",
+      "frameType": "binary",
+      "msg": {}
+    },
+    {
+      "tMs": 22334,
+      "dir": "in",
+      "frameType": "binary",
+      "msg": {
+        "serverContent": {
+          "modelTurn": {
+            "parts": [
+              {
+                "inlineData": {
+                  "mimeType": "audio/pcm;rate=24000",
+                  "data": "RPh1+Wz69Ptx/dv+qADXAVkDjgTABd4G7AfYCJcJfQr+CsML...<20480 base64 chars truncated>"
+                }
+              }
+            ],
+            "role": "model"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 22362,
+      "dir": "in",
+      "frameType": "binary",
+      "msg": {}
+    },
+    {
+      "tMs": 22366,
+      "dir": "in",
+      "frameType": "binary",
+      "msg": {
+        "serverContent": {
+          "modelTurn": {
+            "parts": [
+              {
+                "inlineData": {
+                  "mimeType": "audio/pcm;rate=24000",
+                  "data": "ne818D/xvPG78bjwAfC17zPwvu/J7XzrYerR6JPm9OTO5C7k...<15360 base64 chars truncated>"
+                }
+              }
+            ],
+            "role": "model"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 22441,
+      "dir": "in",
+      "frameType": "binary",
+      "msg": {}
+    },
+    {
+      "tMs": 22449,
+      "dir": "in",
+      "frameType": "binary",
+      "msg": {
+        "serverContent": {
+          "modelTurn": {
+            "parts": [
+              {
+                "inlineData": {
+                  "mimeType": "audio/pcm;rate=24000",
+                  "data": "P/lr+Aj3hfbR9db0xvQr9IL0MvXf9bD2kvaw9fv0avMg8yjz...<30720 base64 chars truncated>"
+                }
+              }
+            ],
+            "role": "model"
+          },
+          "outputTranscription": {
+            "text": " leading softly toward"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 22495,
+      "dir": "in",
+      "frameType": "binary",
+      "msg": {}
+    },
+    {
+      "tMs": 22504,
+      "dir": "in",
+      "frameType": "binary",
+      "msg": {
+        "serverContent": {
+          "modelTurn": {
+            "parts": [
+              {
+                "inlineData": {
+                  "mimeType": "audio/pcm;rate=24000",
+                  "data": "q/9cAEUACgAvADEATgCs//v/TQDQ/3EAeADo/zgAFwCs/+X/...<25600 base64 chars truncated>"
+                }
+              }
+            ],
+            "role": "model"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 22512,
+      "dir": "in",
+      "frameType": "binary",
+      "msg": {}
+    },
+    {
+      "tMs": 22514,
+      "dir": "in",
+      "frameType": "binary",
+      "msg": {
+        "serverContent": {
+          "modelTurn": {
+            "parts": [
+              {
+                "inlineData": {
+                  "mimeType": "audio/pcm;rate=24000",
+                  "data": "QfRt9KP0evT/9Jj1vfVr9h73l/cx+On4s/kS+gD6Xvrp+gj7...<7680 base64 chars truncated>"
+                }
+              }
+            ],
+            "role": "model"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 22625,
+      "dir": "in",
+      "frameType": "binary",
+      "msg": {}
+    },
+    {
+      "tMs": 22625,
+      "dir": "in",
+      "frameType": "binary",
+      "msg": {}
+    },
+    {
+      "tMs": 22632,
+      "dir": "in",
+      "frameType": "binary",
+      "msg": {
+        "serverContent": {
+          "modelTurn": {
+            "parts": [
+              {
+                "inlineData": {
+                  "mimeType": "audio/pcm;rate=24000",
+                  "data": "YOYd53Tm0+O04sXif+GK4l7kWuPQ4/vkJ+P34qfjX+Tl5S3l...<30720 base64 chars truncated>"
+                }
+              }
+            ],
+            "role": "model"
+          },
+          "outputTranscription": {
+            "text": " the gentle sound"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 22632,
+      "dir": "in",
+      "frameType": "binary",
+      "msg": {
+        "serverContent": {
+          "modelTurn": {
+            "parts": [
+              {
+                "inlineData": {
+                  "mimeType": "audio/pcm;rate=24000",
+                  "data": "XQDvAIf/PwAnAIsAAAEb/z0AXwCdAKj/3wHm/kMAj/4cAbL/...<20480 base64 chars truncated>"
+                }
+              }
+            ],
+            "role": "model"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 22739,
+      "dir": "in",
+      "frameType": "binary",
+      "msg": {}
+    },
+    {
+      "tMs": 22739,
+      "dir": "in",
+      "frameType": "binary",
+      "msg": {
+        "serverContent": {
+          "modelTurn": {
+            "parts": [
+              {
+                "inlineData": {
+                  "mimeType": "audio/pcm;rate=24000",
+                  "data": "vfXR9R721fWQ9nX2Kfdj9xH49vh3+WH67fpX+xn8TPzw/Ez9...<35840 base64 chars truncated>"
+                }
+              }
+            ],
+            "role": "model"
+          },
+          "outputTranscription": {
+            "text": " of ocean waves."
+          }
+        }
+      }
+    },
+    {
+      "tMs": 22749,
+      "dir": "in",
+      "frameType": "binary",
+      "msg": {}
+    },
+    {
+      "tMs": 22757,
+      "dir": "in",
+      "frameType": "binary",
+      "msg": {
+        "serverContent": {
+          "modelTurn": {
+            "parts": [
+              {
+                "inlineData": {
+                  "mimeType": "audio/pcm;rate=24000",
+                  "data": "MfjI9u700fKI8OjvC+8C7obsNuty6sPpTulo6HHmd+Xr5Q7l...<23040 base64 chars truncated>"
+                }
+              }
+            ],
+            "role": "model"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 22794,
+      "dir": "in",
+      "frameType": "binary",
+      "msg": {}
+    },
+    {
+      "tMs": 22801,
+      "dir": "in",
+      "frameType": "binary",
+      "msg": {
+        "serverContent": {
+          "modelTurn": {
+            "parts": [
+              {
+                "inlineData": {
+                  "mimeType": "audio/pcm;rate=24000",
+                  "data": "9Q7dDqUP2xAZEtYSdhP2EzwUiBTjFJQU8RP2EwkSJxG3D3MN...<20480 base64 chars truncated>"
+                }
+              }
+            ],
+            "role": "model"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 22828,
+      "dir": "in",
+      "frameType": "binary",
+      "msg": {}
+    },
+    {
+      "tMs": 22833,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "GQD+/+7/AQDy//f/BgD7/wsAHQDw//L/EwDa//f/FwDs/xEA...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 22835,
+      "dir": "in",
+      "frameType": "binary",
+      "msg": {
+        "serverContent": {
+          "modelTurn": {
+            "parts": [
+              {
+                "inlineData": {
+                  "mimeType": "audio/pcm;rate=24000",
+                  "data": "bxCMDAcLTQeyBjAEnwIqABz9ffyJ+Sz5T/fT9LL0M/JJ8lDx...<20480 base64 chars truncated>"
+                }
+              }
+            ],
+            "role": "model"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 22876,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "JALf/+L8kgWr+pYCOQD0/W0DWv3zAFsArP89/1UBCP+b/38B...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 22877,
+      "dir": "in",
+      "frameType": "binary",
+      "msg": {}
+    },
+    {
+      "tMs": 22881,
+      "dir": "in",
+      "frameType": "binary",
+      "msg": {
+        "serverContent": {
+          "modelTurn": {
+            "parts": [
+              {
+                "inlineData": {
+                  "mimeType": "audio/pcm;rate=24000",
+                  "data": "Z/ZV+Dz6ivwc/6UB7wPBBLkEwgLTAEEABQHKArQE/wNAAC79...<20480 base64 chars truncated>"
+                }
+              }
+            ],
+            "role": "model"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 22916,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "6AI+/TYA8QEq/dcBtP/a/8MAhP6hAGn/0wC//gUBsf9V/tIB...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 22932,
+      "dir": "in",
+      "frameType": "binary",
+      "msg": {}
+    },
+    {
+      "tMs": 22932,
+      "dir": "in",
+      "frameType": "binary",
+      "msg": {
+        "serverContent": {
+          "modelTurn": {
+            "parts": [
+              {
+                "inlineData": {
+                  "mimeType": "audio/pcm;rate=24000",
+                  "data": "XQGs/7v8Sv61Ct4AjPPqAZ8McP5k83cEmAq7967+BQXm/3v9...<23040 base64 chars truncated>"
+                }
+              }
+            ],
+            "role": "model"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 22944,
+      "dir": "in",
+      "frameType": "binary",
+      "msg": {}
+    },
+    {
+      "tMs": 22945,
+      "dir": "in",
+      "frameType": "binary",
+      "msg": {
+        "serverContent": {
+          "modelTurn": {
+            "parts": [
+              {
+                "inlineData": {
+                  "mimeType": "audio/pcm;rate=24000",
+                  "data": "DAAMAAsADQAMAAoACwANAA0ADAAMAAsADAAMAAwADgANAA4A...<5120 base64 chars truncated>"
+                }
+              }
+            ],
+            "role": "model"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 22959,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "EO2A73ju9Ow674/ti/D77ivsUe7h7ZzvefDs757xuPE78dP0...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 22962,
+      "dir": "in",
+      "frameType": "binary",
+      "msg": {
+        "serverContent": {
+          "generationComplete": true
+        }
+      }
+    },
+    {
+      "tMs": 23003,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "TiWcGCoNPwmXCacHEwRsAqQB6P74+zD93QKvCBUMZQ/TFHQa...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 23048,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "GhT7EnYPAArXAlb67fJc7ovqAOlT627vPfND9oH4UPj79Xfy...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 23071,
+      "dir": "in",
+      "frameType": "binary",
+      "msg": {
+        "voiceActivity": {
+          "type": "ACTIVITY_START",
+          "audioOffset": "7.560s"
+        }
+      }
+    },
+    {
+      "tMs": 23071,
+      "dir": "in",
+      "frameType": "binary",
+      "msg": {
+        "serverContent": {
+          "interrupted": true
+        }
+      }
+    },
+    {
+      "tMs": 23074,
+      "dir": "in",
+      "frameType": "binary",
+      "msg": {
+        "serverContent": {
+          "turnComplete": true
+        },
+        "usageMetadata": {
+          "promptTokenCount": 1282,
+          "responseTokenCount": 178,
+          "totalTokenCount": 1460,
+          "promptTokensDetails": [
+            {
+              "modality": "TEXT",
+              "tokenCount": 495
+            },
+            {
+              "modality": "AUDIO",
+              "tokenCount": 678
+            }
+          ],
+          "responseTokensDetails": [
+            {
+              "modality": "AUDIO",
+              "tokenCount": 178
+            }
+          ],
+          "thoughtsTokenCount": 49
+        }
+      }
+    },
+    {
+      "tMs": 23088,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "Gu5U7NjqcOrF6vnqHez17Ujut+1D7r/uhO5M8Ej0qfcd+mb8...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 23133,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "lvW79Xj1efXS9jj4kPjc+LH57vkS+S34BfgI+G33dfYW9kn2...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 23178,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "qfgh9wv3S/dz9qX19/WB9ob2//Y0+Mn42/i5+R/73ftV/Hb9...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 23222,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "h/rL+k78u/wo+135+/hB+f34evgk+Gb3ivbd9iD4i/jL97P3...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 23267,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "N/oD+tD5Mfr8+kP7jvqw+d35xfqf+3f7XfpU+bv5TfsZ/GX7...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 23312,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "zQHIAbYB8AF4Au8C/gLZAukCKAOEA74DwgOLA2UDhQPFA90D...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 23358,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "/f/8//v/+v/+/wAA///+/wEAAQABAAEA/v/+//z/+f/6//r/...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 23403,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "AAD+////AQD+/wAAAwABAAAAAAD+//7/+//7//v/+v/9//z/...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 23448,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "AQABAP3/+//8//z//P/+/////v/+////AAACAAIAAAD/////...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 23493,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "///+//7//////////v/+//3//f/+//3//v8AAAAAAQABAAEA...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 23533,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "AAABAAMAAwAAAP/////+//v//P/7//r//P/8////AQADAAQA...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 23576,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "aBLbEEoPvw02DKsKFQl5B8UFAwQ3AmMAnP7d/Dn7qvkv+Nv2...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 23621,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "kvdF9pj0KfOK8tnwP+176e/mn+Si4gTic+Ku4yHmX+n96xLu...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 23663,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "afDn7V3rEOwW7q3rSOVK4qTs6gHxFCIbexY0FqIi0Tg8SUxK...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 23708,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "ZhQxGXQScgcjBBAJDw9kDc4Ejfhb783tde4S7ZToh+PJ383e...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 23749,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "cwu7Eu0QFwtSCIoL8w/bD4IKWQOS/ML2vPS59OLw7Omo5fDl...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 23792,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "PfPK84n0p/Tr9FD1zfV39lz2ZvZ29sr2YfYi9on2hPbf9Wn1...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 23837,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "cvGR8tnyB/K58crydvMt81rzJfTX9DP1zPVz9uv2fveh+Df5...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 23879,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "7A3PC/AHiwTcAmAC+AB4/rj7J/kH+BT42vcY9sTzrPLk8sLz...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 23920,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "HQAjACUAKwAyADgAOQA7ADoAOwBAAEUAQwBCAEUARwBNAFIA...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 23962,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "AAAFAAIAAQAGAAMA/v/+/wIA/f8BAAUABgALAAkACAAIAAMA...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 24004,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "AwAEAAsACgAOAA8ADwAKAAEAAwD3/+//8//3//n/9//+////...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 24049,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "/v8BAAAAAwACAAIAAgAAAP7//P/9//z//P/9//7///8BAAEA...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 24092,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "//8CAAEAAgADAP//AgABAAEAAgAAAAAA//////v//f/+//3/...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 24137,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "AAD+//3//f/9//z//P/+//7//////wAAAQABAAEAAAAAAP7/...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 24183,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "/v////7//v8AAAAAAAABAAEAAQABAAAA/v////7//v/+//3/...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 24226,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "BAAEAAQABAADAAMAAgD9//r//P/+//v/+P///wEAAgAGAAAA...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 24271,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "bP6WAlUBi/3P/1AD3wP0A0v8UPYY/OD+iQFIABb8QP+zACj/...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 24316,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "+AZx+dvzmPIq7/vqtOY94Q/d59w03y/fb9zK3Mbh5+Sq4vff...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 24360,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "UQYbHEEi3B6iI8ov+jdTPTREb0mSStxFHzmOKhkkAiUUJrIj...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 24401,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "5+eg547nZef75rLmS+Zn5Sjkc+MC5MLlUehS647uJfJR9g/7...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 24446,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "R+Eu45zkduR+48vksOV25SfmPueV52HmGefF57XnSOcZ53Hn...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 24490,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "ueKD4yrlKOFU3G7bUN8L6tfznfL56V/r3vlZCscWJxq6FXoR...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 24532,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "1xXRD/8IDAT3/wT71PLM6gvoYucE5ZjhWuFv4Wbe4tuW3Cff...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 24577,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "8glgAy8CWQgX+5H8GgO3+xz4Zv7v+IL0YvbE9SL3xvKS80ry...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 24623,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "EP/JA3v+bgKE/wAC5P6u/1b/rv5O/x4AQgG8/7kBWPzCAYb8...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 24668,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "mQDR/woAFACd//kAW/82ANL/EADz/y0A4v+Y/8sAL/+qAKP/...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 24713,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "cABlAJT/cP9P/zX/qwCWAAb/6f/2AeoA+//F/+MA3AAHAEoC...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 24758,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "uwIyBOcI4wzXDNkIdQPE/239ffzH/Br7Jvha9+H2w/L56z7n...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 24800,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "RvQz6w7liuFN4BTloOvD8aD6ZQKKBt8GPgPc/mr6ivNx6+jm...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 24845,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "sh0NETUFmvv09RPzePAy7aHqcuvi7d3ulfAB9VP6F/+2A00H...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 24889,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "0AFp+bjzjPBC7iTtRezQ7KfvyfEO8yf0V/V+9iL36PUx8/bw...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 24934,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "7gHRAasBhAFfATQBCAHaAKMAcAA/AA8A6f/H/6n/jf9y/1T/...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 24979,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "tf+x/9//EAC+/5D/nv8HAHkAxQDAAGkAXgDw/2L/e/+j//T/...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 25024,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "1P/CAHAAsf/j/ycA+/9NAHYAUQD//1b/DwCL/7T/R/88AKoA...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 25069,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "LwGg/8X9PfwC/Df7xvo3+j/5U/ja9jb2gPSe8rPxcPBb8L/v...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 25114,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "Qhf/E6QNxQRZ+c3sJ+Ij2ynZF91U5VHvzvlzA+4JpgyYDA4K...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 25156,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "9wCkASUB1//Y/ur8MvmR9W/yLO7D6RvnROUL5Arliufb6Ufs...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 25201,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "/N8J3/vgNuLu477ma+h16czqpevc7BHvyvD18anzD/VI9bv0...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 25243,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "eOpi607rEu1m7/bv/PBI8h7ybvKZ9On1O/aw9uj2s/cV+Dz3...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 25288,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "XwpZCsAIVQxFCtcKwAvOCs8MignbDfoKoQnOClUMTQkpCG0O...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 25333,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "QP/n/ikCFvuQA2z/+f0uAqL+BQFu/4UAhP/W/0D/yP/O/1UB...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 25378,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "dP7DAKH/YQHK/mH+7QOQ/HIBYwKv/E8DXP2mAF0BlfxXBCz/...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 25423,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "tfsE+A79KwfmDiQRPA+OCzkJ4wm7CggLgw3wEFwRjApO/yb4...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 25468,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "QvrH+qT6y/gu9BDybPOw9Ab1kPTE8+LvNOsU64PsV+zZ7CLv...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 25513,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "Q+948BPwuu818PHwgfHS8RHyNPEX8EbwRPFw8IvuDu+y8eD0...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 25558,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "xv7E/sP+x/7O/tr+5v70/gP/Ev8j/zf/Tf9j/3v/lP+u/8r/...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 25602,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "Qv0v/6cCBQE1AgIDigGP//AC5QOlAiwEwQR2BqsHBQumBvb/...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 25643,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "5/po+jP3hPKE72vtzOqX5yfkmeFh3xLdHd343kXfe+CS5I3n...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 25687,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "nOi56o3s7+558ffyEfTQ9aL22PTm8oX1yv3JB6IPMRVhGcwb...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 25727,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "MuxT8Oj0wfl7/o4CJwakCUIN3hA9FIcX1BoZHu0g3iIVJC0l...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 25771,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "Pucq6iPtHfAy8132t/k2/c4AoQR+CHcMVBD3E3QXphqYHTUg...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 25814,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "7fu9+5b7gft6+3v7hPuX+7P72vsL/EX8h/zQ/CT9fP3a/UD+...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 25857,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "4f8MACoAIwAKAAMA9P/T/9P/6f8MAB4AGwAOAOv/4f/0/xsA...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 25902,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "AQACAAEAAQAAAPz/+v/6//r/+v/+////AAADAAQABgAEAAMA...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 25945,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "/f/+//z//f/8//z/+//6//////////////////7/////////...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 25985,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "/f/+/////f////7///8BAAAAAQAAAP7//f/9//z//P/7//z/...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 26026,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "/////wAA//8AAAAAAAAAAP///v/9//7/////////AAABAAAA...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 26069,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "AAAAAAAAAAABAAIA//////7//v////3//v////////8AAAAA...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 26114,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "NvJ08W3xjfGU9mz7P/mL92P3mfU1+Lj6rPnW+xf8e/va/b/5...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 26155,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "D+pl7QLw2e1r7tjyK/aF94D3lPoA/QX6jfge+Ff2J/VD8lTw...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 26200,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "djyIPUA/+T2iNiksziFHGK8TgxSzFWITBQ5fCRIHFgR7AJ4B...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 26242,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "JgFL/5f98/td+uH4cfcF9p30RPMD8t/w5e8s76ruUO4q7gzu...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 26287,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "ouu96grqVOkO6U/pf+lT6SvpQ+kr6cPoL+ia5yfnmOY/5lbm...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 26328,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "vi9YQ65MdE7OTzVPdUTVLvkYzAr4/4Dz/eq97YH4pQNaDgca...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 26371,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "8QC77SfbkdC+0XPY9N9G6pT3EgJUBHAAa/tm9Wbtv+Xv4avk...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 26413,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "sym0KdcnRyIMG3wV5RFqD0IPpBHpE9UUARZIGBAaVhkeGD0a...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 26458,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "uvOr9Kn1uvbk9x75c/rM+yv9l/4XAJMBBAN4BN8FMgd3CKkJ...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 26499,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "QQEQAewA3gC7AJYAfwBVADAADwD4/+P/vP+h/43/cP9H/zH/...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 26540,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "GQT0BXP54/z4/+YHSwN/7ZsO6wSj+on8s/tfGzz63vQTA9wH...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 26585,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "QBLqF70bUyDkJbcppStuLRAxkzNEMyczIDXGNhw0pTDlLygv...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 26630,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "OQB0AZ4BFgHPAK7/lf0O/K/6P/ha9s31a/Rv8gjyy/Hc727u...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 26671,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "1etK6y/ryOzQ7XrtGu7T7zTxVPKV80v1x/ef+bH5Kfrw+yz8...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 26711,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "gPit+s78if4g/pf9DP3A+wP5f/ZT9MTwlu7y7EbqTuld6p/o...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 26755,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "+/JC82vycfH68LHzbPS48rTt3fFtBt0ilzwJSrxMc0UeOroo...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 26800,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "vu7m8kH+YA0+HVEtWjhQOu40FykWGvkMeAanBHICN//N/GL6...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 26843,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "pAnKA9EITAPHB9wC7gW+AKwA3Abr+nUCyf8++6j+GvxD/Db8...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 26888,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "+wHF/279BwTA+FMG2fx1AgT+SwJkAXH8pQMh/DACav3aAZv/...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 26933,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "3//3//f/GQApABgAQgACAAEA6//N/+D/4v8GABAAHgAaACIA...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 26975,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "evt//y4FyARmBhcDv/8Q/Lz7kPzE/lAAVf/TAdj/h/4W/3T8...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 27020,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "0fokA+8C8veRB+f54ALN/7n9ugaL+fYDNf9s+2kFLPs9BAr+...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 27065,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "5QHzAFT6xgWiAQn8lQRb+ZP+nwC5+m8FFv1MANQDbf40A6sA...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 27107,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "xBBaFR0XoRFxCUYFRwVYBPgArAFkCFENoQ53EvcXqhngGNkY...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 27148,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "ruY759zms+U45fHmAetK7lfwX/SQ+Iz4aPbH9Yr0GvCt6jzo...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 27189,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "NP+uAlwGIAqGDdQQBRQFF8AZIhxWHlEgPyIwJFAmiyh9KjAs...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 27234,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "iwOdA64DtQO9A8EDvQO7A7UDqgOgA48DegNjA0EDHAPyAr0C...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 27276,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "GADVBO4BzwGpA6f/pwBOALb+oADS/7MAuQAg/pD88PyE/en8...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 27321,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "1PJ38JPse+nM6E3o+eZp5jbns+Vn42DlKOgF52/lMui66dDn...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 27366,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "JzeUN8M5/DsXPPM6bzn6NqMzTjB0LI8nmiIxHtoZaxU1ESYN...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 27410,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "utpd2xPcv9xz3TXe4d6V3z/gAuHG4ZjideNW5HnlcOZ+55vo...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 27451,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "5B7XJpMytTzQQg9GIEghR99AzzUfKpUjyiMRJE8cKw8/BgUF...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 27492,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "8+9r8I/wju9H7vPu5PHi9ST4wfng99Dy8PCa8TTyifIz9Lb0...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 27536,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "Qf7t/PT+TQAM/wz+ov5y/8T86fnX+M74+/b49I72Mfch9tz1...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 27579,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "GPfj9aP2K/a085PyZvB/7ZbsPe1T7xHyyPPQ9F/2nfUu9PL1...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 27624,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "FPmM+mD7sPzu/Mr8+/2j/Rn8NvyA/IX7w/oN+wD7svrN+qf6...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 27669,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "N++38KPzSPfk+uj9FABGAh8D5QH0AIv/fv2l+2T50/jU+Nn3...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 27715,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "i/4U/uT91v2f/Rb9zPz8/MH8PvzV+9b65/ka+bX3nvdJ+Sv8...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 27759,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "XhVWFDwTIRI1EbMQRRDADyoPgQ7aDeYMxAuZClwJZQiBB9UG...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 27804,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "e/7Q/n396v4z/778NwFe/LT/Mf+Z/UQA0v11ABb+nv9I/5f/...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 27848,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "QwBF/ywBfv7xABMAEP/DAK3/3/+LAMf/uP9UAFsAJ/9dAYf/...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 27893,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "pADD/xIANACu/3QACv8GAZT/VwDm/xMAugD2/jcByv6qANb/...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 27934,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "YP9JAP//kP+QAEIAwf+CADEAFgB9AN//FAAiALP/1P/k/9H/...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 27977,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 28022,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 28064,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 28109,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 28152,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 28196,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 28239,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 28282,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 28323,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 28363,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 28404,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 28445,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 28489,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 28530,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 28574,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 28619,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 28665,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 28706,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 28751,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 28795,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 28838,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 28883,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 28928,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 28972,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 29017,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 29061,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 29102,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 29148,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 29184,
+      "dir": "in",
+      "frameType": "binary",
+      "msg": {}
+    },
+    {
+      "tMs": 29184,
+      "dir": "in",
+      "frameType": "binary",
+      "msg": {}
+    },
+    {
+      "tMs": 29184,
+      "dir": "in",
+      "frameType": "binary",
+      "msg": {
+        "serverContent": {
+          "inputTranscription": {
+            "text": "Sorry, wait. Can you stop for a second? I want to ask something else."
+          }
+        }
+      }
+    },
+    {
+      "tMs": 29184,
+      "dir": "in",
+      "frameType": "binary",
+      "msg": {
+        "voiceActivity": {
+          "type": "ACTIVITY_END",
+          "audioOffset": "13.160s"
+        }
+      }
+    },
+    {
+      "tMs": 29184,
+      "dir": "in",
+      "frameType": "binary",
+      "msg": {}
+    },
+    {
+      "tMs": 29184,
+      "dir": "in",
+      "frameType": "binary",
+      "msg": {}
+    },
+    {
+      "tMs": 29184,
+      "dir": "in",
+      "frameType": "binary",
+      "msg": {}
+    },
+    {
+      "tMs": 29184,
+      "dir": "in",
+      "frameType": "binary",
+      "msg": {}
+    },
+    {
+      "tMs": 29184,
+      "dir": "in",
+      "frameType": "binary",
+      "msg": {
+        "serverContent": {}
+      }
+    },
+    {
+      "tMs": 29184,
+      "dir": "in",
+      "frameType": "binary",
+      "msg": {
+        "serverContent": {
+          "modelTurn": {
+            "parts": [
+              {
+                "inlineData": {
+                  "mimeType": "audio/pcm;rate=24000",
+                  "data": "AAA="
+                }
+              }
+            ],
+            "role": "model"
+          },
+          "outputTranscription": {
+            "text": "Of course, I'm "
+          }
+        }
+      }
+    },
+    {
+      "tMs": 29184,
+      "dir": "in",
+      "frameType": "binary",
+      "msg": {}
+    },
+    {
+      "tMs": 29184,
+      "dir": "in",
+      "frameType": "binary",
+      "msg": {}
+    },
+    {
+      "tMs": 29184,
+      "dir": "in",
+      "frameType": "binary",
+      "msg": {}
+    },
+    {
+      "tMs": 29184,
+      "dir": "in",
+      "frameType": "binary",
+      "msg": {}
+    },
+    {
+      "tMs": 29184,
+      "dir": "in",
+      "frameType": "binary",
+      "msg": {}
+    },
+    {
+      "tMs": 29184,
+      "dir": "in",
+      "frameType": "binary",
+      "msg": {}
+    },
+    {
+      "tMs": 29184,
+      "dir": "in",
+      "frameType": "binary",
+      "msg": {
+        "serverContent": {
+          "modelTurn": {
+            "parts": [
+              {
+                "inlineData": {
+                  "mimeType": "audio/pcm;rate=24000",
+                  "data": "CgAEAAgADAAJAA8ACQAJAA0ADQALAAgAEAAKAAgACgANAAsA...<6400 base64 chars truncated>"
+                }
+              }
+            ],
+            "role": "model"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 29184,
+      "dir": "in",
+      "frameType": "binary",
+      "msg": {
+        "serverContent": {
+          "modelTurn": {
+            "parts": [
+              {
+                "inlineData": {
+                  "mimeType": "audio/pcm;rate=24000",
+                  "data": "2Pyo/cf9Lfzz/LMA+vk9/c/9bPmyAJP5qQGA+aD+Hv1e/cb8...<10240 base64 chars truncated>"
+                }
+              }
+            ],
+            "role": "model"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 29185,
+      "dir": "in",
+      "frameType": "binary",
+      "msg": {
+        "serverContent": {
+          "modelTurn": {
+            "parts": [
+              {
+                "inlineData": {
+                  "mimeType": "audio/pcm;rate=24000",
+                  "data": "8fxu/A78yftC+0L7Kvtj+/v62Pre+pb6s/qy+t363voB+2T7...<12800 base64 chars truncated>"
+                }
+              }
+            ],
+            "role": "model"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 29185,
+      "dir": "in",
+      "frameType": "binary",
+      "msg": {
+        "serverContent": {
+          "modelTurn": {
+            "parts": [
+              {
+                "inlineData": {
+                  "mimeType": "audio/pcm;rate=24000",
+                  "data": "uQSnBKEESQU0Bt4GqQd5BxsH0AWkBFMDsALPAjAD9gNNBNgE...<20480 base64 chars truncated>"
+                }
+              }
+            ],
+            "role": "model"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 29188,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 29205,
+      "dir": "in",
+      "frameType": "binary",
+      "msg": {
+        "serverContent": {
+          "modelTurn": {
+            "parts": [
+              {
+                "inlineData": {
+                  "mimeType": "audio/pcm;rate=24000",
+                  "data": "AwADAAQABQADAAIAAgAGAAgABAAIAAcACAAHAAcACQALAAkA...<15360 base64 chars truncated>"
+                }
+              }
+            ],
+            "role": "model"
+          },
+          "outputTranscription": {
+            "text": "happy to wait."
+          }
+        }
+      }
+    },
+    {
+      "tMs": 29210,
+      "dir": "in",
+      "frameType": "binary",
+      "msg": {
+        "serverContent": {
+          "modelTurn": {
+            "parts": [
+              {
+                "inlineData": {
+                  "mimeType": "audio/pcm;rate=24000",
+                  "data": "8fYN99X3cvgF+R/6Dvuo/GT+HQDnAbcD5gU/COsKDQ2LDswP...<10240 base64 chars truncated>"
+                }
+              }
+            ],
+            "role": "model"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 29212,
+      "dir": "in",
+      "frameType": "binary",
+      "msg": {
+        "serverContent": {
+          "modelTurn": {
+            "parts": [
+              {
+                "inlineData": {
+                  "mimeType": "audio/pcm;rate=24000",
+                  "data": "vvsW/sP+Sv5m/jj+Rf1v/MP7OPoj+aD5oPon/Gb+vP8q/8P9...<33280 base64 chars truncated>"
+                }
+              }
+            ],
+            "role": "model"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 29212,
+      "dir": "in",
+      "frameType": "binary",
+      "msg": {
+        "serverContent": {
+          "modelTurn": {
+            "parts": [
+              {
+                "inlineData": {
+                  "mimeType": "audio/pcm;rate=24000",
+                  "data": "CAAGAAgACgAFAAkACwANAAsACQARABAADgANABAADgAQABAA...<5120 base64 chars truncated>"
+                }
+              }
+            ],
+            "role": "model"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 29213,
+      "dir": "in",
+      "frameType": "binary",
+      "msg": {
+        "serverContent": {
+          "modelTurn": {
+            "parts": [
+              {
+                "inlineData": {
+                  "mimeType": "audio/pcm;rate=24000",
+                  "data": "+//8//3//v/7//v//v/8//z//f/9//3//f/8//7/+//9//3/...<25600 base64 chars truncated>"
+                }
+              }
+            ],
+            "role": "model"
+          },
+          "outputTranscription": {
+            "text": " What would you like to ask"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 29229,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 29232,
+      "dir": "in",
+      "frameType": "binary",
+      "msg": {
+        "serverContent": {
+          "modelTurn": {
+            "parts": [
+              {
+                "inlineData": {
+                  "mimeType": "audio/pcm;rate=24000",
+                  "data": "HA7nEJIT7hWsFysZgBqzG3wctRxOHN8bZhu+GrUZMRhwFmAU...<23040 base64 chars truncated>"
+                }
+              }
+            ],
+            "role": "model"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 29232,
+      "dir": "in",
+      "frameType": "binary",
+      "msg": {}
+    },
+    {
+      "tMs": 29232,
+      "dir": "in",
+      "frameType": "binary",
+      "msg": {
+        "serverContent": {
+          "modelTurn": {
+            "parts": [
+              {
+                "inlineData": {
+                  "mimeType": "audio/pcm;rate=24000",
+                  "data": "FQAXABUAGAAWAB4AFwAcABcAJwAaAB0AIAAhABcAHQAeABgA...<20480 base64 chars truncated>"
+                }
+              }
+            ],
+            "role": "model"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 29273,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 29282,
+      "dir": "in",
+      "frameType": "binary",
+      "msg": {}
+    },
+    {
+      "tMs": 29292,
+      "dir": "in",
+      "frameType": "binary",
+      "msg": {
+        "serverContent": {
+          "modelTurn": {
+            "parts": [
+              {
+                "inlineData": {
+                  "mimeType": "audio/pcm;rate=24000",
+                  "data": "DAD3/wUAFQD8/wMAFAD//xAADwACABoACwAZABUAAQAWABAA...<20480 base64 chars truncated>"
+                }
+              }
+            ],
+            "role": "model"
+          },
+          "outputTranscription": {
+            "text": " now?"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 29297,
+      "dir": "in",
+      "frameType": "binary",
+      "msg": {}
+    },
+    {
+      "tMs": 29302,
+      "dir": "in",
+      "frameType": "binary",
+      "msg": {
+        "serverContent": {
+          "modelTurn": {
+            "parts": [
+              {
+                "inlineData": {
+                  "mimeType": "audio/pcm;rate=24000",
+                  "data": "0P+w/8r/+v/5/+b/4//2//r/BwAMABMALAA2ACoALwBJAEsA...<20480 base64 chars truncated>"
+                }
+              }
+            ],
+            "role": "model"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 29313,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 29320,
+      "dir": "in",
+      "frameType": "binary",
+      "msg": {
+        "serverContent": {
+          "generationComplete": true
+        }
+      }
+    },
+    {
+      "tMs": 29354,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 29397,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 29442,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 29482,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 29526,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 29571,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 29612,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 29655,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 29699,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 29744,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 29785,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 29826,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 29871,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 29915,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 29960,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 30005,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 30049,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA...<1708 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 30093,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audio": {
+            "data": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA...<1560 base64 chars truncated>",
+            "mimeType": "audio/pcm;rate=16000"
+          }
+        }
+      }
+    },
+    {
+      "tMs": 30137,
+      "dir": "out",
+      "frameType": "text",
+      "msg": {
+        "realtimeInput": {
+          "audioStreamEnd": true
+        }
+      }
+    },
+    {
+      "tMs": 32710,
+      "dir": "in",
+      "frameType": "binary",
+      "msg": {
+        "serverContent": {
+          "turnComplete": true
+        },
+        "usageMetadata": {
+          "promptTokenCount": 1501,
+          "responseTokenCount": 93,
+          "totalTokenCount": 1594,
+          "promptTokensDetails": [
+            {
+              "modality": "TEXT",
+              "tokenCount": 521
+            },
+            {
+              "modality": "AUDIO",
+              "tokenCount": 855
+            }
+          ],
+          "responseTokensDetails": [
+            {
+              "modality": "AUDIO",
+              "tokenCount": 93
+            }
+          ],
+          "thoughtsTokenCount": 49
+        }
+      }
+    }
+  ]
+}

@@ -1,0 +1,10 @@
+{
+  "direction": "client->server",
+  "websocketFrame": "text",
+  "tMs": 1047,
+  "message": {
+    "realtimeInput": {
+      "text": "Hello! This is a short test. How are you?"
+    }
+  }
+}

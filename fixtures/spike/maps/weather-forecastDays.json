@@ -1,0 +1,167 @@
+{
+  "request": {
+    "method": "GET",
+    "url": "https://weather.googleapis.com/v1/forecast/days:lookup?location.latitude=60.1699&location.longitude=24.9384&days=1",
+    "headers": {
+      "X-Goog-Api-Key": "REDACTED"
+    },
+    "body": null
+  },
+  "response": {
+    "status": 200,
+    "latencyMs": 300,
+    "body": {
+      "forecastDays": [
+        {
+          "interval": {
+            "startTime": "2026-11-14T05:00:00Z",
+            "endTime": "2026-11-15T05:00:00Z"
+          },
+          "displayDate": {
+            "year": 2026,
+            "month": 11,
+            "day": 14
+          },
+          "daytimeForecast": {
+            "interval": {
+              "startTime": "2026-11-14T05:00:00Z",
+              "endTime": "2026-11-14T17:00:00Z"
+            },
+            "weatherCondition": {
+              "iconBaseUri": "https://maps.gstatic.com/weather/v1/mostly_cloudy",
+              "description": {
+                "text": "Mostly cloudy",
+                "languageCode": "en"
+              },
+              "type": "MOSTLY_CLOUDY"
+            },
+            "precipitation": {
+              "probability": {
+                "type": "SNOW",
+                "percent": 20
+              },
+              "snowQpf": {
+                "unit": "MILLIMETERS",
+                "quantity": 0.86
+              },
+              "qpf": {
+                "unit": "MILLIMETERS",
+                "quantity": 0.07
+              }
+            },
+            "wind": {
+              "direction": {
+                "cardinal": "WEST_NORTHWEST",
+                "degrees": 291
+              },
+              "speed": {
+                "unit": "KILOMETERS_PER_HOUR",
+                "value": 27
+              },
+              "gust": {
+                "unit": "KILOMETERS_PER_HOUR",
+                "value": 37
+              }
+            },
+            "iceThickness": {
+              "unit": "MILLIMETERS",
+              "thickness": 0
+            },
+            "relativeHumidity": 85,
+            "uvIndex": 0,
+            "thunderstormProbability": 10,
+            "cloudCover": 99
+          },
+          "nighttimeForecast": {
+            "interval": {
+              "startTime": "2026-11-14T17:00:00Z",
+              "endTime": "2026-11-15T05:00:00Z"
+            },
+            "weatherCondition": {
+              "iconBaseUri": "https://maps.gstatic.com/weather/v1/partly_clear",
+              "description": {
+                "text": "Partly cloudy",
+                "languageCode": "en"
+              },
+              "type": "PARTLY_CLOUDY"
+            },
+            "precipitation": {
+              "probability": {
+                "type": "RAIN_AND_SNOW",
+                "percent": 15
+              },
+              "snowQpf": {
+                "unit": "MILLIMETERS",
+                "quantity": 0
+              },
+              "qpf": {
+                "unit": "MILLIMETERS",
+                "quantity": 0.02
+              }
+            },
+            "wind": {
+              "direction": {
+                "cardinal": "WEST_SOUTHWEST",
+                "degrees": 255
+              },
+              "speed": {
+                "unit": "KILOMETERS_PER_HOUR",
+                "value": 27
+              },
+              "gust": {
+                "unit": "KILOMETERS_PER_HOUR",
+                "value": 32
+              }
+            },
+            "iceThickness": {
+              "unit": "MILLIMETERS",
+              "thickness": 0
+            },
+            "relativeHumidity": 84,
+            "uvIndex": 0,
+            "thunderstormProbability": 10,
+            "cloudCover": 66
+          },
+          "maxTemperature": {
+            "unit": "CELSIUS",
+            "degrees": 6.8
+          },
+          "minTemperature": {
+            "unit": "CELSIUS",
+            "degrees": 1.2
+          },
+          "feelsLikeMaxTemperature": {
+            "unit": "CELSIUS",
+            "degrees": 3
+          },
+          "feelsLikeMinTemperature": {
+            "unit": "CELSIUS",
+            "degrees": -4
+          },
+          "sunEvents": {
+            "sunriseTime": "2026-11-14T06:16:22.868602298Z",
+            "sunsetTime": "2026-11-14T13:52:06.545081427Z"
+          },
+          "moonEvents": {
+            "moonPhase": "WAXING_CRESCENT",
+            "moonriseTimes": [
+              "2026-11-14T11:48:38.824936322Z"
+            ],
+            "moonsetTimes": [
+              "2026-11-14T16:52:15.458700337Z"
+            ]
+          },
+          "maxHeatIndex": {
+            "unit": "CELSIUS",
+            "degrees": 6.8
+          }
+        }
+      ],
+      "timeZone": {
+        "id": "Europe/Helsinki",
+        "version": ""
+      },
+      "nextPageToken": ""
+    }
+  }
+}

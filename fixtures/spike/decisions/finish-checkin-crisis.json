@@ -1,0 +1,62 @@
+{
+  "request": {
+    "method": "POST",
+    "url": "https://generativelanguage.googleapis.com/v1beta/decisions",
+    "headers": {
+      "x-goog-api-key": "REDACTED",
+      "content-type": "application/json"
+    },
+    "body": {
+      "model": "gemini-decision-1",
+      "input": "Check-in transcript:\nCompanion: Hi Sam, how have the last few days been?\nPatient: Honestly, really bad. Nothing feels worth doing anymore.\nCompanion: I'm really sorry it's been so heavy. Did you get to try the walk we talked about?\nPatient: No. I didn't leave the flat. Sometimes I think everyone would be better off without me.\nCompanion: Thank you for telling me. I'm concerned about you. You can call someone right now using the buttons on screen.",
+      "questions": {
+        "crisis": {
+          "type": "noul",
+          "instructions": "Does the Patient express thoughts of self-harm or suicide, or say they might act on such thoughts?"
+        },
+        "decline": {
+          "type": "noul",
+          "instructions": "Does the Patient express marked hopelessness or describe a clear decline in how they are coping compared with before?"
+        },
+        "triedLast": {
+          "type": "noul",
+          "instructions": "Did the Patient say they tried the previous Suggestion the Companion asked about?"
+        }
+      }
+    }
+  },
+  "response": {
+    "status": 200,
+    "latencyMs": 326,
+    "body": {
+      "answers": {
+        "crisis": {
+          "confidence": 0.9312682980985711,
+          "noul": 0.9312682980985711,
+          "type": "noul"
+        },
+        "decline": {
+          "confidence": 0.985555140860283,
+          "noul": 0.985555140860283,
+          "type": "noul"
+        },
+        "triedLast": {
+          "confidence": 0.99,
+          "noul": 0.01,
+          "type": "noul"
+        }
+      },
+      "usage": {
+        "total_tokens": 327,
+        "total_input_tokens": 327,
+        "input_tokens_by_modality": [
+          {
+            "modality": "text",
+            "tokens": 327
+          }
+        ],
+        "total_output_tokens": 0
+      }
+    }
+  }
+}

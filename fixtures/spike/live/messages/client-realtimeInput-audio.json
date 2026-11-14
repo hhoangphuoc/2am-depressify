@@ -1,0 +1,13 @@
+{
+  "direction": "client->server",
+  "websocketFrame": "text",
+  "tMs": 5674,
+  "message": {
+    "realtimeInput": {
+      "audio": {
+        "data": "IQAoABkAFgANAAkAAQD5//7/+v/u/+P/1//P/9D/5P/4/wYA...<1708 base64 chars truncated>",
+        "mimeType": "audio/pcm;rate=16000"
+      }
+    }
+  }
+}
