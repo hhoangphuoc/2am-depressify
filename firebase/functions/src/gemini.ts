@@ -2,8 +2,6 @@
 // `TextModelClient` interface; tests pass a fake, and only `genaiTextClient` talks to Gemini.
 import { GoogleGenAI } from "@google/genai";
 import { defineSecret } from "firebase-functions/params";
-import type { TokenRequest } from "./checkIn";
-import type { LiveTokenClient } from "./checkInFunctions";
 
 /** The Gemini API key, a function secret. It never reaches a client. */
 export const GEMINI_API_KEY = defineSecret("GEMINI_API_KEY");
@@ -39,31 +37,6 @@ export function genaiTextClient(apiKey: string): TextModelClient {
     async generateText(request) {
       const interaction = await ai.interactions.create(request, { timeout_ms: TEXT_MODEL_TIMEOUT_MS });
       return interaction.output_text ?? null;
-    },
-  };
-}
-
-/**
- * Mints single-use Live tokens (`POST /v1beta/auth_tokens`). Tokens exist only on `v1beta`, so the
- * version is set here; the constraints lock the model and the whole Live configuration.
- */
-export function genaiTokenClient(apiKey: string): LiveTokenClient {
-  if (!apiKey) throw new Error("The Gemini API key is not set.");
-  const ai = new GoogleGenAI({ apiKey, httpOptions: { apiVersion: "v1beta" } });
-  return {
-    async mintToken(request: TokenRequest) {
-      const token = await ai.authTokens.create({
-        config: {
-          uses: 1,
-          expireTime: request.expireTime,
-          newSessionExpireTime: request.newSessionExpireTime,
-          // The SDK's types lag the Live setup fields (tool behavior, VAD); the wire shape is the documented one.
-          liveConnectConstraints: { model: request.model, config: request.config as never },
-          httpOptions: { apiVersion: "v1beta", timeout: TEXT_MODEL_TIMEOUT_MS },
-        },
-      });
-      if (!token.name) throw new Error("No token came back.");
-      return token.name;
     },
   };
 }
