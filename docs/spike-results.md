@@ -17,7 +17,7 @@ Run on 14 November 2026 against the real project `junction26hel-7400` from a Mac
 | 2b. The same on the S24+ with the real microphone, and on an iPhone | **Needs a person** | none |
 | 3. Text model with structured output (Finish Check-in, #14) | **Pass.** `response_format` with a JSON Schema works on `v1` and `v1beta`. | `interactions/*.json` |
 | 4. Decisions API with three yes/no questions (#20) | **Pass.** The fictional crisis transcript was answered, not refused. The refusal shape is taken from the docs. | `decisions/*.json` |
-| 5a. Maps agent tools (`mapstools.googleapis.com`): weather, text search, routes | **Blocked.** HTTP 403 `PERMISSION_DENIED`, because the service is not enabled on the project. The error is recorded. | `maps/mapstools-*.json` |
+| 5a. Maps agent tools (`mapstools.googleapis.com`): weather, text search, routes | **Pass**, after the service was enabled (re-run on 14 November, [below](#maps-agent-tools-after-enabling)). At the time of the spike: HTTP 403 `PERMISSION_DENIED`. | `maps/mapstools-*.json` |
 | 5b. Direct Places API (New) text search and Weather API | **Pass** | `maps/places-searchText.json`, `maps/weather-*.json` |
 | 5c. Direct Routes API | **Blocked.** HTTP 403, because `routes.googleapis.com` is not enabled. | `maps/routes-computeRoutes.json` |
 | 6. Calendar | **Needs a person** (OAuth consent on a phone). The steps are [below](#calendar-steps-for-a-person). | none |
@@ -250,6 +250,21 @@ Enabled on the project at the time of the spike: `places.googleapis.com` and `we
 All four 403s have the same shape, with `metadata.service` naming the API: `{"error":{"code":403,"message":"Permission denied on the service.","status":"PERMISSION_DENIED","details":[{"@type":"type.googleapis.com/google.rpc.ErrorInfo","reason":"ACCESS_DENIED","domain":"googleapis.com","metadata":{"service":"mapstools.googleapis.com"}}, …]}}`. The reason is `ACCESS_DENIED`, not `SERVICE_DISABLED`.
 
 The mapstools request bodies above follow the reference pages, but the nested `Location` and `Waypoint` shapes (`latLng`) are **not verified**, because the calls never got past the permission check.
+
+### Maps agent tools after enabling
+
+`mapstools.googleapis.com` was enabled later on 14 November, and the three calls were re-run from the sample location in Otaniemi (60.185, 24.8324). The fixtures `maps/mapstools-*.json` now hold these real responses, with `contentToken` and `retrievalToken` redacted; the 403s above are no longer recorded.
+
+| Call | Result |
+|---|---|
+| `:searchText` `{textQuery, languageCode, locationBias:{circle:{center, radiusMeters}}}` | 200 in 1.1 s: `places[]` (`id`, `location`, `googleMapsLinks`, `attribution.title`), a `summary` and a `contentToken`. The place name is only in `attribution.title` ("Flowel yoga - Google Maps") and the summary. |
+| `:lookupWeather` `{location:{latLng}, languageCode, capabilities:["WEATHER"]}` | 200 in 0.4 s: `weather` with temperature, feels-like, condition, precipitation, wind and an `attribution`. No daylight field. |
+| `:computeRoutes` `{origin:{latLng}, destination:{latLng}, travelMode:"WALK"}` | 200 in 0.3 s: `routes[0].distanceMeters` and `duration` ("1677s") |
+
+- The `latLng` shapes are now verified.
+- `lookupWeather` without `capabilities` is HTTP 400, "At least one capabilities value must be specified".
+- The circle's field is `radiusMeters`; `radius` (the direct Places name) is HTTP 400.
+- The location bias is weak: "health clinic" from Otaniemi returned a clinic in Tallinn first. `mapTool` sorts by distance and drops anything over 10 km.
 
 ### Maps agent tools or direct APIs
 

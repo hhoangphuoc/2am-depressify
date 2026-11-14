@@ -9,7 +9,7 @@ import { adminDigestStore, createDigestFunctions } from "./digestFunctions";
 import { healthStatus } from "./health";
 import { adminPatientStore, createIntakeFunctions } from "./intakeFunctions";
 import { fetchLiveTokenClient } from "./live";
-import { MAPS_API_KEY, createPlacesFunctions, fetchPlacesClient } from "./places";
+import { MAPS_API_KEY, createMapToolFunctions, fetchMapsClient } from "./mapTool";
 import { REGION } from "./region";
 import { adminSilenceStore, createSilenceFunctions } from "./silenceFunctions";
 
@@ -74,8 +74,11 @@ export const { startCheckIn, finishCheckIn } = createCheckInFunctions({
   liveTokens: () => fetchLiveTokenClient(GEMINI_API_KEY.value()),
 });
 
-/** Find places (the Patient, or anyone signed in on a Demo Patient): real places near the location the phone sends. */
-export const { findPlaces } = createPlacesFunctions({
+/**
+ * The Map tool (the Patient, or anyone signed in on a Demo Patient): places with walking times, or
+ * the weather, near the location the phone sends, from Maps agent tools.
+ */
+export const { mapTool } = createMapToolFunctions({
   store: () => adminCheckInStore(adminDb()),
-  places: () => fetchPlacesClient(MAPS_API_KEY.value()),
+  maps: () => fetchMapsClient(MAPS_API_KEY.value()),
 });

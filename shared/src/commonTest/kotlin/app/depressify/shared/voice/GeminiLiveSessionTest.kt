@@ -11,6 +11,7 @@ import app.depressify.core.model.SuggestionStatus
 import app.depressify.shared.data.FakeCheckInGateway
 import app.depressify.shared.data.FakePatientStore
 import app.depressify.shared.data.NearbyPlace
+import app.depressify.shared.data.Weather
 import app.depressify.shared.voice.live.LiveClient
 import app.depressify.shared.voice.live.ToolCard
 import kotlinx.coroutines.CompletableDeferred
@@ -119,11 +120,11 @@ class GeminiLiveSessionTest {
 
     @Test
     fun findPlacesShowsRealPlacesAndFallsBackToTheSearchLinkWhenTheLookupFails() {
-        gateway.places = listOf(NearbyPlace("Otaniemi Yoga", "https://maps.google.com/?cid=1", 1240))
+        gateway.places = listOf(NearbyPlace("Otaniemi Yoga", "https://maps.google.com/?cid=1", 1240), NearbyPlace("Flowel yoga", "https://maps.google.com/?cid=2", 1605, walkMinutes = 28))
         val found = FakeLiveClient(listOf(call("find_places", "query" to JsonPrimitive("yoga studio"))))
         session(found).apply { start(returning = true) }.let { live ->
             assertEquals(gateway.places, assertIs<ToolCard.Places>(live.snapshot.value.cards.single()).places)
-            assertTrue(found.sent.any { it.contains("Otaniemi Yoga") && it.contains("1.2 km") })
+            assertTrue(found.sent.any { it.contains("Otaniemi Yoga") && it.contains("1.2 km") && it.contains("\"minutes_on_foot\":28") })
             live.stop()
         }
 
@@ -134,6 +135,25 @@ class GeminiLiveSessionTest {
             assertEquals(emptyList(), card.places)
             assertEquals("https://www.google.com/maps/search/?api=1&query=yoga%20studio", card.url)
             assertTrue(failed.sent.any { it.contains("lookup_failed") })
+            live.stop()
+        }
+    }
+
+    @Test
+    fun getWeatherShowsTheWeatherWithItsSourceAndAFailedLookupIsANamedError() {
+        gateway.weather = Weather("Cloudy", 3, -3, 10, 26, goodForAWalk = true, sourceTitle = "Weather for Espoo - Google", sourceUrl = "https://www.google.com/search?q=Weather")
+        val found = FakeLiveClient(listOf(call("get_weather")))
+        session(found).apply { start(returning = true) }.let { live ->
+            assertEquals(ToolCard.Weather("Cloudy, 3 °C, feels like -3 °C", "Weather for Espoo - Google", "https://www.google.com/search?q=Weather"), live.snapshot.value.cards.single())
+            assertTrue(found.sent.any { it.contains("\"good_for_a_walk\":true") })
+            live.stop()
+        }
+
+        gateway.weather = null
+        val failed = FakeLiveClient(listOf(call("get_weather")))
+        session(failed).apply { start(returning = true) }.let { live ->
+            assertEquals(emptyList(), live.snapshot.value.cards)
+            assertTrue(failed.sent.any { it.contains("backend_failed") })
             live.stop()
         }
     }

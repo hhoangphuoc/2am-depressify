@@ -2,9 +2,8 @@
 //
 // The tools run on the phone, where the Patient's data already is; the dispatcher is
 // `CompanionTools` in shared/.../voice/live/CompanionTools.kt, which mirrors these names and
-// arguments. All are BLOCKING, the only behaviour the #6 spike verified. find_places goes through
-// the findPlaces callable (places.ts). Weather, routes and the calendar are not here: they wait on
-// the rest of the Map tool function (#18) and #19.
+// arguments. All are BLOCKING, the only behaviour the #6 spike verified. find_places and
+// get_weather go through the mapTool callable (mapTool.ts). The calendar is not here: it waits on #19.
 import { SUGGESTION_KINDS } from "./types";
 
 /** A Live API parameter schema (OpenAPI subset, upper-case types, as recorded in the #6 spike). */
@@ -73,8 +72,13 @@ export const LIVE_TOOL_DECLARATIONS: readonly FunctionDeclaration[] = (
     },
     {
       name: "find_places",
-      description: "Find real places of one kind near the person, from Google Maps, nearest first with straight-line distances. The person sees them as a card with links. Call when you suggest going somewhere. Name only places it returns; if it returns none or an error, suggest the kind of place without a name.",
+      description: "Find real places of one kind near the person, from Google Maps, nearest first, with the minutes on foot when known. The person sees them as a card with links. Call when you suggest going somewhere. Name only places it returns; if it returns none or an error, suggest the kind of place without a name.",
       parameters: { type: "OBJECT", properties: { query: { type: "STRING", description: "The kind of place, for example 'park', 'yoga studio' or 'health clinic'." } }, required: ["query"] },
+    },
+    {
+      name: "get_weather",
+      description: "The current weather where the person is, from Google, and whether it suits a walk. Call before you suggest anything outdoors. The person sees it as a card.",
+      parameters: NO_ARGUMENTS,
     },
     {
       name: "wrap_up",

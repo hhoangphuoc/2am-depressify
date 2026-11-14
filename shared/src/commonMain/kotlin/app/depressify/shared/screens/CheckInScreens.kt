@@ -154,9 +154,17 @@ private fun ToolCardView(card: ToolCard) {
             is ToolCard.Places -> {
                 Txt("A place nearby", DepressifyType.meta, c.muted)
                 Txt(card.query, DepressifyType.bodyStrong, c.ink)
-                card.places.forEach { p -> TextLink(p.name + " · " + CompanionTools.distanceLabel(p.distanceMeters) + " away", { uri.openUri(p.mapsUrl) }) }
+                card.places.forEach { p ->
+                    val how = p.walkMinutes?.let { "$it min walk" } ?: (CompanionTools.distanceLabel(p.distanceMeters) + " away")
+                    TextLink(p.name + " · " + how, { uri.openUri(p.mapsUrl) })
+                }
                 TextLink(if (card.places.isEmpty()) "Open in Google Maps" else "See more in Google Maps", { uri.openUri(card.url) })
                 Txt("Results come from Google Maps", DepressifyType.small, c.muted)
+            }
+            is ToolCard.Weather -> {
+                Txt("The weather near you", DepressifyType.meta, c.muted)
+                Txt(card.line, DepressifyType.bodyStrong, c.ink)
+                TextLink(card.sourceTitle, { uri.openUri(card.sourceUrl) })
             }
         }
     }

@@ -23,9 +23,22 @@ data class PatientLocation(val label: String, val latitude: Double, val longitud
     }
 }
 
-/** One Google Maps result near the Patient. [distanceMeters] is a straight line, not a walking distance. */
+/** One Google Maps result near the Patient. [distanceMeters] is a straight line; [walkMinutes] is on foot, when known. */
 @Serializable
-data class NearbyPlace(val name: String, val mapsUrl: String, val distanceMeters: Int)
+data class NearbyPlace(val name: String, val mapsUrl: String, val distanceMeters: Int, val walkMinutes: Int? = null)
+
+/** The current weather near the Patient, with its Google source to show beside it. */
+@Serializable
+data class Weather(
+    val conditions: String,
+    val temperatureC: Int,
+    val feelsLikeC: Int,
+    val precipitationPercent: Int,
+    val windKmh: Int,
+    val goodForAWalk: Boolean,
+    val sourceTitle: String,
+    val sourceUrl: String,
+)
 
 /** What a Check-in needs from the backend: the Live token, and the Patient's records the Companion's tools read and write. */
 interface CheckInGateway {
@@ -43,6 +56,9 @@ interface CheckInGateway {
 
     /** Up to five real places matching [query] near [near], nearest first. The Maps key never reaches the phone. */
     suspend fun findPlaces(patientId: String, query: String, near: PatientLocation): List<NearbyPlace>
+
+    /** The current weather at [near]. */
+    suspend fun weather(patientId: String, near: PatientLocation): Weather
 
     /** The most recent daily records, newest first. */
     suspend fun recentDays(patientId: String, count: Int): List<DailyDoc>

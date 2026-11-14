@@ -29,6 +29,9 @@ sealed interface ToolCard {
 
     /** A kind of place to go; [url] opens the search in Google Maps. [places] are the results found, shown and never stored. */
     data class Places(val query: String, val url: String, val places: List<NearbyPlace> = emptyList()) : ToolCard
+
+    /** The weather near the Patient in one line, with its Google source. */
+    data class Weather(val line: String, val sourceTitle: String, val sourceUrl: String) : ToolCard
 }
 
 /** What a tool call changes on screen. Called on the session's coroutine. */
@@ -61,6 +64,7 @@ class CompanionTools(
             "record_suggestion" -> recordSuggestion(args.string("kind"), args.string("details"))
             "suggest_music" -> search(args.string("query")) { q -> ToolCard.Music(q, "https://music.youtube.com/search?q=" + q.encode()) }
             "find_places" -> findPlaces(args.string("query"))
+            "get_weather" -> weather()
             "wrap_up" -> ok().also { effects.wrapUp() }
             "raise_crisis" -> raiseCrisis()
             else -> error("unknown_tool")
@@ -175,11 +179,31 @@ class CompanionTools(
                 else -> {
                     put("near", location.label)
                     put("places_from_google_maps", buildJsonArray {
-                        places.forEach { p -> add(buildJsonObject { put("name", p.name); put("straight_line_distance", distanceLabel(p.distanceMeters)) }) }
+                        places.forEach { p ->
+                            add(buildJsonObject {
+                                put("name", p.name)
+                                if (p.walkMinutes != null) put("minutes_on_foot", p.walkMinutes) else put("straight_line_distance", distanceLabel(p.distanceMeters))
+                            })
+                        }
                     })
                 }
             }
             put("shown", "a card with links that open in Google Maps")
+        }
+    }
+
+    /** A failed lookup throws, and dispatch answers the model with a named error. */
+    private suspend fun weather(): JsonObject {
+        val w = checkIns.weather(patientId, location)
+        effects.show(ToolCard.Weather(w.conditions + ", " + w.temperatureC + " °C, feels like " + w.feelsLikeC + " °C", w.sourceTitle, w.sourceUrl))
+        return buildJsonObject {
+            put("near", location.label)
+            put("conditions", w.conditions)
+            put("temperature_c", w.temperatureC)
+            put("feels_like_c", w.feelsLikeC)
+            put("chance_of_precipitation_percent", w.precipitationPercent)
+            put("wind_kmh", w.windKmh)
+            put("good_for_a_walk", w.goodForAWalk)
         }
     }
 
@@ -229,6 +253,7 @@ class CompanionTools(
             "record_suggestion" -> "Noting a Suggestion"
             "suggest_music" -> "Finding some music"
             "find_places" -> "Looking for a place nearby"
+            "get_weather" -> "Checking the weather"
             else -> "One moment"
         }
 

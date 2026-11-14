@@ -11,6 +11,7 @@ import app.depressify.shared.data.CheckInGateway
 import app.depressify.shared.data.LiveStart
 import app.depressify.shared.data.NearbyPlace
 import app.depressify.shared.data.PatientLocation
+import app.depressify.shared.data.Weather
 import dev.gitlive.firebase.firestore.Direction
 import dev.gitlive.firebase.firestore.FirebaseFirestore
 import dev.gitlive.firebase.functions.FirebaseFunctions
@@ -43,10 +44,13 @@ class FirebaseCheckInGateway(private val db: FirebaseFirestore, private val func
     private data class FinishResponse(val checkInId: String, val summary: Summary, val minimal: Boolean = false)
 
     @Serializable
-    private data class PlacesRequest(val patientId: String, val query: String, val latitude: Double, val longitude: Double)
+    private data class MapRequest(val patientId: String, val tool: String, val latitude: Double, val longitude: Double, val query: String? = null)
 
     @Serializable
     private data class PlacesResponse(val places: List<NearbyPlace>)
+
+    @Serializable
+    private data class WeatherResponse(val weather: Weather)
 
     private fun patient(patientId: String) = db.collection(Collections.PATIENTS).document(patientId)
 
@@ -72,10 +76,14 @@ class FirebaseCheckInGateway(private val db: FirebaseFirestore, private val func
             .data(FinishResponse.serializer()).summary
     }
 
+    private suspend fun mapTool(patientId: String, tool: String, near: PatientLocation, query: String? = null) =
+        functions.httpsCallable("mapTool").invoke(MapRequest.serializer(), MapRequest(patientId, tool, near.latitude, near.longitude, query))
+
     override suspend fun findPlaces(patientId: String, query: String, near: PatientLocation): List<NearbyPlace> =
-        functions.httpsCallable("findPlaces")
-            .invoke(PlacesRequest.serializer(), PlacesRequest(patientId, query, near.latitude, near.longitude))
-            .data(PlacesResponse.serializer()).places
+        mapTool(patientId, "find_places", near, query).data(PlacesResponse.serializer()).places
+
+    override suspend fun weather(patientId: String, near: PatientLocation): Weather =
+        mapTool(patientId, "get_weather", near).data(WeatherResponse.serializer()).weather
 
     override suspend fun recentDays(patientId: String, count: Int): List<DailyDoc> =
         patient(patientId).collection(Collections.DAILY).orderBy("date", Direction.DESCENDING).limit(count).get()
