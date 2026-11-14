@@ -20,7 +20,7 @@ Kept up to date as PRs are opened and merged. Each PR also updates its own rows 
 | #69 | `feat/26-daily-job-rules` → `main` | #26, pure logic: the daily job as one pure pipeline in `core` | Open |
 | #70 | `feat/live-demo-patient` → `main` | `npm run seed-live-patient`: a rich mock history for one real test account (already run on the real project) | Open |
 | #74 | `feat/dashboard-backend-sync` → `main` | Dashboard design ↔ backend sync: the design adapter, live data helpers, `Digest.sourceCheckInIds`, two indexes | Open; tested on top of the latest `main` (hosting 373, functions 426, seed 103, emulators 97 + 23). See [design/dashboard-backend-sync.md](design/dashboard-backend-sync.md). |
-| (to open) | `feat/dashboard-design-ui` → `main`, stacked on #74 | Dashboard UI restyled to the design system of `design/clinician`: sidebar workspace, roster, Patient page tabs, dialogs, chart lanes | To open after #74. See [Dashboard UI restyled to the design system](#dashboard-ui-restyled-to-the-design-system). |
+| #78 | `feat/dashboard-design-ui` → `main`, stacked on #74 | Dashboard UI restyled to the design system of `design/clinician`: sidebar workspace, roster, Patient page tabs, dialogs, chart lanes | To open after #74. See [Dashboard UI restyled to the design system](#dashboard-ui-restyled-to-the-design-system). |
 
 **Deployed on `junction26hel-7400`:**
 - Rules and indexes.
@@ -214,7 +214,7 @@ Useful when the dashboard design is merged:
 
 ## Dashboard UI restyled to the design system
 
-Branch `feat/dashboard-design-ui` (to open, stacked on #74). The real dashboard (`firebase/hosting`) now looks and is laid out like the design prototype in `design/clinician`. It is still plain ES modules and the Firebase SDK from the gstatic CDN, with no build step (ADR 0008).
+Branch `feat/dashboard-design-ui` (open, stacked on #74). The real dashboard (`firebase/hosting`) now looks and is laid out like the design prototype in `design/clinician`. It is still plain ES modules and the Firebase SDK from the gstatic CDN, with no build step (ADR 0008).
 
 **What changed:**
 - **Design system.** `styles.css` is rewritten from the prototype's `styles.css`. The tokens are CSS custom properties: palette, Attention level colours, chart colours, type sizes, spacing, gutters, radii, the 3 px focus ring and the 44 px target. The components follow: the 220 px sidebar, cards and bands, buttons, the red banner, tables, dialogs, forms and chart lanes. Below 1000 px the sidebar folds into a top bar; on phones the layout is one column with 24 px gutters. Reduced motion is respected.
