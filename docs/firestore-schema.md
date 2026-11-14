@@ -307,9 +307,9 @@ The contract has no marker field on most documents, so the seeded history is mar
 
 | Collection | Marker | Why it is safe |
 |---|---|---|
-| `daily` | `demoOverride: true` (the id is the date) | The app writes `false`. A date the app has already written is skipped, so the app's record wins. |
-| `checkIns`, `summaries`, `suggestions`, `flags`, `visits` | id starts with `demo-`: `demo-checkin-<date>` (also the Summary id), `demo-suggestion-<date>`, `demo-<kind>-<date>`, `demo-visit-<date>` | Start Check-in uses random ids, the app's crisis flag is `crisis-<millis>`, the silence check's is `silent-<millis>`, and the app's Suggestion ids are `s<millis>`. |
-| `consents` | none: one document per subject | Rewritten (all granted) on every run, never deleted. |
+| `daily` | `demoOverride: true` (the id is the date) | The daily job writes `false`, so a date it has written (`demoOverride: false`) is skipped and its record wins. A demo control (#31) also writes `true`; `--reset` deletes those too, since they hold demo values as well. On the day of seeding the phone keeps today's seeded values (the daily job keeps a `demoOverride` record's values), so that day's demo shows the seeded drift. |
+| `checkIns`, `summaries`, `suggestions`, `flags`, `visits` | id starts with `demo-`: `demo-checkin-<date>` (also the Summary id), `demo-suggestion-<date>`, `demo-<kind>-<date>`, `demo-visit-<date>` | Start Check-in uses random ids, the app's crisis flag is `crisis-<millis>`, the silence check's is `silent-<millis>`, Finish Check-in's flags are `<kind>-<checkInId>` (and it never finishes a seeded Check-in), and the app's Suggestion ids are `s<millis>`. Visits the Clinician writes (no dashboard screen yet) must not use `demo-` ids. |
+| `consents` | none: one document per subject | Rewritten (all granted) on every run, never deleted. A run refuses a Patient who declined sharing or withdrew a Consent in the app, so the seed never undoes their choice. |
 | the record | none | Rewritten on every run (merged), with `flagLevel` and `flagReasons` from every open flag stamped `sharedWithClinician`, the app's included, and `lastCheckInAtMillis` the later of the seeded history's and the app's. |
 | `digests` | not written | The Digest function's. A Digest it made from seeded Summaries stays after a reset. |
 

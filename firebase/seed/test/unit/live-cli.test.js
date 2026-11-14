@@ -3,7 +3,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { DEFAULT_AUTH_EMULATOR_HOST, DEFAULT_EMULATOR_HOST, DEFAULT_PROJECT, parseLivePatientCommand } from "../../src/cli.js";
-import { LIVE_DEFAULT_DISPLAY_NAME } from "../../src/live-patient.js";
+import { LIVE_DEFAULT_DISPLAY_NAME } from "../../src/live-profile.js";
 
 const PATIENT = "patient.test@example.com";
 
@@ -62,6 +62,12 @@ test("a real project needs a real Clinician, and no Auth emulator in the environ
 
 test("a demo- project is refused outside the emulator", () => {
   assert.throws(() => parseLivePatientCommand(["--email", PATIENT, "--project", "demo-twoam"], {}), /emulator-only/);
+});
+
+test("--today is for the emulators: on a real project a past day would look silent and the silence check would flag it red", () => {
+  const real = ["--email", PATIENT, "--clinician", "dr.real@example.org", "--project", "twoam-prod"];
+  assert.throws(() => parseLivePatientCommand([...real, "--today", "2026-11-13"], {}), /--today is for the emulators/);
+  assert.equal(parseLivePatientCommand(real, {}).today, undefined);
 });
 
 test("--display-name, --today, --seed and --reset", () => {

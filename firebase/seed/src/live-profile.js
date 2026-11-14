@@ -19,6 +19,9 @@
 /** @typedef {import("./profiles.js").Profile} Profile */
 /** @typedef {import("./profiles.js").ScriptedCheckIn} ScriptedCheckIn */
 
+/** Neutral and invented; `--display-name` gives another. */
+export const LIVE_DEFAULT_DISPLAY_NAME = "Alex";
+
 const DETAILS = Object.freeze({
   lunchWalk: "A twenty-minute walk at lunch, with your camera in your pocket.",
   morningLight: "Ten minutes outside in morning daylight before opening the laptop.",
@@ -216,10 +219,11 @@ const WATCH_OFF = new Set([37, 25, 14, 12]);
 export const live = {
   key: "live",
   id: "live-demo", // replaced by the account's uid
-  displayName: "Alex",
+  displayName: LIVE_DEFAULT_DISPLAY_NAME,
   synthetic: false,
   seededHistory: true,
   intakeHighlights:
+    "Synthetic demo data. Invented profile, not a real person. " +
     "Finished a course of TMS six weeks ago with a good response. Works full time as a designer in a " +
     "small studio; the work comes in bursts before deadlines. Moved to the city two years ago and misses " +
     "close friends from home. Earlier low periods began with short sleep, late evenings on the phone and " +

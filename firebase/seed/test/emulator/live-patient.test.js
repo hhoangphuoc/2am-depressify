@@ -242,3 +242,15 @@ test("refuses a real project without a real Clinician, a Clinician's account, an
   assert.match(fails(["--email", "second.clinician@example.com"]), /on the clinicians allowlist/);
   await assert.rejects(auth.getUserByEmail("second.clinician@example.com"));
 });
+
+test("a rerun never undoes the Patient's own choices: declined sharing or a withdrawn Consent is refused, and nothing changes", async () => {
+  const ref = db.collection("patients").doc(uid);
+  await ref.update({ sharingConsent: "declined" });
+  await ref.collection("consents").doc("steps").set({ subject: "steps", granted: false, changedAtMillis: 1 });
+  const before = await snapshotOf(uid);
+  const stderr = fails(["--email", PATIENT_EMAIL, "--today", TODAY, "--reset"]);
+  assert.match(stderr, /declined sharing/);
+  assert.match(stderr, /withdrew Consent for steps/);
+  assert.deepEqual(await snapshotOf(uid), before);
+});
+

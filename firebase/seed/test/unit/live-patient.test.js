@@ -11,14 +11,15 @@ import { addDays, dateInZone, zonedMillis } from "../../src/dates.js";
 import { THRESHOLDS } from "../../src/flags.js";
 import { outcomeScore } from "../../src/generate.js";
 import {
-  LIVE_DEFAULT_DISPLAY_NAME,
   SEED_ID_PREFIX,
   isSeededEntry,
   makeLivePatient,
   maskEmail,
   recordAfterSeeding,
   refuseRedFlags,
+  refuseOverridingChoices,
 } from "../../src/live-patient.js";
+import { LIVE_DEFAULT_DISPLAY_NAME } from "../../src/live-profile.js";
 
 /** @typedef {import("../../src/generate.js").DemoPatient} DemoPatient */
 
@@ -92,8 +93,9 @@ describe("the Patient record", () => {
     assert.equal(last, Math.max(...live.checkIns.map((c) => /** @type {number} */ (c.data.endedAtMillis))));
   });
 
-  test("has plain, fictional Intake highlights with no clinical claims", () => {
+  test("has plain, fictional Intake highlights with no clinical claims, labelled synthetic like the Demo Patients'", () => {
     const intake = live.patient.intakeHighlights;
+    assert.match(intake, /^Synthetic demo data\. Invented profile, not a real person\./);
     assert.ok(intake.length > 100 && intake.split(/\s+/).length <= 120, intake);
     assert.match(intake, /TMS/);
   });
@@ -399,6 +401,22 @@ describe("refuseRedFlags", () => {
     assert.doesNotThrow(() => refuseRedFlags(live));
     const red = { ...live, flags: [...live.flags, { id: "demo-sleep_collapse-x", data: { ...live.flags[0].data, level: /** @type {const} */ ("red") } }] };
     assert.throws(() => refuseRedFlags(red), /red flag/);
+  });
+});
+
+describe("refuseOverridingChoices", () => {
+  test("passes a new account, a Patient who has not chosen yet, and granted Consents", () => {
+    assert.doesNotThrow(() => refuseOverridingChoices(undefined, []));
+    assert.doesNotThrow(() => refuseOverridingChoices({ sharingConsent: "undecided" }, []));
+    assert.doesNotThrow(() => refuseOverridingChoices({ sharingConsent: "granted" }, [{ subject: "steps", granted: true }]));
+  });
+
+  test("refuses when the Patient declined sharing or withdrew a Consent in the app, naming what", () => {
+    assert.throws(() => refuseOverridingChoices({ sharingConsent: "declined" }, []), /declined sharing/);
+    assert.throws(
+      () => refuseOverridingChoices({ sharingConsent: "granted" }, [{ subject: "steps", granted: false }, { subject: "ratings", granted: false }]),
+      /withdrew Consent for steps, ratings/,
+    );
   });
 });
 

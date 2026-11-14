@@ -4,7 +4,8 @@
 //
 // How the seeded history is marked, so `--reset` deletes exactly it and never what the app or the
 // functions write later:
-//   - daily records carry the contract's `demoOverride: true` (the app writes `false`);
+//   - daily records carry the contract's `demoOverride: true` (the daily job writes `false`; a demo
+//     control's `true` holds demo values too, so --reset deleting it is fine);
 //   - Check-ins, Summaries, Suggestions, flags and Visits have ids starting `demo-` (the app and
 //     functions use random ids, `crisis-<millis>` and `silent-<millis>`);
 //   - Consents and the Patient record are rewritten on every run, never deleted;
@@ -12,7 +13,6 @@
 import { levelAfterClearing } from "../../hosting/js/lib/clear.js";
 import { CLINICIANS, PATIENTS, SEEDED_COLLECTIONS } from "./firestore.js";
 import { SEED_ID_PREFIX, makePatient } from "./generate.js";
-import { PROFILES } from "./profiles.js";
 
 /** @typedef {import("firebase-admin/firestore").Firestore} Firestore */
 /** @typedef {import("firebase-admin/firestore").DocumentData} DocumentData */
@@ -24,9 +24,6 @@ import { PROFILES } from "./profiles.js";
 /** @typedef {(typeof SEEDED_COLLECTIONS)[number]} SeededCollection */
 
 export { SEED_ID_PREFIX };
-
-/** Neutral and invented; `--display-name` gives another. */
-export const LIVE_DEFAULT_DISPLAY_NAME = PROFILES.live.displayName;
 
 /** The collections whose seeded documents carry an id prefix. */
 const PREFIXED = new Set(["checkIns", "summaries", "suggestions", "flags", "visits"]);
@@ -48,7 +45,7 @@ const PREFIXED = new Set(["checkIns", "summaries", "suggestions", "flags", "visi
  */
 export function makeLivePatient(options) {
   const { patientId, clinicianEmail, today, nowMillis, seed, displayName } = options;
-  return makePatient("live", { patientId, clinicianEmail, today, nowMillis, seed, displayName: displayName ?? LIVE_DEFAULT_DISPLAY_NAME });
+  return makePatient("live", { patientId, clinicianEmail, today, nowMillis, seed, displayName });
 }
 
 /**
@@ -170,18 +167,36 @@ export async function readPatientState(db, patientId) {
   const seeded = [];
   /** @type {AppWritten & { dailyDates: Set<string> }} */
   const app = { flags: [], checkIns: [], dailyDates: new Set() };
+  /** @type {{ subject?: string, granted?: boolean }[]} */
+  const consents = [];
   for (const name of SEEDED_COLLECTIONS) {
-    if (name === "consents") continue;
     const snapshot = await ref.collection(name).get();
     for (const doc of snapshot.docs) {
       const data = doc.data();
-      if (isSeededEntry(name, doc.id, data)) seeded.push({ name, ref: doc.ref });
+      if (name === "consents") consents.push(data);
+      else if (isSeededEntry(name, doc.id, data)) seeded.push({ name, ref: doc.ref });
       else if (name === "flags") app.flags.push({ id: doc.id, ...data });
       else if (name === "checkIns") app.checkIns.push(data);
       else if (name === "daily") app.dailyDates.add(doc.id);
     }
   }
-  return { record: record.exists ? /** @type {Partial<PatientDoc>} */ (record.data()) : undefined, seeded, app };
+  return { record: record.exists ? /** @type {Partial<PatientDoc>} */ (record.data()) : undefined, seeded, app, consents };
+}
+
+/**
+ * The seed grants sharing and every Consent, so a rerun must never undo what the Patient chose in
+ * the app (issue #29, ADR 0005, ADR 0006). "Not chosen yet" is no choice and may be seeded.
+ * @param {Partial<PatientDoc> | undefined} record
+ * @param {{ subject?: string, granted?: boolean }[]} consents
+ */
+export function refuseOverridingChoices(record, consents) {
+  const choices = [];
+  if (record?.sharingConsent === "declined") choices.push("declined sharing");
+  const withdrawn = consents.filter((c) => c.granted === false).map((c) => c.subject);
+  if (withdrawn.length > 0) choices.push(`withdrew Consent for ${withdrawn.join(", ")}`);
+  if (choices.length > 0) {
+    throw new Error(`The Patient ${choices.join(" and ")} in the app; the seed would undo that, so nothing was written.`);
+  }
 }
 
 /**
@@ -196,9 +211,10 @@ export function refuseRedFlags(generated) {
 }
 
 /**
- * Writes the live demo Patient. Refuses a history with a red flag and a Demo Patient's record, and
- * refuses to write over seeded history unless `reset` is set, in which case that history is deleted first. Daily records the
- * app wrote (`demoOverride: false`) are kept, and the generated record for that date is skipped.
+ * Writes the live demo Patient. Refuses a history with a red flag, a Demo Patient's record, and a
+ * Patient who declined sharing or withdrew a Consent; refuses to write over seeded history unless
+ * `reset` is set, in which case that history is deleted first. Daily records the app wrote
+ * (`demoOverride: false`) are kept, and the generated record for that date is skipped.
  * @param {Firestore} db
  * @param {DemoPatient} generated
  * @param {{ reset: boolean }} options
@@ -207,6 +223,7 @@ export async function seedLivePatient(db, generated, { reset }) {
   refuseRedFlags(generated);
   const state = await readPatientState(db, generated.id);
   if (state.record?.synthetic === true) throw new Error(`Patient ${generated.id} is a Demo Patient (synthetic); refusing.`);
+  refuseOverridingChoices(state.record, state.consents);
   if (state.seeded.length > 0 && !reset) {
     throw new Error(`Patient ${generated.id} already has seeded history (${state.seeded.length} documents). Pass --reset to delete and recreate it.`);
   }

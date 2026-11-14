@@ -15,8 +15,6 @@ import { LIVE_PATIENT_USAGE, parseLivePatientCommand } from "./src/cli.js";
 import { demoToday } from "./src/generate.js";
 import { allowlistState, ensurePatientUser, makeLivePatient, maskEmail, refuseRedFlags, seedLivePatient } from "./src/live-patient.js";
 
-const DAY_MILLIS = 86_400_000;
-
 /** @param {Record<string, number>} counts */
 const countsText = (counts) =>
   Object.entries(counts)
@@ -64,13 +62,8 @@ async function main() {
         seed: command.seed,
         displayName: command.displayName,
       });
-    // A real, sharing Patient last seen over a day ago is flagged red by the hourly silence check,
-    // which emails the Clinician. Only a past --today can do that; refuse it outside the emulator.
     const preview = generate("preview");
     refuseRedFlags(preview);
-    if (!command.emulatorHost && (preview.patient.lastSeenAtMillis ?? 0) < nowMillis - DAY_MILLIS) {
-      throw new Error("--today is more than a day in the past: the silence check would flag this real Patient red. Leave --today out.");
-    }
 
     const user = await ensurePatientUser(getAuth(app), command.email, command.displayName);
     if (user.created) console.log(`Created the account: uid ${user.uid} (email verified, no password).`);

@@ -3,7 +3,7 @@
 import { parseArgs } from "node:util";
 import { isDateKey } from "./dates.js";
 import { DEFAULT_SEED, DEMO_CLINICIAN_EMAIL } from "./generate.js";
-import { LIVE_DEFAULT_DISPLAY_NAME } from "./live-patient.js";
+import { LIVE_DEFAULT_DISPLAY_NAME } from "./live-profile.js";
 
 export const DEFAULT_PROJECT = "demo-twoam";
 export const DEFAULT_EMULATOR_HOST = "127.0.0.1:8080";
@@ -254,6 +254,10 @@ export function parseLivePatientCommand(argv, env) {
   const today = todayOption(values.today);
   const seed = seedOption(values.seed);
   const target = resolveTarget(values.project, env);
+  if (today !== undefined && !target.emulatorHost) {
+    // A past day leaves the real Patient looking silent, and the hourly silence check flags it red.
+    throw new Error("--today is for the emulators: on a real project the history always ends today.");
+  }
   const authEmulatorHost = authTarget(target, env);
   const displayName = (values["display-name"] ?? LIVE_DEFAULT_DISPLAY_NAME).trim();
   if (displayName === "" || displayName.length > 100) throw new Error("--display-name must be a name of 1 to 100 characters");
