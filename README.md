@@ -336,7 +336,7 @@ For the Clinician dashboard UI built from the design prototype in `design/clinic
 
 | File | What it is |
 |---|---|
-| `firebase/hosting/js/lib/design-model.js` | Pure. Firestore documents → the design's patient object (`designPatient`), roster view (`rosterView`, `orderRoster`), level words (`DESIGN_LEVELS`), Signals (`DESIGN_SIGNALS`, `designSignals`), Summaries, timeline, Digest with sources, what helps, and the design's form checks (`validateDesignVisit`, `validateDesignTms`, `intakeFileProblem`) |
+| `firebase/hosting/js/lib/design-model.js` | Pure. Firestore documents → the design's patient object (`designPatient`), the light roster row (`designRosterPatient`), roster view (`rosterView`, `orderRoster`), level words (`DESIGN_LEVELS`), Signals (`DESIGN_SIGNALS`, `designSignals`), Summaries, timeline, Digest with sources, what helps, and the design's form checks (`validateDesignVisit`, `validateDesignTms`, `intakeFileProblem`) |
 | `firebase/hosting/js/lib/design-live.js` | Live subscriptions and actions; takes the Firestore functions as its first argument. `subscribeRoster`, `subscribePatient` (and `subscribeAttention`, `subscribeOverview`, `subscribeSummaries`, `subscribeSignals`, `subscribeIntakeVisits`, `subscribeDigest`), `recordVisit`, `setTmsEndDate`, `clearAttention`, `generateDigestNow`, `extractIntake`, `saveIntake` |
 | `firebase/hosting/js/data/design-data.js` | The same bound to this dashboard's browser SDK: `designData({ db, app })` |
 
@@ -354,14 +354,15 @@ const stopRoster = subscribeRoster(fs, db, { clinicianEmail: user.email, keepWit
 });
 
 // One Patient: status is "loading" | "ok" | "withdrawn" | "error"; state.patient has the shape createPatients() makes.
+// state.loaded, state.errors ("denied" | "error") and state.docs are per collection; a failed collection is null, never empty.
 const stopPatient = subscribePatient(fs, db, patientId, { sections: "all" }, (state) => setPatient(state));
 
 // Actions return { ok: true, ... } or { ok: false, message } with copy safe to show.
 await recordVisit(fs, db, patientId, { date, type: "PHQ-9", score: "12" }, { today, tms: patient.tms, visits: patient.visits });
-await clearAttention(fs, db, { patientId, raw: state.raw, nowMillis: Date.now() });   // { ok: false, changed: true } asks for a new review
+await clearAttention(fs, db, { patientId, raw: state.raw, nowMillis: Date.now() });   // { ok: false, changed: true } asks for a new review; notOpen: nothing to clear
 ```
 
-In this plain-JS dashboard, `designData({ db, app: auth.app })` from `js/data/design-data.js` returns the same functions with `fs` and `db` already bound (`data.subscribeRoster(options, onChange)`), plus the callables (`data.generateDigestNow(patientId)`, `data.extractIntake(patientId, text)`, `data.saveIntake(patientId, highlights)`). Every query keeps the sharing filters the rules require; a Patient who stops sharing becomes `status: "withdrawn"` with an anonymous placeholder, and their listeners stop. The tests are `firebase/hosting/test/design-{model,live}.test.mjs` and, against the emulators under the rules, `firebase/seed/test/emulator/design-live.test.js`.
+In this plain-JS dashboard, `designData({ db, app: auth.app })` from `js/data/design-data.js` returns the same functions with `fs` and `db` already bound (`data.subscribeRoster(options, onChange)`), plus the callables (`data.generateDigestNow(patientId)`, `data.extractIntake(patientId, text)`, `data.saveIntake(patientId, highlights)`). Every query keeps the sharing filters the rules require; a Patient who stops sharing becomes `status: "withdrawn"` with an anonymous placeholder, and their listeners stop; the record is checked again after 5 s, 15 s and then every minute, so a Patient who shares again comes back. The roster's sleep sparkline shows only while the Patient's sleep Consent is granted. The tests are `firebase/hosting/test/design-{model,live}.test.mjs` and, against the emulators under the rules, `firebase/seed/test/emulator/design-live.test.js`.
 
 ### Weekly Digest
 

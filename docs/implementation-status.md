@@ -324,7 +324,15 @@ Branch `feat/dashboard-backend-sync` (to open). It gives the Clinician dashboard
   - `subscribeRoster`, `subscribePatient` and per-section wrappers, with loading, ok, denied, expired, withdrawn and error states, and `fromCache` for offline or stale data;
   - `recordVisit`, `setTmsEndDate`, `clearAttention`, `generateDigestNow`, `extractIntake` and `saveIntake`, which return vetted copy on failure.
 - `js/data/design-data.js` binds them to the browser SDK. A React port passes `firebase/firestore` instead.
-- **Tests:** unit tests on the seed generator's Demo Patients and an in-memory Firestore stand-in. `firebase/seed/test/emulator/design-live.test.js` runs the helpers as the Clinician under the rules on the seeded Demo Patients.
+- **Tests:** unit tests on the seed generator's Demo Patients and an in-memory Firestore stand-in. `firebase/seed/test/emulator/design-live.test.js` runs the helpers as the Clinician under the rules on the seeded Demo Patients, with #67's tokens (`role: "clinician"`, a verified email).
+
+**Review fixes** (each with a test):
+- **A failed flags read never shows green.** Only `permission-denied` is a withdrawal. A collection whose listener fails stays unloaded, with `state.errors[name]` (`"denied"` or `"error"`); the record's stored level and reasons stand in, and `patient.flagsError` lets the UI say the flags could not load.
+- **The roster's sleep sparkline follows Signal Consent.** `subscribeRoster` listens to each Patient's `consents/sleepMinutes`; a withheld, missing or not-yet-loaded Consent puts no sleep value in the row. With Consents not loaded, `designPatient` now hides every Signal too.
+- **A Visit strictly after the TMS end date**, and the TMS end date strictly before every Visit: Phase 1 starts the day after TMS ends, so a Visit on that day fell off the timeline.
+- **Sharing again comes back without a reload.** After the rules refuse the record, `subscribePatient` listens again after 5 s, 15 s, then every minute, until `stop()`.
+- **A lighter roster.** `designRosterPatient` builds only what the roster shows; `subscribeRoster` rebuilds only the Patient whose snapshot changed and skips metadata-only snapshots.
+- **One write path for the UI.** `recordVisit` also edits (`editingId`) and returns field `errors`; `clearAttention` takes the review the Clinician confirmed and reports `notOpen` apart from `changed`. `state.docs` hands the page each collection's documents, so one subscription can feed every block.
 
 **Conflicts left for the user** (details and options in the sync note):
 1. **"Retry automatic assessment"** can't run after the Summary, because the transcript is dropped (ADR 0006). Proposal: retry only within the finish window (#60's `unavailable`), and optionally a Clinician "mark reviewed".
