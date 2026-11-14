@@ -321,7 +321,7 @@ data class MailMessage(
     val text: String,
 )
 
-/** Top-level `mail/{autoId}`. Written by Cloud Functions only; read by the Trigger Email extension. */
+/** Top-level `mail/{mailId}`, one per red flag (id from `mailIdFor` in firebase/functions/src/alerts.ts). Written by Cloud Functions only; read by the Trigger Email extension. */
 @Serializable
 data class MailDoc(
     val to: String,
