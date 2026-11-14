@@ -40,6 +40,9 @@ data class Weather(
     val sourceUrl: String,
 )
 
+/** About a minute of generated music, held in memory only and never saved. */
+class MusicClip(val mimeType: String, val bytes: ByteArray)
+
 /** What a Check-in needs from the backend: the Live token, and the Patient's records the Companion's tools read and write. */
 interface CheckInGateway {
     /**
@@ -59,6 +62,9 @@ interface CheckInGateway {
 
     /** The current weather at [near]. */
     suspend fun weather(patientId: String, near: PatientLocation): Weather
+
+    /** About a minute of calm instrumental music matched to [mood], from Lyria. Takes about half a minute. */
+    suspend fun generateMusic(patientId: String, mood: String): MusicClip
 
     /** The most recent daily records, newest first. */
     suspend fun recentDays(patientId: String, count: Int): List<DailyDoc>

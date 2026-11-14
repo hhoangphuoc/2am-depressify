@@ -91,7 +91,8 @@ class GeminiLiveSession(
                 val brief = CheckInBrief.build(patients.get(id)?.intakeHighlights.orEmpty())
                 val start = checkIns.startCheckIn(id, brief, typed = state.value.muted)
                 checkInId = start.checkInId
-                val tools = CompanionTools(patients, checkIns, id, nowMillis, effects)
+                // This coroutine's scope: music still being made is cancelled with the Check-in.
+                val tools = CompanionTools(patients, checkIns, id, nowMillis, effects, scope = this)
                 client.run(start.endpoint, start.token, start.model, out) { handle(it, tools, out) }
                 lost()
             } catch (e: CancellationException) {

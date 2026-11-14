@@ -6,3 +6,6 @@ export const TEXT_MODEL = "gemini-4-hydrogen";
 
 /** The Gemini Live model a Check-in talks to. Start Check-in locks every token to it. */
 export const LIVE_MODEL = "gemini-3.8-live";
+
+/** The music model behind the Companion's suggest_music tool. */
+export const MUSIC_MODEL = "lyria-3.5";

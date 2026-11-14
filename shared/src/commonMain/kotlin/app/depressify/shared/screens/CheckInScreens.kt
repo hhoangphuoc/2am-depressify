@@ -39,6 +39,7 @@ import app.depressify.core.SuggestionKind
 import app.depressify.shared.voice.*
 import app.depressify.shared.voice.live.CompanionTools
 import app.depressify.shared.voice.live.ToolCard
+import app.depressify.shared.voice.live.createClipPlayer
 import androidx.compose.ui.platform.LocalUriHandler
 import kotlinx.coroutines.delay
 
@@ -147,9 +148,23 @@ private fun ToolCardView(card: ToolCard) {
                 Txt("From your own records · compared with your usual, never with anyone else", DepressifyType.small, c.muted)
             }
             is ToolCard.Music -> {
-                Txt("A little music", DepressifyType.meta, c.muted)
-                Txt(card.query, DepressifyType.bodyStrong, c.ink)
-                TextLink("Open in your music app", { uri.openUri(card.url) })
+                Txt("A little music, made for you", DepressifyType.meta, c.muted)
+                Txt("Calm and instrumental, about a minute", DepressifyType.bodyStrong, c.ink)
+                val clip = card.clip
+                when {
+                    clip != null -> {
+                        val player = remember(clip) { createClipPlayer() }
+                        var playing by remember(clip) { mutableStateOf(false) }
+                        DisposableEffect(player) { onDispose { player.stop() } }
+                        SecondaryButton(if (playing) "Stop" else "Play", {
+                            if (playing) player.stop() else player.play(clip) { playing = false }
+                            playing = !playing
+                        })
+                    }
+                    card.failed -> Txt("The music could not be made this time.", DepressifyType.meta, c.muted)
+                    else -> Txt("Being made · about half a minute", DepressifyType.meta, c.muted)
+                }
+                Txt("Made by AI (Lyria) for this Check-in, and not saved", DepressifyType.small, c.muted)
             }
             is ToolCard.Places -> {
                 Txt("A place nearby", DepressifyType.meta, c.muted)
@@ -174,6 +189,7 @@ private fun ToolCardView(card: ToolCard) {
 private fun TypedCheckInScreen(vm: PatientViewModel, s: PatientState) {
     val c = Theme.colors
     val t = s.typedCheckIn
+    val snap by vm.live.snapshot.collectAsStateWithLifecycle()
     Page(
         top = { TopBar("Check-in", onBack = { vm.showSheet(Sheet.Leave) }, trailing = { TextLink("Finish", vm::finishCheckIn, Modifier.padding(end = 12.dp)) }) },
         bottom = { Composer(onSend = vm::sendTyped, onVoice = if (s.scenario == Scenario.MicDeclined) null else ({ vm.setTyped(false) })) },
@@ -203,6 +219,8 @@ private fun TypedCheckInScreen(vm: PatientViewModel, s: PatientState) {
                 onAccept = { vm.reply(Reply.Accept) }, onSmaller = { vm.reply(Reply.Smaller) }, onDecline = { vm.reply(Reply.Decline) },
                 onBook = { vm.showSheet(Sheet.Booking) }, onFinish = vm::finishCheckIn)
         }
+        // What the Companion's tool calls found or made, newest first.
+        if (vm.live.isLive) snap.cards.asReversed().forEach { ToolCardView(it) }
         MapsNotice { vm.showSheet(Sheet.MapsSources) }
     }
 }

@@ -10,6 +10,7 @@ import { healthStatus } from "./health";
 import { adminPatientStore, createIntakeFunctions } from "./intakeFunctions";
 import { fetchLiveTokenClient } from "./live";
 import { MAPS_API_KEY, createMapToolFunctions, fetchMapsClient } from "./mapTool";
+import { createMusicFunctions, fetchMusicClient } from "./music";
 import { REGION } from "./region";
 import { adminSilenceStore, createSilenceFunctions } from "./silenceFunctions";
 
@@ -81,4 +82,10 @@ export const { startCheckIn, finishCheckIn } = createCheckInFunctions({
 export const { mapTool } = createMapToolFunctions({
   store: () => adminCheckInStore(adminDb()),
   maps: () => fetchMapsClient(MAPS_API_KEY.value()),
+});
+
+/** Music (the Patient, or anyone signed in on a Demo Patient): about a minute of calm instrumental music from Lyria 3.5. */
+export const { generateMusic } = createMusicFunctions({
+  store: () => adminCheckInStore(adminDb()),
+  music: () => fetchMusicClient(GEMINI_API_KEY.value()),
 });
