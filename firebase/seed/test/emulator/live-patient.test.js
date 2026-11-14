@@ -1,5 +1,5 @@
 // The live demo Patient command against the Auth and Firestore emulators: it creates the account
-// and the mock history, --reset recreates the history and leaves everything else alone, and under
+// and the seeded history, --reset recreates the history and leaves everything else alone, and under
 // the security rules the owner and their Clinician can read it through the app's and the
 // dashboard's queries. Run inside the emulators:
 //   cd firebase && firebase emulators:exec --only auth,firestore --project demo-twoam "npm --prefix seed run test:emulator"
@@ -86,7 +86,7 @@ after(async () => {
   await deleteApp(app);
 });
 
-test("creates the account with a verified email, no password and no claims, then the mock history", async () => {
+test("creates the account with a verified email, no password and no claims, then the seeded history", async () => {
   const before = { other: await snapshotOf("other-live"), steady: await snapshotOf("demo-steady") };
   const output = run(["--email", PATIENT_EMAIL, "--today", TODAY]);
   const match = /Created the account: uid (\S+) \(email verified, no password\)\./.exec(output);
@@ -161,11 +161,11 @@ test("the allowlisted Clinician reads it through the dashboard's queries", async
   assert.deepEqual(attention.flagReasons, generated.patient.flagReasons);
 });
 
-test("without --reset it refuses to write over the mock history", () => {
-  assert.match(fails(["--email", PATIENT_EMAIL, "--today", TODAY]), /already has mock history .* Pass --reset/);
+test("without --reset it refuses to write over the seeded history", () => {
+  assert.match(fails(["--email", PATIENT_EMAIL, "--today", TODAY]), /already has seeded history .* Pass --reset/);
 });
 
-test("--reset deletes and recreates exactly the mock history; what the app wrote is left alone", async () => {
+test("--reset deletes and recreates exactly the seeded history; what the app wrote is left alone", async () => {
   const ref = db.collection("patients").doc(uid);
   const generated = expected();
   // What the app and functions wrote since: a Check-in, a crisis flag, today's daily record, a Digest.
@@ -177,7 +177,7 @@ test("--reset deletes and recreates exactly the mock history; what the app wrote
     "digests/2026-W45": { isoWeek: "2026-W45", text: "A week.", sharedWithClinician: true },
   };
   for (const [path, data] of Object.entries(app)) await ref.collection(path.split("/")[0]).doc(path.split("/")[1]).set(data);
-  // Mock history changed since: the Clinician cleared the open flag, and an older run left a Check-in.
+  // Seeded history changed since: the Clinician cleared the open flag, and an older run left a Check-in.
   const openFlag = generated.flags.find((f) => f.data.clearedAtMillis === null);
   await ref.collection("flags").doc(/** @type {string} */ (openFlag?.id)).update({ clearedAtMillis: endedAtMillis });
   await ref.collection("checkIns").doc("demo-checkin-2026-09-01").set({ id: "demo-checkin-2026-09-01" });
@@ -185,14 +185,14 @@ test("--reset deletes and recreates exactly the mock history; what the app wrote
 
   const output = run(["--email", PATIENT_EMAIL, "--today", TODAY, "--reset"]);
   assert.match(output, new RegExp(`Found the account: uid ${uid}\\.`));
-  assert.match(output, /Deleted mock history: daily 41, consents 0, checkIns 25, summaries 24, suggestions 24, flags \d+, visits 2\./);
-  // Today's record is now the app's (demoOverride false): kept, and not counted as mock.
+  assert.match(output, /Deleted seeded history: daily 41, consents 0, checkIns 25, summaries 24, suggestions 24, flags \d+, visits 2\./);
+  // Today's record is now the app's (demoOverride false): kept, and not counted as seeded.
   assert.match(output, /Kept 1 daily record\(s\) the app wrote\./);
   assert.ok(!output.includes(PATIENT_EMAIL));
 
   const stored = await snapshotOf(uid);
   for (const [path, data] of Object.entries(app)) assert.deepEqual(stored[path], data, path);
-  assert.equal(stored["checkIns/demo-checkin-2026-09-01"], undefined, "a stale mock Check-in survived the reset");
+  assert.equal(stored["checkIns/demo-checkin-2026-09-01"], undefined, "a stale seeded Check-in survived the reset");
   for (const name of SEEDED_COLLECTIONS) {
     for (const entry of generated[name]) {
       if (name === "daily" && entry.id === TODAY) continue;

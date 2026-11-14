@@ -1,9 +1,9 @@
-// Gives one real test account (the live demo Patient) six weeks of invented history, so the
+// Gives one real Patient account (the live demo Patient) six weeks of invented history, so the
 // Companion and "what seems to help" have context. Targets the Auth and Firestore emulators unless
 // --project names a real project.
 //
 //   npm run seed-live-patient -- --email <patient email>                    # emulators
-//   npm run seed-live-patient -- --email <patient email> --reset            # delete and recreate the mock history
+//   npm run seed-live-patient -- --email <patient email> --reset            # delete and recreate the seeded history
 //   npm run seed-live-patient -- --email <patient email> --clinician <clinician email> --project <project-id>
 //                                                                           # a real project (Application Default Credentials)
 //
@@ -80,13 +80,13 @@ async function main() {
     }
 
     const result = await seedLivePatient(db, generate(user.uid), { reset: command.reset });
-    if (command.reset) console.log(`Deleted mock history: ${countsText(result.deleted)}.`);
+    if (command.reset) console.log(`Deleted seeded history: ${countsText(result.deleted)}.`);
     console.log(`Wrote patients/${user.uid} and ${countsText(result.written)}.`);
     if (result.keptDaily > 0) console.log(`Kept ${result.keptDaily} daily record(s) the app wrote.`);
     if (result.appFlags + result.appCheckIns > 0) {
       console.log(`Left alone: ${result.appFlags} flag(s) and ${result.appCheckIns} Check-in(s) the app wrote.`);
     }
-    console.log(`Attention: ${result.flagLevel}; open mock flags: ${result.openFlagIds.join(", ") || "none"}.`);
+    console.log(`Attention: ${result.flagLevel}; open seeded flags: ${result.openFlagIds.join(", ") || "none"}.`);
   } finally {
     await deleteApp(app);
   }

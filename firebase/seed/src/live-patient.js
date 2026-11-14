@@ -1,8 +1,8 @@
-// The live demo Patient: one real test account (not synthetic) given six weeks of invented history
+// The live demo Patient: one real Patient account (not synthetic) given six weeks of invented history
 // by the shared generator, so the Companion and "what seems to help" have context. Unlike the Demo
 // Patients, this record is only readable by its owner and their Clinician, and alerts apply.
 //
-// How the mock history is marked, so `--reset` deletes exactly it and never what the app or the
+// How the seeded history is marked, so `--reset` deletes exactly it and never what the app or the
 // functions write later:
 //   - daily records carry the contract's `demoOverride: true` (the app writes `false`);
 //   - Check-ins, Summaries, Suggestions, flags and Visits have ids starting `demo-` (the app and
@@ -11,7 +11,7 @@
 //   - digests are never written or deleted here (the Digest function makes them).
 import { levelAfterClearing } from "../../hosting/js/lib/clear.js";
 import { CLINICIANS, PATIENTS, SEEDED_COLLECTIONS } from "./firestore.js";
-import { MOCK_ID_PREFIX, makePatient } from "./generate.js";
+import { SEED_ID_PREFIX, makePatient } from "./generate.js";
 import { PROFILES } from "./profiles.js";
 
 /** @typedef {import("firebase-admin/firestore").Firestore} Firestore */
@@ -23,12 +23,12 @@ import { PROFILES } from "./profiles.js";
 /** @typedef {import("./generate.js").DemoPatient} DemoPatient */
 /** @typedef {(typeof SEEDED_COLLECTIONS)[number]} SeededCollection */
 
-export { MOCK_ID_PREFIX };
+export { SEED_ID_PREFIX };
 
 /** Neutral and invented; `--display-name` gives another. */
 export const LIVE_DEFAULT_DISPLAY_NAME = PROFILES.live.displayName;
 
-/** The collections whose mock documents carry an id prefix. */
+/** The collections whose seeded documents carry an id prefix. */
 const PREFIXED = new Set(["checkIns", "summaries", "suggestions", "flags", "visits"]);
 
 /**
@@ -52,21 +52,21 @@ export function makeLivePatient(options) {
 }
 
 /**
- * Whether a stored document is part of the mock history (and so deleted by `--reset`).
+ * Whether a stored document is part of the seeded history (and so deleted by `--reset`).
  * @param {string} collection
  * @param {string} id
  * @param {DocumentData | undefined} data
  */
-export function isMockEntry(collection, id, data) {
+export function isSeededEntry(collection, id, data) {
   if (collection === "daily") return data?.demoOverride === true;
-  return PREFIXED.has(collection) && id.startsWith(MOCK_ID_PREFIX);
+  return PREFIXED.has(collection) && id.startsWith(SEED_ID_PREFIX);
 }
 
 /** @param {unknown} value @returns {value is number} */
 const isNumber = (value) => typeof value === "number" && Number.isFinite(value);
 
 /**
- * What the app or the functions wrote for this Patient, outside the mock history.
+ * What the app or the functions wrote for this Patient, outside the seeded history.
  * @typedef {object} AppWritten
  * @property {(Partial<Flag> & { id: string })[]} flags
  * @property {{ endedAtMillis?: unknown }[]} checkIns
@@ -159,7 +159,7 @@ export async function allowlistState(db, patientEmail, clinicianEmail) {
 const zeroCounts = () => /** @type {Record<SeededCollection, number>} */ (Object.fromEntries(SEEDED_COLLECTIONS.map((name) => [name, 0])));
 
 /**
- * What is stored for the Patient now: the record, the mock history, and what the app wrote.
+ * What is stored for the Patient now: the record, the seeded history, and what the app wrote.
  * @param {Firestore} db
  * @param {string} patientId
  */
@@ -167,7 +167,7 @@ export async function readPatientState(db, patientId) {
   const ref = db.collection(PATIENTS).doc(patientId);
   const record = await ref.get();
   /** @type {{ name: SeededCollection, ref: DocumentReference }[]} */
-  const mock = [];
+  const seeded = [];
   /** @type {AppWritten & { dailyDates: Set<string> }} */
   const app = { flags: [], checkIns: [], dailyDates: new Set() };
   for (const name of SEEDED_COLLECTIONS) {
@@ -175,13 +175,13 @@ export async function readPatientState(db, patientId) {
     const snapshot = await ref.collection(name).get();
     for (const doc of snapshot.docs) {
       const data = doc.data();
-      if (isMockEntry(name, doc.id, data)) mock.push({ name, ref: doc.ref });
+      if (isSeededEntry(name, doc.id, data)) seeded.push({ name, ref: doc.ref });
       else if (name === "flags") app.flags.push({ id: doc.id, ...data });
       else if (name === "checkIns") app.checkIns.push(data);
       else if (name === "daily") app.dailyDates.add(doc.id);
     }
   }
-  return { record: record.exists ? /** @type {Partial<PatientDoc>} */ (record.data()) : undefined, mock, app };
+  return { record: record.exists ? /** @type {Partial<PatientDoc>} */ (record.data()) : undefined, seeded, app };
 }
 
 /**
@@ -197,7 +197,7 @@ export function refuseRedFlags(generated) {
 
 /**
  * Writes the live demo Patient. Refuses a history with a red flag and a Demo Patient's record, and
- * refuses to write over mock history unless `reset` is set, in which case that history is deleted first. Daily records the
+ * refuses to write over seeded history unless `reset` is set, in which case that history is deleted first. Daily records the
  * app wrote (`demoOverride: false`) are kept, and the generated record for that date is skipped.
  * @param {Firestore} db
  * @param {DemoPatient} generated
@@ -207,14 +207,14 @@ export async function seedLivePatient(db, generated, { reset }) {
   refuseRedFlags(generated);
   const state = await readPatientState(db, generated.id);
   if (state.record?.synthetic === true) throw new Error(`Patient ${generated.id} is a Demo Patient (synthetic); refusing.`);
-  if (state.mock.length > 0 && !reset) {
-    throw new Error(`Patient ${generated.id} already has mock history (${state.mock.length} documents). Pass --reset to delete and recreate it.`);
+  if (state.seeded.length > 0 && !reset) {
+    throw new Error(`Patient ${generated.id} already has seeded history (${state.seeded.length} documents). Pass --reset to delete and recreate it.`);
   }
 
   const deleted = zeroCounts();
-  if (state.mock.length > 0) {
+  if (state.seeded.length > 0) {
     const writer = db.bulkWriter();
-    for (const { name, ref } of state.mock) {
+    for (const { name, ref } of state.seeded) {
       writer.delete(ref);
       deleted[name]++;
     }

@@ -59,9 +59,9 @@ import { live } from "./live-profile.js";
  * @property {string} displayName
  * @property {string} intakeHighlights a Demo Patient's begins "Synthetic demo data"
  * @property {boolean} [synthetic] false for the live demo Patient, a real account; default true
- * @property {boolean} [mockHistory] mark every document as mock history, so it can be found and
+ * @property {boolean} [seededHistory] mark every document as seeded history, so it can be found and
  *   reset without touching what the app writes later: daily records get `demoOverride: true`, and
- *   every other id starts with `demo-` (see MOCK_ID_PREFIX)
+ *   every other id starts with `demo-` (see SEED_ID_PREFIX)
  * @property {number} visitScore PHQ-9 score at the Visit 21 days ago
  * @property {number} [tmsEndVisitScore] PHQ-9 score at a Visit on the TMS end date, if there was one
  * @property {UsualValues} usual

@@ -16,7 +16,7 @@ Kept up to date as PRs are opened and merged. Each PR also updates its own rows 
 | #61 | (teammate) | #18, places part: `find_places` returns real nearby places | Open; not part of this branch |
 | #69 | `feat/26-daily-job-rules` (from `main`) | #26, `core` only: the daily job's pure pipeline (daily record, Baseline, sign of life, Signal flag rules, write plan) | Tested (core 124, seed 105, dashboard 310); the app's background work, debug action and device check are still to do |
 | #68 | `feat/27-nudge-rules` → `feat/26-daily-job-rules` (stacked on #69) | #27, `core` part: Nudge rules, Nudge text, quiet hours, and the `core` purity check | Open; tested (core 161) |
-| #70 | `feat/live-demo-patient` → `main` | Live demo Patient: `npm run seed-live-patient` gives one real test account six weeks of mock history | Open; tested (seed 132, seed emulators 24). A rerun with `--display-name` also renames the existing account. **Run on `junction26hel-7400` on 14 November 2026** for the team's test Gmail account: account created (verified, no password), 42 daily, 24 Check-ins and Summaries, 24 Suggestions, 3 flags (level amber), 2 Visits, 12 Consents. |
+| #70 | `feat/live-demo-patient` → `main` | Live demo Patient: `npm run seed-live-patient` gives one real Patient account six weeks of seeded history | Open; tested (seed 132, seed emulators 24). A rerun with `--display-name` also renames the existing account. **Run on `junction26hel-7400` on 14 November 2026** for the team's test Gmail account: account created (verified, no password), 42 daily, 24 Check-ins and Summaries, 24 Suggestions, 3 flags (level amber), 2 Visits, 12 Consents. |
 
 **Deployed on `junction26hel-7400`:**
 - Rules and indexes.
@@ -218,7 +218,7 @@ Write plan, mirroring `raisedAttention` and `hasOpenFlag` in the functions:
 - **`npm run allow-clinician -- --email <email> [--project <id>]`** adds a Clinician to the allowlist, with the same targeting rules.
 - **Shared Baseline fixture:** `fixtures/baseline/baseline-cases.json`, with a 14-day median, at least 5 valid days, and a floor on the spread. The seed and the dashboard check it now, and #16 must check it from Kotlin.
 
-**Live demo Patient** (`feat/live-demo-patient`). `npm run seed-live-patient -- --email <patient-email> [--clinician <email>] [--display-name <name>] [--today <date>] [--seed <n>] [--reset] [--project <id>]` gives one real test account six weeks of mock history, so the Companion and "what seems to help" have context:
+**Live demo Patient** (`feat/live-demo-patient`). `npm run seed-live-patient -- --email <patient-email> [--clinician <email>] [--display-name <name>] [--today <date>] [--seed <n>] [--reset] [--project <id>]` gives one real Patient account six weeks of seeded history, so the Companion and "what seems to help" have context:
 
 | Part | State |
 |---|---|

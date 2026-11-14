@@ -50,7 +50,7 @@ ${TARGET_HELP}`;
 export const LIVE_PATIENT_USAGE = `Usage: npm run seed-live-patient -- --email <patient email> [--clinician email]
          [--display-name name] [--today yyyy-MM-dd] [--seed n] [--reset] [--project id]
 
-Gives one real test account six weeks of invented history, so the Companion and "what seems to
+Gives one real Patient account six weeks of invented history, so the Companion and "what seems to
 help" have context: Daily Signals with a drift in the last days, Check-ins with Summaries,
 Suggestions with Outcomes (the latest still open), an amber flag, Visits and Consents. The record is
 not synthetic (only the account and its Clinician can read it) and its health source says
@@ -67,8 +67,8 @@ Options:
   --display-name <name>  default: ${LIVE_DEFAULT_DISPLAY_NAME}
   --today <date>         the last day of history (default: today in Europe/Helsinki)
   --seed <n>             pseudo-random seed (default: ${DEFAULT_SEED})
-  --reset                delete this Patient's mock history and write it again. Without it, the
-                         command refuses a Patient who already has mock history. What the app
+  --reset                delete this Patient's seeded history and write it again. Without it, the
+                         command refuses a Patient who already has seeded history. What the app
                          wrote is never deleted.`;
 
 /**

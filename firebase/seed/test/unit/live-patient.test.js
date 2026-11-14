@@ -1,5 +1,5 @@
-// The live demo Patient: one real (not synthetic) test account with six weeks of invented history.
-// Determinism, the profile's story, the markers that let --reset find the mock history, and the
+// The live demo Patient: one real (not synthetic) Patient account with six weeks of invented history.
+// Determinism, the profile's story, the markers that let --reset find the seeded history, and the
 // data contract.
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
@@ -12,8 +12,8 @@ import { THRESHOLDS } from "../../src/flags.js";
 import { outcomeScore } from "../../src/generate.js";
 import {
   LIVE_DEFAULT_DISPLAY_NAME,
-  MOCK_ID_PREFIX,
-  isMockEntry,
+  SEED_ID_PREFIX,
+  isSeededEntry,
   makeLivePatient,
   maskEmail,
   recordAfterSeeding,
@@ -99,26 +99,26 @@ describe("the Patient record", () => {
   });
 });
 
-describe("marked as mock history", () => {
-  test("every daily record is demoOverride, every other document id starts with the mock prefix", () => {
+describe("marked as seeded history", () => {
+  test("every daily record is demoOverride, every other document id starts with the seeded prefix", () => {
     for (const { data } of live.daily) assert.equal(data.demoOverride, true);
     for (const name of /** @type {const} */ (["checkIns", "summaries", "suggestions", "flags", "visits"])) {
-      for (const { id } of live[name]) assert.ok(id.startsWith(MOCK_ID_PREFIX), `${name}/${id}`);
+      for (const { id } of live[name]) assert.ok(id.startsWith(SEED_ID_PREFIX), `${name}/${id}`);
     }
   });
 
-  test("isMockEntry finds exactly the mock documents, and not what the app writes", () => {
+  test("isSeededEntry finds exactly the seeded documents, and not what the app writes", () => {
     for (const e of entries(live)) {
       if (e.name === "consents") continue;
-      assert.equal(isMockEntry(e.name, e.id, e.data), true, `${e.name}/${e.id}`);
+      assert.equal(isSeededEntry(e.name, e.id, e.data), true, `${e.name}/${e.id}`);
     }
-    assert.equal(isMockEntry("daily", TODAY, { demoOverride: false }), false);
-    assert.equal(isMockEntry("daily", TODAY, {}), false);
-    assert.equal(isMockEntry("checkIns", "5f0c5bde-2c1a-4e4e-9a59-3f3c2f1f7c11", {}), false);
-    assert.equal(isMockEntry("flags", "silent-1763100000000", {}), false);
-    assert.equal(isMockEntry("flags", "crisis-1763100000000", {}), false);
-    assert.equal(isMockEntry("digests", "demo-2026-W46", {}), false, "digests are the Digest function's, never mock");
-    assert.equal(isMockEntry("consents", "steps", {}), false, "Consents are rewritten, never deleted");
+    assert.equal(isSeededEntry("daily", TODAY, { demoOverride: false }), false);
+    assert.equal(isSeededEntry("daily", TODAY, {}), false);
+    assert.equal(isSeededEntry("checkIns", "5f0c5bde-2c1a-4e4e-9a59-3f3c2f1f7c11", {}), false);
+    assert.equal(isSeededEntry("flags", "silent-1763100000000", {}), false);
+    assert.equal(isSeededEntry("flags", "crisis-1763100000000", {}), false);
+    assert.equal(isSeededEntry("digests", "demo-2026-W46", {}), false, "digests are the Digest function's, never seeded");
+    assert.equal(isSeededEntry("consents", "steps", {}), false, "Consents are rewritten, never deleted");
   });
 
   test("a Check-in and its Summary share an id; a Suggestion is keyed by its own day", () => {

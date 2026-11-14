@@ -62,10 +62,10 @@ export const TMS_END_DAYS_AGO = 42;
 export const VISIT_DAYS_AGO = 21;
 export const PROFILE_ORDER = /** @type {const} */ (["steady", "declining", "sparse"]);
 /**
- * Every document id of a profile with `mockHistory` starts with this, except daily records (keyed
- * by date), which carry `demoOverride: true` instead. `--reset` finds the mock history by these.
+ * Every document id of a profile with `seededHistory` starts with this, except daily records (keyed
+ * by date), which carry `demoOverride: true` instead. `--reset` finds the seeded history by these.
  */
-export const MOCK_ID_PREFIX = "demo-";
+export const SEED_ID_PREFIX = "demo-";
 const NOT_TRIED_OUTCOME = -0.1;
 
 /** @param {number} value @param {number} min @param {number} max */
@@ -193,8 +193,8 @@ export function makePatient(profileKey, options) {
   const nowMillis = options.nowMillis ?? zonedMillis(today, 12, 0);
   const seed = options.seed ?? DEFAULT_SEED;
   const clinicianEmail = options.clinicianEmail ?? DEMO_CLINICIAN_EMAIL;
-  const mock = profile.mockHistory === true;
-  const idPrefix = mock ? MOCK_ID_PREFIX : "";
+  const seeded = profile.seededHistory === true;
+  const idPrefix = seeded ? SEED_ID_PREFIX : "";
   const random = createRandom(hashString(`${seed}:${profile.key}`));
   const dateOf = (/** @type {number} */ d) => addDays(today, -d);
   const at = (/** @type {number} */ d, /** @type {number} */ hour, /** @type {number} */ minute) =>
@@ -236,7 +236,7 @@ export function makePatient(profileKey, options) {
       values: day.values,
       vsBaseline: comparisons[i].vsBaseline,
       composite: comparisons[i].composite,
-      demoOverride: mock,
+      demoOverride: seeded,
       sharedWithClinician: sharedAt(at(day.d, 7, 10)),
     },
   }));

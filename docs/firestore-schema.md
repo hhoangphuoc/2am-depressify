@@ -75,7 +75,7 @@ Written by the phone's daily job (#26): the decision is `DailyJob.run` in `core`
 | `values` | map of Signal key to number or null | Holds every Signal key; `null` where there is no value. |
 | `vsBaseline` | map of Signal key to number or null | Today's distance from the Patient's own Baseline, in units of their spread. `null` with fewer than 5 valid prior days or no value today. |
 | `composite` | number or null | Mean of the oriented comparisons that exist; `null` if none. |
-| `demoOverride` | boolean | `true` when a demo control wrote this record. Overrides only ever touch these. The live demo Patient's mock history sets it on every daily record it writes, and `--reset` deletes exactly those (see [Live demo Patient](#live-demo-patient)). The app writes `false`. |
+| `demoOverride` | boolean | `true` when a demo control wrote this record. Overrides only ever touch these. The live demo Patient's seeded history sets it on every daily record it writes, and `--reset` deletes exactly those (see [Live demo Patient](#live-demo-patient)). The app writes `false`. |
 | `sharedWithClinician` | boolean | The sharing stamp. A record rewritten later in the day keeps the stamp it was created with. |
 
 #### Baseline
@@ -289,7 +289,7 @@ What the functions count per Patient record (`firebase/functions/src/limits.ts`)
 | Clear after follow-up | `patients/{id}/flags` where `sharedWithClinician == true`, then the reviewed flags by id in a transaction | none |
 | Digest functions | `summaries` by `createdAtMillis` range, `daily` by `date` range (Admin SDK); the stamp is filtered in code | single field (automatic) |
 | Seed reset | `patients` where `synthetic == true` (Admin SDK) | single field (automatic) |
-| Live demo Patient reset | every document of one Patient's `daily`, `checkIns`, `summaries`, `suggestions`, `flags` and `visits`, filtered in code by the mock markers (Admin SDK) | none |
+| Live demo Patient reset | every document of one Patient's `daily`, `checkIns`, `summaries`, `suggestions`, `flags` and `visits`, filtered in code by the seeded markers (Admin SDK) | none |
 | Finish Check-in | in the finish transaction, `patients/{id}/flags` where `kind in ["crisis", "decline", "unassessed"]` (Admin SDK) | single field (automatic) |
 | Silence check | all `patients`, selecting `sharingConsent`, `synthetic` and `lastSeenAtMillis` only; then, in each silent Patient's transaction, `patients/{id}/flags` where `kind == "silent"` (Admin SDK) | single field (automatic) |
 
@@ -303,17 +303,17 @@ The list query must carry the sharing filter (built by `clinicianListFilters` in
 
 `npm run seed-live-patient` in `firebase/seed` gives one real account (found or created in Firebase Auth by `--email`) six weeks of invented history under `patients/<uid>`. The record is a normal Patient's: `synthetic: false`, so only the owner and their Clinician read it and alerts apply, with `healthSource: "synthetic"` to label the data, `sharingConsent: "granted"` and the given Clinician. The history comes from the same generator as the Demo Patients (profile `live` in `firebase/seed/src/live-profile.js`). The README lists what it contains.
 
-The contract has no marker field on most documents, so the mock history is marked with what the contract already has:
+The contract has no marker field on most documents, so the seeded history is marked with what the contract already has:
 
 | Collection | Marker | Why it is safe |
 |---|---|---|
 | `daily` | `demoOverride: true` (the id is the date) | The app writes `false`. A date the app has already written is skipped, so the app's record wins. |
 | `checkIns`, `summaries`, `suggestions`, `flags`, `visits` | id starts with `demo-`: `demo-checkin-<date>` (also the Summary id), `demo-suggestion-<date>`, `demo-<kind>-<date>`, `demo-visit-<date>` | Start Check-in uses random ids, the app's crisis flag is `crisis-<millis>`, the silence check's is `silent-<millis>`, and the app's Suggestion ids are `s<millis>`. |
 | `consents` | none: one document per subject | Rewritten (all granted) on every run, never deleted. |
-| the record | none | Rewritten on every run (merged), with `flagLevel` and `flagReasons` from every open flag stamped `sharedWithClinician`, the app's included, and `lastCheckInAtMillis` the later of the mock history's and the app's. |
-| `digests` | not written | The Digest function's. A Digest it made from mock Summaries stays after a reset. |
+| the record | none | Rewritten on every run (merged), with `flagLevel` and `flagReasons` from every open flag stamped `sharedWithClinician`, the app's included, and `lastCheckInAtMillis` the later of the seeded history's and the app's. |
+| `digests` | not written | The Digest function's. A Digest it made from seeded Summaries stays after a reset. |
 
-Without `--reset`, a Patient who already has mock history is refused. With it, the documents with these markers are deleted and the history written again; nothing else is deleted. `npm run seed` never touches this Patient (it deletes only `synthetic == true`).
+Without `--reset`, a Patient who already has seeded history is refused. With it, the documents with these markers are deleted and the history written again; nothing else is deleted. `npm run seed` never touches this Patient (it deletes only `synthetic == true`).
 
 
 ## Security rules

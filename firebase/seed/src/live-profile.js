@@ -1,4 +1,4 @@
-// The live demo Patient's profile: six weeks of invented history for one real test account, so the
+// The live demo Patient's profile: six weeks of invented history for one real Patient account, so the
 // Companion has context to draw on and "what seems to help" has something to learn from. Every
 // value is invented. It is data for the shared generator (generate.js), like the Demo Patients.
 //
@@ -218,7 +218,7 @@ export const live = {
   id: "live-demo", // replaced by the account's uid
   displayName: "Alex",
   synthetic: false,
-  mockHistory: true,
+  seededHistory: true,
   intakeHighlights:
     "Finished a course of TMS six weeks ago with a good response. Works full time as a designer in a " +
     "small studio; the work comes in bursts before deadlines. Moved to the city two years ago and misses " +

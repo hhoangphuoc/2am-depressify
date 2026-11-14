@@ -11,7 +11,7 @@ A wellbeing companion for the time between Visits: a Kotlin Multiplatform Patien
 | `androidApp/` | Android application entry point. |
 | `iosApp/` | XcodeGen spec (`project.yml`) and Swift glue. |
 | `design/` | The Patient and Clinician design prototypes and the screen deck. |
-| `firebase/` | `firebase.json`, Firestore rules, `functions/` (TypeScript, vitest), `hosting/` (the dashboard) and `seed/` (the Demo Patients). |
+| `firebase/` | `firebase.json`, Firestore rules, `functions/` (TypeScript, vitest), `hosting/` (the dashboard) and `seed/` (the Demo Patients and the live demo Patient's seeded history). |
 | `fixtures/` | Fixtures shared by Kotlin and Node tests, such as the Baseline cases. |
 | `gradle/libs.versions.toml` | The only place library versions are pinned. |
 
@@ -391,12 +391,12 @@ The Demo Patients are linked to the Clinician from `--clinician` or `CLINICIAN_E
 
 ## Live demo Patient
 
-`npm run seed-live-patient` gives one real test account six weeks of invented history, so the Companion has context and "what seems to help" has something to learn from. Unlike the Demo Patients, the record is not synthetic: only the account itself and its Clinician can read it, and alerts apply as for any Patient.
+`npm run seed-live-patient` gives one real Patient account six weeks of invented history, so the Companion has context and "what seems to help" has something to learn from. Unlike the Demo Patients, the record is not synthetic: only the account itself and its Clinician can read it, and alerts apply as for any Patient.
 
 ```sh
 cd firebase/seed && npm install
 npm run seed-live-patient -- --email <patient-email>              # Auth and Firestore emulators
-npm run seed-live-patient -- --email <patient-email> --reset      # delete the mock history and write it again
+npm run seed-live-patient -- --email <patient-email> --reset      # delete the seeded history and write it again
 npm run seed-live-patient -- --email <patient-email> --clinician <clinician-email> --project <your-project-id>
                                                                   # a real project (Application Default Credentials)
 ```
@@ -407,7 +407,7 @@ npm run seed-live-patient -- --email <patient-email> --clinician <clinician-emai
 | `--clinician <email>` | The Clinician, also `CLINICIAN_EMAIL`. Required for a real project; the emulator falls back to `clinician@example.com`. It should already be on the allowlist (`npm run allow-clinician`); the command warns if not. |
 | `--display-name <name>` | Default `Alex`. |
 | `--today <date>`, `--seed <n>` | The last day of history and the pseudo-random seed, as for the seed. A real project refuses a `--today` more than a day in the past (the silence check would flag the Patient red) and a seed whose history has a red flag. |
-| `--reset` | Delete this Patient's mock history and write it again. Without it, a Patient who already has mock history is refused. |
+| `--reset` | Delete this Patient's seeded history and write it again. Without it, a Patient who already has seeded history is refused. |
 | `--project <id>` | As for the seed: the emulators by default; a `demo-` project is refused outside them. The Auth emulator goes with the Firestore emulator (`$FIREBASE_AUTH_EMULATOR_HOST`, or `127.0.0.1:9099`); a real project with `FIREBASE_AUTH_EMULATOR_HOST` set is refused. |
 
 **The account.** Found by email, or created with the email verified, the display name and no password. An existing account is reused and its email marked verified. No custom claims are set. The command refuses an account with the Clinician role and an email on the `clinicians` allowlist. It prints the uid, which is also the Patient id.
@@ -421,7 +421,7 @@ npm run seed-live-patient -- --email <patient-email> --clinician <clinician-emai
 - **Flags:** an amber `poor_sleep` flag from a deadline week, cleared by the Clinician after follow-up; an open amber `poor_sleep` flag from the last nights, and `drift` when the Signals hold low for three days. No red flag. All stamped `sharedWithClinician: true`. The Patient is amber on the dashboard.
 - **Two Visits** with PHQ-9 scores (at the TMS end date and 21 days ago), and every Consent granted (each Signal, sharing, ratings, Voice cues). No Digests: the Digest function writes those.
 
-**How reset finds the mock history:** daily records carry `demoOverride: true`, and every other mock id starts with `demo-` (`demo-checkin-<date>`, `demo-suggestion-<date>`, `demo-<kind>-<date>`, `demo-visit-<date>`). `--reset` deletes exactly those and writes them again. What the app or the functions wrote is never deleted: their ids are random or `crisis-…`/`silent-…`, and the app writes daily records with `demoOverride: false`, so a date the app already wrote keeps the app's record. Consents and the record are rewritten; the record's level and latest Check-in also count the app's own flags and Check-ins. Digests are left alone.
+**How reset finds the seeded history:** daily records carry `demoOverride: true`, and every other seeded id starts with `demo-` (`demo-checkin-<date>`, `demo-suggestion-<date>`, `demo-<kind>-<date>`, `demo-visit-<date>`). `--reset` deletes exactly those and writes them again. What the app or the functions wrote is never deleted: their ids are random or `crisis-…`/`silent-…`, and the app writes daily records with `demoOverride: false`, so a date the app already wrote keeps the app's record. Consents and the record are rewritten; the record's level and latest Check-in also count the app's own flags and Check-ins. Digests are left alone.
 
 With your own Google account as Application Default Credentials, the Firebase Auth calls may need a quota project: `gcloud auth application-default set-quota-project <your-project-id>`.
 
