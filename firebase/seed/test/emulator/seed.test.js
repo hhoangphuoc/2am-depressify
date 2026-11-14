@@ -4,7 +4,7 @@
 import { assertFails, assertSucceeds, initializeTestEnvironment } from "@firebase/rules-unit-testing";
 import { deleteApp, initializeApp } from "firebase-admin/app";
 import { getFirestore } from "firebase-admin/firestore";
-import { collection, getDocs, onSnapshot, query, where } from "firebase/firestore";
+import { collection, doc, getDocs, onSnapshot, query, setDoc, where } from "firebase/firestore";
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
@@ -173,4 +173,59 @@ test("the dashboard list orders them red, amber, green and re-sorts live when a 
   } finally {
     stop();
   }
+});
+
+/**
+ * A new Patient record as the app creates it, linked to `email`.
+ * @param {string} email
+ */
+const newPatient = (email) => ({
+  displayName: "Live patient", clinicianEmail: email, intakeHighlights: "", tmsEndDate: null, flagLevel: "green",
+  flagReasons: [], quietHoursStart: 21, quietHoursEnd: 9, lastSeenAtMillis: null, lastCheckInAtMillis: null,
+  healthSource: "device", synthetic: false, sharingConsent: "undecided", sharingChangedAtMillis: null,
+});
+
+/** @param {string} uid */
+const asAnonymousPatient = (uid) => rules.authenticatedContext(uid, { firebase: { sign_in_provider: "anonymous" } }).firestore();
+
+test("the seed allows its Clinician, so the app can link a new Patient to them", async () => {
+  const output = runSeed(["--clinician", "Seeded@Example.com"]);
+  assert.match(output, /Allowed seeded@example\.com in clinicians\./);
+  assert.deepEqual((await db.doc("clinicians/seeded@example.com").get()).data(), { email: "seeded@example.com" });
+  const demo = (await db.doc("patients/demo-steady").get()).data();
+  assert.equal(demo?.clinicianEmail, "seeded@example.com");
+
+  const phone = asAnonymousPatient("seed-allow-phone");
+  await assertSucceeds(setDoc(doc(phone, "patients/seed-allow-phone"), newPatient("seeded@example.com")));
+  await assertFails(setDoc(doc(phone, "patients/seed-allow-phone-2"), newPatient("not-allowed@example.com")));
+
+  runSeed([]); // back to the placeholder Clinician for the other tests
+  assert.ok((await db.doc(`clinicians/${CLINICIAN}`).get()).exists);
+});
+
+test("allow-clinician adds a Clinician to the allowlist, and again changes nothing", async () => {
+  const allow = (/** @type {string[]} */ args) =>
+    execFileSync(process.execPath, ["allow-clinician.js", ...args], { cwd: seedDir, env: process.env, encoding: "utf8" });
+  const phone = asAnonymousPatient("allow-cli-phone");
+  await assertFails(setDoc(doc(phone, "patients/allow-cli-phone"), newPatient("new-clinician@example.com")));
+
+  assert.match(allow(["--email", "New-Clinician@example.com"]), /Allowed new-clinician@example\.com in clinicians/);
+  allow(["--email", "new-clinician@example.com"]);
+  assert.deepEqual((await db.doc("clinicians/new-clinician@example.com").get()).data(), { email: "new-clinician@example.com" });
+  await assertSucceeds(setDoc(doc(phone, "patients/allow-cli-phone"), newPatient("new-clinician@example.com")));
+});
+
+test("allow-clinician and the seed refuse a real project without a real Clinician, writing nothing", () => {
+  const env = { ...process.env, FIRESTORE_EMULATOR_HOST: "" };
+  const fails = (/** @type {string} */ script, /** @type {string[]} */ args) => {
+    try {
+      execFileSync(process.execPath, [script, ...args], { cwd: seedDir, env, encoding: "utf8", stdio: "pipe" });
+    } catch (error) {
+      return String(/** @type {any} */ (error).stderr);
+    }
+    throw new Error(`${script} ${args.join(" ")} succeeded`);
+  };
+  assert.match(fails("seed.js", ["--project", "twoam-prod"]), /needs the Clinician's email/);
+  assert.match(fails("seed.js", ["--project", "twoam-prod", "--clinician", CLINICIAN]), /emulator placeholder/);
+  assert.match(fails("allow-clinician.js", ["--project", "twoam-prod"]), /--email <email> is required/);
 });

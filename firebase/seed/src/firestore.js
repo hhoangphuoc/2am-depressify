@@ -6,9 +6,11 @@
 /** @typedef {import("./generate.js").DemoPatient} DemoPatient */
 /** @typedef {import("./generate.js").SeedOptions} SeedOptions */
 
-import { generateDemoPatients } from "./generate.js";
+import { DEMO_CLINICIAN_EMAIL, generateDemoPatients } from "./generate.js";
 
 export const PATIENTS = "patients";
+/** The allowlist of Clinicians a new Patient may link to, keyed by email. */
+export const CLINICIANS = "clinicians";
 
 /** The collections under a Patient record that the seed writes, by DemoPatient field. */
 export const SEEDED_COLLECTIONS = /** @type {const} */ ([
@@ -56,13 +58,26 @@ export async function writeDemoPatients(db, patients) {
 }
 
 /**
- * Deletes the previous Demo Patients and writes new ones for `options.today`.
+ * Adds a Clinician to the allowlist, so the rules let a new Patient link to them. Writing it again
+ * changes nothing.
+ * @param {Firestore} db
+ * @param {string} email trimmed and lower case (see `clinicianEmail` in cli.js)
+ */
+export async function allowClinician(db, email) {
+  await db.collection(CLINICIANS).doc(email).set({ email });
+}
+
+/**
+ * Deletes the previous Demo Patients, writes new ones for `options.today`, and allows their
+ * Clinician.
  * @param {Firestore} db
  * @param {SeedOptions} options
  */
 export async function reseed(db, options) {
-  const patients = generateDemoPatients(options);
+  const clinicianEmail = options.clinicianEmail ?? DEMO_CLINICIAN_EMAIL;
+  const patients = generateDemoPatients({ ...options, clinicianEmail });
   const deleted = await deleteDemoPatients(db);
   const documents = await writeDemoPatients(db, patients);
-  return { deleted, created: patients.map((p) => p.id), documents };
+  await allowClinician(db, clinicianEmail);
+  return { deleted, created: patients.map((p) => p.id), documents, allowed: clinicianEmail };
 }

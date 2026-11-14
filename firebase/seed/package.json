@@ -8,6 +8,7 @@
   },
   "scripts": {
     "seed": "node seed.js",
+    "allow-clinician": "node allow-clinician.js",
     "typecheck": "tsc -p tsconfig.json",
     "test": "npm run typecheck && node --test \"test/unit/*.test.js\"",
     "test:emulator": "node --test --test-concurrency=1 \"test/emulator/*.test.js\""

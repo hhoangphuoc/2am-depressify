@@ -51,6 +51,7 @@ import { createRandom, hashString } from "./random.js";
  * @property {string} [clinicianEmail]
  */
 
+/** The placeholder Clinician, for the emulator only. A real project is seeded with --clinician. */
 export const DEMO_CLINICIAN_EMAIL = "clinician@example.com";
 export const DEFAULT_SEED = 20_260_514;
 export const DAILY_RECORDS = 42;

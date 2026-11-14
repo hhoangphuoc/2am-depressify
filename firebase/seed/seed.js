@@ -3,7 +3,8 @@
 //
 //   npm run seed                                   # emulator, today in Europe/Helsinki
 //   npm run seed -- --today 2026-11-14             # a fixed day, for a rehearsal
-//   npm run seed -- --project my-real-project      # a real project (Application Default Credentials)
+//   npm run seed -- --project my-real-project --clinician <email>
+//                                                  # a real project (Application Default Credentials)
 import { deleteApp, initializeApp } from "firebase-admin/app";
 import { getFirestore } from "firebase-admin/firestore";
 import { USAGE, parseCommand } from "./src/cli.js";
@@ -33,6 +34,7 @@ async function main() {
   });
   console.log(`Deleted ${result.deleted.length} Demo Patient(s): ${result.deleted.join(", ") || "none"}.`);
   console.log(`Created ${result.created.join(", ")} (${result.documents} documents).`);
+  console.log(`Allowed ${result.allowed} in clinicians.`);
   await deleteApp(app);
 }
 
