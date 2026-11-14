@@ -1,18 +1,23 @@
 // Start and Finish Check-in against the emulators.
 //
-// 1. The handlers with the Admin SDK store against the Firestore emulator, with a fake token client
-//    and a fake text model: Start creates the Check-in, Finish writes the Summary, the Check-in's
-//    fields and the Patient's times in one transaction, a retry overwrites, and the Patient then
-//    reads the Summary through the security rules (which the Admin SDK writes bypass).
+// 1. The handlers with the Admin SDK store against the Firestore emulator, with a fake token client,
+//    a fake text model and a fake Decisions client: Start creates the Check-in, Finish writes the
+//    Summary, the Check-in's fields, the flags the Decisions answers raise (#20) and the Patient's
+//    times and level in one transaction, a retry overwrites and never duplicates a flag, and the
+//    Patient then reads the Summary through the security rules (which the Admin SDK writes bypass).
+//    The Outcome (#21) lands on the previous accepted Suggestion in the same transaction, with the
+//    day's steps from the daily records, once.
 // 2. When the Functions emulator is running too, the deployed callables are called through the
 //    Firebase JS SDK as the app calls them. Only paths that never reach Gemini are exercised there:
-//    refusals, and a finish of a silent Check-in (which never calls the model). So no request can
-//    reach Gemini even with a key in .secret.local:
+//    refusals, and a finish of a silent Check-in (which calls neither the text model nor the
+//    Decisions API). So no request can reach Gemini even with a key in .secret.local. A silent
+//    Check-in with the crisis marker raises red crisis there, and the deployed `redFlagAlert`
+//    writes the Clinician's email:
 //      cd firebase/functions && npm run build && cd ..
 //      firebase emulators:exec --only auth,firestore,functions --project demo-twoam "npm --prefix functions run test:emulator"
 // 3. Opt-in only, never by default: CHECKIN_REAL_GEMINI=1 with GEMINI_API_KEY in the environment runs
-//    the handlers with the REAL token client and text model against the Firestore emulator, with
-//    fictional text. Nothing is written to a real project.
+//    the handlers with the REAL token client, text model and Decisions client against the Firestore
+//    emulator, with fictional text. Nothing is written to a real project.
 import { deleteApp as deleteAdminApp, initializeApp as initializeAdminApp } from "firebase-admin/app";
 import { getFirestore as getAdminFirestore } from "firebase-admin/firestore";
 import { deleteApp, initializeApp, type FirebaseApp } from "firebase/app";
@@ -20,12 +25,18 @@ import { connectAuthEmulator, getAuth, signInAnonymously } from "firebase/auth";
 import { connectFirestoreEmulator, doc, getDoc, getFirestore, setDoc, updateDoc } from "firebase/firestore";
 import { connectFunctionsEmulator, getFunctions, httpsCallable } from "firebase/functions";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { mailIdFor } from "../../src/alerts";
 import { adminCheckInStore, finishCheckInHandler, startCheckInHandler } from "../../src/checkInFunctions";
+import { CRISIS_FROM_CHECK_IN_REASON, CRISIS_FROM_REVIEW_REASON, DECLINE_REASON } from "../../src/decisions";
+import { fetchDecisionsClient } from "../../src/decisionsApi";
 import { genaiTextClient } from "../../src/gemini";
+import { MAX_CHECK_IN_STARTS_PER_HOUR, PATIENT_LIMITS } from "../../src/limits";
 import { fetchLiveTokenClient } from "../../src/live";
 import { REGION } from "../../src/region";
+import { outcomeDay } from "../../src/outcomes";
 import { newPatientDoc, type PatientDoc, type Summary } from "../../src/types";
-import { FakeLiveTokens, FakeTextModel } from "../fakes";
+import { whatHelps, whatHelpsWindow } from "../../../hosting/js/lib/what-helps.js";
+import { FakeDecisions, FakeLiveTokens, FakeTextModel, decisionsReply, decisionsTimeout } from "../fakes";
 
 const PROJECT_ID = "demo-twoam";
 const HOST = "127.0.0.1";
@@ -58,10 +69,15 @@ async function patient(id: string, overrides: Partial<PatientDoc> = {}) {
   await adminDb.collection("patients").doc(id).set({ ...newPatientDoc("Check-in emulator patient", CLINICIAN_EMAIL), sharingConsent: "granted", ...overrides });
 }
 const docData = async (path: string) => (await adminDb.doc(path).get()).data();
+const createdMail: string[] = [];
 const count = async (path: string) => (await adminDb.collection(path).get()).size;
 
 afterAll(async () => {
-  for (const id of createdPatients) await adminDb.recursiveDelete(adminDb.collection("patients").doc(id));
+  for (const id of createdPatients) {
+    await adminDb.recursiveDelete(adminDb.collection("patients").doc(id));
+    await adminDb.collection(PATIENT_LIMITS).doc(id).delete();
+  }
+  await Promise.all(createdMail.map((id) => adminDb.collection("mail").doc(id).delete()));
   await deleteAdminApp(adminApp);
 });
 
@@ -93,12 +109,12 @@ describe("Check-in handlers with the Admin SDK on the Firestore emulator", () =>
     const checkInPath = `patients/${uid}/checkIns/${started.checkInId}`;
     expect(await docData(checkInPath)).toEqual({
       id: started.checkInId, startedAtMillis: 1_000, endedAtMillis: null, mood: null, energy: null, sleepQuality: null,
-      voiceCues: [], crisis: false, sharedWithClinician: true,
+      voiceCues: [], crisis: false, assessment: null, previousTried: null, sharedWithClinician: true,
     });
 
     const result = await finishCheckInHandler(
       { data: { patientId: uid, checkInId: started.checkInId, draft: DRAFT, todayLines: ["Steps were usual."] }, auth },
-      { store, textModel: new FakeTextModel(MODEL_JSON), clock: () => 200_000 },
+      { store, textModel: new FakeTextModel(MODEL_JSON), decisions: new FakeDecisions(), clock: () => 200_000 },
     );
     const summaryPath = `patients/${uid}/summaries/${started.checkInId}`;
     expect(await docData(summaryPath)).toEqual(result.summary);
@@ -108,15 +124,16 @@ describe("Check-in handlers with the Admin SDK on the Firestore emulator", () =>
     });
     expect(await docData(checkInPath)).toEqual({
       id: started.checkInId, startedAtMillis: 1_000, endedAtMillis: 200_000, mood: 4, energy: null, sleepQuality: 3,
-      voiceCues: DRAFT.voiceCues, crisis: false, sharedWithClinician: true,
+      voiceCues: DRAFT.voiceCues, crisis: false, assessment: "assessed", previousTried: null, sharedWithClinician: true,
     });
+    expect(await count(`patients/${uid}/flags`)).toBe(0);
     expect(await docData(`patients/${uid}`)).toMatchObject({ lastCheckInAtMillis: 200_000, lastSeenAtMillis: 200_000 });
 
     // A retry without usable model output keeps the one Summary, its stamp and creation time.
     await adminDb.doc(`patients/${uid}`).update({ sharingConsent: "declined" });
     await finishCheckInHandler(
       { data: { patientId: uid, checkInId: started.checkInId, draft: DRAFT }, auth },
-      { store, textModel: new FakeTextModel("not json"), clock: () => 300_000 },
+      { store, textModel: new FakeTextModel("not json"), decisions: new FakeDecisions(), clock: () => 300_000 },
     );
     expect(await count(`patients/${uid}/summaries`)).toBe(1);
     expect(await docData(summaryPath)).toMatchObject({ themes: ["Library walk", "Calm reading"], createdAtMillis: 200_000, sharedWithClinician: true });
@@ -135,11 +152,101 @@ describe("Check-in handlers with the Admin SDK on the Firestore emulator", () =>
     await expect(
       finishCheckInHandler(
         { data: { patientId: uid, checkInId: "never-started", draft: DRAFT }, auth: { uid, token: {} } },
-        { store, textModel: new FakeTextModel(MODEL_JSON) },
+        { store, textModel: new FakeTextModel(MODEL_JSON), decisions: new FakeDecisions() },
       ),
     ).rejects.toMatchObject({ code: "not-found" });
     expect((await adminDb.doc(`patients/${uid}/summaries/never-started`).get()).exists).toBe(false);
     expect((await adminDb.doc(`patients/${uid}/checkIns/never-started`).get()).exists).toBe(false);
+  });
+
+  it("Decisions answers raise flags and the level in the finish transaction; a retry adds none; a failure marks the assessment unavailable", async () => {
+    const id = `flags-${uid}`;
+    await patient(id, { flagLevel: "amber", flagReasons: ["Poor sleep on the last three nights."] });
+    const auth = { uid: id, token: {} };
+    const startOne = async () =>
+      (await startCheckInHandler({ data: { patientId: id, brief: BRIEF }, auth }, { store, liveTokens: new FakeLiveTokens() })).checkInId;
+    const finishOne = (checkInId: string, decisions: FakeDecisions) =>
+      finishCheckInHandler({ data: { patientId: id, checkInId, draft: DRAFT }, auth }, { store, textModel: new FakeTextModel(MODEL_JSON), decisions, clock: () => 500_000 });
+
+    const checkInId = await startOne();
+    const result = await finishOne(checkInId, new FakeDecisions(decisionsReply({ crisis: 0.93, decline: 0.99 })));
+    expect(Object.keys(result).sort()).toEqual(["checkInId", "minimal", "summary"]);
+    expect(await docData(`patients/${id}/flags/crisis-${checkInId}`)).toEqual({
+      level: "red", kind: "crisis", reason: CRISIS_FROM_REVIEW_REASON, raisedAtMillis: 500_000, clearedAtMillis: null, sharedWithClinician: true,
+    });
+    expect(await docData(`patients/${id}/flags/decline-${checkInId}`)).toMatchObject({ level: "amber", kind: "decline", reason: DECLINE_REASON });
+    expect(await docData(`patients/${id}`)).toMatchObject({
+      flagLevel: "red",
+      flagReasons: [CRISIS_FROM_REVIEW_REASON, "Poor sleep on the last three nights.", DECLINE_REASON],
+    });
+
+    // The phone's reply was lost and it retries: the same two flags, no more.
+    await finishOne(checkInId, new FakeDecisions(decisionsReply({ crisis: 0.93, decline: 0.99 })));
+    expect(await count(`patients/${id}/flags`)).toBe(2);
+
+    // A later Check-in whose review times out: no flag, the level stays, the Check-in says so.
+    const later = await startOne();
+    await finishOne(later, decisionsTimeout());
+    expect(await count(`patients/${id}/flags`)).toBe(2);
+    expect(await docData(`patients/${id}/checkIns/${later}`)).toMatchObject({ assessment: "unavailable", previousTried: null });
+    expect(await docData(`patients/${id}`)).toMatchObject({ flagLevel: "red" });
+  });
+
+  it("the Outcome lands on the previous accepted Suggestion in the finish transaction, with the day's steps, once", async () => {
+    const auth = { uid, token: {} };
+    const DAY = 86_400_000;
+    const now = Date.UTC(2026, 10, 14, 17, 0); // 19:00 in Helsinki
+    const madeAt = now - DAY;
+    const suggestionPath = (id: string) => `patients/${uid}/suggestions/${id}`;
+    const open = { kind: "walk", details: "Walk to the library", status: "accepted", booked: false, tried: null, felt: null, objectiveChange: null, outcomeScore: null, outcomeCheckInId: null, sharedWithClinician: true };
+    await adminDb.doc(suggestionPath("s-walk")).set({ ...open, id: "s-walk", suggestedAtMillis: madeAt });
+    await adminDb.doc(suggestionPath("s-declined")).set({ ...open, id: "s-declined", status: "declined", suggestedAtMillis: madeAt + 60_000 });
+    // Five days of 5000 steps before, then 5500 that day with no stored comparison: +2 by the Baseline rule.
+    for (let d = 0; d <= 5; d++) {
+      const date = outcomeDay(madeAt - d * DAY);
+      await adminDb.doc(`patients/${uid}/daily/${date}`).set({
+        date, values: { steps: d === 0 ? 5500 : 5000 }, vsBaseline: { steps: null }, composite: null, demoOverride: false, sharedWithClinician: true,
+      });
+    }
+    const started = await startCheckInHandler({ data: { patientId: uid, brief: BRIEF }, auth }, { store, liveTokens: new FakeLiveTokens(), clock: () => now });
+    const finishOne = (reply: Record<string, unknown>) =>
+      finishCheckInHandler(
+        { data: { patientId: uid, checkInId: started.checkInId, draft: DRAFT }, auth },
+        { store, textModel: new FakeTextModel(JSON.stringify({ ...JSON.parse(MODEL_JSON), ...reply })), decisions: new FakeDecisions(), clock: () => now + 180_000 },
+      );
+
+    await finishOne({ previousTried: true, previousFelt: 4 });
+    const recorded = await docData(suggestionPath("s-walk"));
+    expect(recorded).toMatchObject({ ...open, id: "s-walk", tried: true, felt: 4, objectiveChange: expect.any(Number), outcomeScore: expect.any(Number), outcomeCheckInId: started.checkInId });
+    expect(recorded!.objectiveChange).toBeCloseTo(2, 9);
+    expect(recorded!.outcomeScore).toBeCloseTo(0.65, 9);
+    expect(await docData(suggestionPath("s-declined"))).toMatchObject({ tried: null, outcomeScore: null, outcomeCheckInId: null });
+
+    // A retry hears it differently, and changes nothing.
+    await finishOne({ previousTried: false });
+    expect(await docData(suggestionPath("s-walk"))).toEqual(recorded);
+
+    // The dashboard's "what seems to help" reads the new score.
+    const suggestions = (await adminDb.collection(`patients/${uid}/suggestions`).get()).docs.map((d) => d.data());
+    const helps = whatHelps(suggestions, { ...whatHelpsWindow(outcomeDay(now)), timeZone: "Europe/Helsinki" });
+    expect(helps.rows.map((r) => [r.kind, r.n, r.feelings.better])).toEqual([["walk", 1, 1]]);
+
+    // The phone reads the Outcome but cannot change it.
+    expect((await getDoc(doc(phoneDb, suggestionPath("s-walk")))).data()).toMatchObject({ tried: true, felt: 4 });
+    for (const field of [{ outcomeScore: 1 }, { tried: false }, { outcomeCheckInId: null }]) {
+      await expect(updateDoc(doc(phoneDb, suggestionPath("s-walk")), field)).rejects.toMatchObject({ code: "permission-denied" });
+    }
+  });
+
+  it("the store records each start, refuses the one past the hourly cap, and no client reads the record", async () => {
+    const id = `cap-${uid}`;
+    createdPatients.push(id);
+    const start = (n: number) => store.reserveStart(id, { checkInId: `c${n}`, uid, startedAtMillis: 1_000 + n });
+    for (let i = 0; i < MAX_CHECK_IN_STARTS_PER_HOUR; i++) expect(await start(i)).toBe(true);
+    expect(await start(MAX_CHECK_IN_STARTS_PER_HOUR)).toBe(false);
+    expect(await store.getStart(id, "c3")).toEqual({ checkInId: "c3", uid, startedAtMillis: 1_003 });
+    expect(await store.getStart(id, `c${MAX_CHECK_IN_STARTS_PER_HOUR}`)).toBeUndefined();
+    await expect(getDoc(doc(phoneDb, `${PATIENT_LIMITS}/${uid}`))).rejects.toMatchObject({ code: "permission-denied" });
   });
 });
 
@@ -211,6 +318,34 @@ describe.skipIf(!withFunctions)("Check-in callables through the Functions emulat
     expect(record?.lastSeenAtMillis).toEqual(expect.any(Number));
   });
 
+  it("a silent Check-in with the crisis marker raises red crisis, and redFlagAlert emails the Clinician once", async () => {
+    const crisisCheckInId = "emulator-silent-crisis";
+    await startCheckInHandler({ data: { patientId: uid, brief: BRIEF }, auth: { uid, token: {} } }, { store, liveTokens: new FakeLiveTokens(), newId: () => crisisCheckInId });
+    const draft = { turns: [{ speaker: "companion", text: "Hi, are you there?" }], voiceCues: [], suggestions: [], crisis: true };
+    const response = (await phone.finish({ patientId: uid, checkInId: crisisCheckInId, draft })).data as Record<string, unknown>;
+    // The phone hears nothing of the flag.
+    expect(Object.keys(response).sort()).toEqual(["checkInId", "minimal", "summary"]);
+    const flagId = `crisis-${crisisCheckInId}`;
+    expect(await docData(`patients/${uid}/flags/${flagId}`)).toMatchObject({ level: "red", kind: "crisis", reason: CRISIS_FROM_CHECK_IN_REASON, sharedWithClinician: true });
+    expect(await docData(`patients/${uid}`)).toMatchObject({ flagLevel: "red" });
+    expect(await docData(`patients/${uid}/checkIns/${crisisCheckInId}`)).toMatchObject({ crisis: true, assessment: null });
+
+    const mailId = mailIdFor(uid, flagId);
+    createdMail.push(mailId);
+    const deadline = Date.now() + 15_000;
+    let mail: Record<string, unknown> | undefined;
+    while (!mail && Date.now() < deadline) {
+      mail = await docData(`mail/${mailId}`);
+      if (!mail) await new Promise((resolve) => setTimeout(resolve, 250));
+    }
+    expect(mail).toMatchObject({ to: CLINICIAN_EMAIL, message: { subject: "[CRISIS] Red flag for Check-in emulator patient: crisis in a Check-in" } });
+    expect((mail as { message: { text: string } }).message.text).toContain(CRISIS_FROM_CHECK_IN_REASON);
+
+    // A retry raises no second flag, so no second email.
+    await phone.finish({ patientId: uid, checkInId: crisisCheckInId, draft });
+    expect((await adminDb.collection(`patients/${uid}/flags`).get()).docs.map((d) => d.id)).toEqual([flagId]);
+  });
+
   it("finish refuses another user, a signed-out caller and a Check-in that was never started", async () => {
     const draft = { turns: [] };
     await expect(other.finish({ patientId: uid, checkInId, draft })).rejects.toMatchObject({ code: "functions/permission-denied" });
@@ -223,7 +358,7 @@ describe.skipIf(!withFunctions)("Check-in callables through the Functions emulat
 const realGemini = process.env.CHECKIN_REAL_GEMINI === "1" && !!process.env.GEMINI_API_KEY;
 
 describe.skipIf(!realGemini)("OPT-IN: the handlers with the real Gemini API, Firestore emulator only", () => {
-  it("mints a real Live token and makes a real Summary from fictional text", { timeout: 60_000 }, async () => {
+  it("mints a real Live token, makes a real Summary and a real review from fictional text", { timeout: 60_000 }, async () => {
     const key = process.env.GEMINI_API_KEY!;
     const id = "checkin-real-gemini-patient";
     await patient(id);
@@ -232,9 +367,12 @@ describe.skipIf(!realGemini)("OPT-IN: the handlers with the real Gemini API, Fir
     expect(started.token).toMatch(/^auth_tokens\//);
     const result = await finishCheckInHandler(
       { data: { patientId: id, checkInId: started.checkInId, draft: DRAFT }, auth },
-      { store, textModel: genaiTextClient(key) },
+      { store, textModel: genaiTextClient(key), decisions: fetchDecisionsClient(key) },
     );
     expect(result.minimal).toBe(false);
+    // The fictional Check-in is routine: reviewed, nothing raised.
+    expect(await docData(`patients/${id}/checkIns/${started.checkInId}`)).toMatchObject({ assessment: "assessed" });
+    expect(await count(`patients/${id}/flags`)).toBe(0);
     expect(result.summary.themes.length).toBeGreaterThan(0);
     expect(result.summary.voiceCues).toEqual(DRAFT.voiceCues);
   });

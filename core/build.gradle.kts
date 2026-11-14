@@ -59,4 +59,7 @@ tasks.named<Test>("jvmTest") {
     // The Signal rules' thresholds and reasons, for SignalRulesFixtureTest (the seed reads it too).
     systemProperty("signal.rules.fixture", rootProject.file("fixtures/flags/signal-rules.json").path)
     inputs.file(rootProject.file("fixtures/flags/signal-rules.json"))
+    // The shared Outcome fixture (#21), for OutcomeFixtureTest.
+    systemProperty("outcome.fixtures", rootProject.file("fixtures/outcomes").path)
+    inputs.dir(rootProject.file("fixtures/outcomes"))
 }

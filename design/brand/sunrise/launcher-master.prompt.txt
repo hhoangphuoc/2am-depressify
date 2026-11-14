@@ -1,0 +1,16 @@
+Use case: precise-object-edit.
+Asset type: standalone square Android launcher artwork, a crisp professional brand graphic.
+
+EDIT the supplied image /Users/hhoangphuoc/Downloads/Depressify_Sunrise_Logo.png. It is the edit target and chosen identity, not merely inspiration. Refine this same logo into a launcher mark using the app theme colors. Preserve its recognizable right-facing human head profile and exact caring relationship of the broad supporting hand cradling it and holding a short two-leaf sprout. Preserve the hope-and-self-care narrative of cloud, rolling hills and sunrise inside the head. This is the same identity without its wordmark, not a different or abstract design.
+
+Canvas: square, opaque, edge-to-edge uniform paper #FAFAF7 background. No outer rounded tile; the launcher applies the mask. Center the complete profile + supporting hand + sprout as ONE cohesive mark wholly inside the middle 60% of the square in both dimensions, with balanced even margins and comfortable space on every side.
+
+Remove ALL lettering and the entire Depressify wordmark, including its detached leaf dot. There must be NO text anywhere.
+
+Preserve the reference's smooth right-facing head silhouette including forehead, nose, lips, chin and neck, its cloud in the upper back of the head, its rising sun behind rolling hills, its broad gently cupped supporting hand below, and its sprout at the right-hand tip. Keep a clearly visible broad pale negative-space gap between head/landscape and supporting hand.
+
+Simplify ONLY for small-size launcher legibility: exactly ONE cloud, exactly TWO rolling hills, a luminous rising ivory sun with exactly THREE thick short separated rays, NO raindrop marks, and a short sprout with a thick stem and exactly TWO leaves. Smooth broad silhouettes, comfortably separate forms, robust contrast. Do not add interior details, extra leaves, extra clouds, or more landscape layers.
+
+Restrict the entire artwork to this cohesive palette: deep blue-green ink #233C4C; teal accent #326B73; soft sea-glass #8CC1C2; cool pale blue-gray #E9EDF0; soft ivory-white #E4EBE8; paper #FAFAF7. Deep ink head outer silhouette and broad hand; teal secondary planes; sea-glass hills and leaves; softly luminous ivory/mist rising sun and rays; cool pale blue-gray cloud. Muted tonal transitions within this palette are acceptable only where they preserve the original illustration. Remove the source's rainbow blues, purples, yellow, orange and lime. No saturated rainbow and no yellow sun. The sun's luminosity comes from pale color contrast, not glow effects.
+
+Clean sharp graphic edges and polished vector-like finish. No texture, 3D, shadows, app mockup, frame, badges, slogans, clinical claims, or watermark. Opaque background; transparent_background false. Produce ONE edited image.
