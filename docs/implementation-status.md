@@ -48,7 +48,10 @@ main
 | | Writes Visits, the TMS end date and the display name. |
 | | Clears a flag by setting `clearedAtMillis` only, and can reset the Patient's level and reasons. |
 | Anyone signed in, on a Patient marked synthetic | The Patient's access (demo shortcut). |
-| Everyone | No client reads or writes `mail`. Signed-out users read nothing. |
+| Patient, creating their record | Links only to a Clinician whose email has a document in `clinicians` (the allowlist). |
+| Everyone | No client reads or writes `mail` or `clinicians`. Signed-out users read nothing. |
+
+The Clinician's email is configuration, never code: the rules check the `clinicians/{email}` allowlist, which only the Admin SDK writes (`npm run allow-clinician`, and the seed for the Clinician it seeds for). The app reads the email from `secrets.properties` (Android) or `Secrets.plist` (iOS).
 
 Not enforced for the demo: `email_verified`. Production must require it (see the comment in the rules).
 
@@ -89,7 +92,15 @@ There is also a trivial `health` endpoint.
 
 - **Deterministic:** pass `--today` and `--seed` to get the same data every time.
 - **Target:** the emulator by default; pass `--project <id>` for a real project.
+- **Clinician:** `--clinician <email>` or `CLINICIAN_EMAIL`. Only the emulator falls back to the placeholder `clinician@example.com`; a real project must be given the email and refuses the placeholder. The seed also adds that Clinician to the `clinicians` allowlist.
+- **`npm run allow-clinician -- --email <email> [--project <id>]`** adds a Clinician to the allowlist, with the same targeting rules.
 - **Shared Baseline fixture:** `fixtures/baseline/baseline-cases.json`, with a 14-day median, at least 5 valid days, and a floor on the spread. The seed and the dashboard check it now, and #16 must check it from Kotlin.
+
+### Configuration for a real project
+
+- **Clinician's email:** never in code (the repository is public). Android reads `demo.clinicianEmail` from `secrets.properties` into `BuildConfig.CLINICIAN_EMAIL`; iOS reads `ClinicianEmail` from `iosApp/iosApp/Secrets.plist`. Both pass it into `shared` as `DemoConfig` through Koin. Only the emulator falls back to `clinician@example.com`.
+- **App id:** `app.depressify` on Android and iOS; the app is called Depressify. The Kotlin packages are still `com.twoam.companion`.
+- **Setup steps:** "Set up a real Firebase project" in the [README](../README.md#set-up-a-real-firebase-project).
 
 ## Gemini and Google API integrations
 
@@ -122,16 +133,16 @@ Useful for the merge:
 
 ## Verification
 
-Results on `fix/review-decisions`, all from local runs:
+Results on `chore/real-project-config` (on top of `fix/review-decisions`), all from local runs:
 
 | Suite | Command | Result |
 |---|---|---|
-| Kotlin `core` and `shared`, Android build | `./gradlew :core:jvmTest :shared:jvmTest :androidApp:assembleDebug` | pass |
-| Functions | `cd firebase/functions && npm test` | 122 pass |
-| Seed | `cd firebase/seed && npm test` | 64 pass |
+| Kotlin `core` and `shared`, Android build | `./gradlew :core:jvmTest :shared:jvmTest :androidApp:assembleDebug` | 19 + 62 pass, APK builds |
+| Functions | `cd firebase/functions && npm test` | 123 pass |
+| Seed | `cd firebase/seed && npm test` | 78 pass |
 | Dashboard helpers | `cd firebase/hosting && node --test` | 308 pass |
-| Rules, functions and end-to-end on the emulators | `firebase emulators:exec --only auth,firestore,functions --project demo-twoam "npm --prefix functions run test:emulator"` | 75 pass |
-| Seed on the emulator | `... "npm --prefix seed run test:emulator"` | 11 pass |
+| Rules, functions and end-to-end on the emulators | `firebase emulators:exec --only auth,firestore,functions --project demo-twoam "npm --prefix functions run test:emulator"` | 78 pass |
+| Seed on the emulator | `... "npm --prefix seed run test:emulator"` | 14 pass |
 
 **Not verified (needs a person, hardware or credentials):**
 - Deploying to a real Firebase project.

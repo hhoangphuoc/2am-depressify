@@ -35,9 +35,35 @@ There is no `google-services.json` and no Google Services plugin. The Android ap
   firebase.apiKey=AIza...
   # Leave empty to stop using the emulators in debug builds
   firebase.emulatorHost=
+  # The Clinician a new Patient is linked to (must be allowed, see below)
+  demo.clinicianEmail=<clinician-email>
   ```
 
-iOS reads `iosApp/iosApp/GoogleService-Info.plist` (gitignored) when it exists, and otherwise uses `demo-twoam` and the emulators. Register the iOS app with the bundle ID `app.depressify` (`BUNDLE_ID` in `iosApp/Configuration/Config.xcconfig`). The app is called Depressify on both platforms. The dashboard uses the emulators when served from `localhost`, and the deployed project's `/__/firebase/init.json` otherwise. The demo Clinician email is `DemoConfig.CLINICIAN_EMAIL` in `shared`.
+iOS reads `iosApp/iosApp/GoogleService-Info.plist` (gitignored) when it exists, and otherwise uses `demo-twoam` and the emulators. Register the iOS app with the bundle ID `app.depressify` (`BUNDLE_ID` in `iosApp/Configuration/Config.xcconfig`). The app is called Depressify on both platforms. The dashboard uses the emulators when served from `localhost`, and the deployed project's `/__/firebase/init.json` otherwise.
+
+### The Clinician's email
+
+The repository is public, so the Clinician's email is configuration, never code. The app links every new Patient to it, and the security rules accept the link only if the email has a document in the `clinicians` allowlist in Firestore, which only the Admin SDK writes.
+
+| Where | Setting | Without it |
+|---|---|---|
+| Android app | `demo.clinicianEmail` in `secrets.properties` (becomes `BuildConfig.CLINICIAN_EMAIL`) | `clinician@example.com` for the `demo-twoam` emulator project; with a real `firebase.projectId` the build fails |
+| iOS app | `ClinicianEmail` (string) in a gitignored `iosApp/iosApp/Secrets.plist`, or in `Info.plist` | `clinician@example.com` with the emulators; with `GoogleService-Info.plist` the app stops at launch |
+| Allowlist | `npm run allow-clinician -- --email <clinician-email> [--project <project-id>]` in `firebase/seed` | a new Patient cannot create their record |
+| Seed | `--clinician <clinician-email>` or `CLINICIAN_EMAIL` (the option wins); the seed also allows that email | `clinician@example.com` in the emulator; a real project (`--project`) refuses to seed |
+
+Emails are stored trimmed and in lower case, as Firebase Auth puts them in the sign-in token. A minimal `Secrets.plist`:
+
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>ClinicianEmail</key>
+	<string>clinician-email-here</string>
+</dict>
+</plist>
+```
 
 ## Build
 
@@ -73,16 +99,43 @@ firebase emulators:exec --only auth,firestore --project demo-twoam "npm --prefix
 
 The rules are described, with a who-can-do-what table, in [`docs/firestore-schema.md`](docs/firestore-schema.md#security-rules).
 
-## Deploy the security rules
+## Set up a real Firebase project
 
-Deploying needs a real Firebase project and a signed-in CLI (`firebase login`). Run the rules tests first, then deploy the rules with the indexes (the dashboard's latest-Digest query needs the composite index in `firestore.indexes.json`; the emulator does not check indexes):
+The Firestore database and every function are in `europe-north1` (Finland); the functions' region is `REGION` in `firebase/functions/src/region.ts`, and the dashboard's copy is checked against it. Real IDs, keys and the Clinician's email go only into gitignored files (`secrets.properties`, `GoogleService-Info.plist`, `Secrets.plist`) or into Firestore, never into a commit. Deploying functions needs the Blaze plan.
 
-```sh
-cd firebase
-firebase deploy --only firestore:rules,firestore:indexes --project <your-project-id>
-```
+1. **Sign in and add the project under an alias.** `.firebaserc` keeps `demo-twoam` as the default so that local runs and tests never reach a real project, so name the real one explicitly every time:
+   ```sh
+   firebase login
+   cd firebase
+   firebase use --add        # pick the project, alias it "prod"
+   firebase use default      # back to demo-twoam for local work
+   ```
+   `firebase use --add` writes the alias into `.firebaserc`. A project ID is not a secret, but leave that change out of commits unless the team wants it.
+2. **In the Firebase console:** enable the Anonymous and Email/Password sign-in providers, add the Clinician as a user (Authentication, Users, Add user), and register the apps: Android package name `app.depressify`, iOS bundle ID `app.depressify`. Put the apps' values in `secrets.properties` (with `demo.clinicianEmail`) and `iosApp/iosApp/GoogleService-Info.plist` plus `Secrets.plist`, as above.
+3. **Deploy the rules and indexes.** Run the rules tests first. The dashboard's latest-Digest query needs the composite index in `firestore.indexes.json` (the emulator does not check indexes). Before real Patients use it, require `email_verified` in `authEmail()` in `firestore.rules` (see the comment there).
+   ```sh
+   firebase deploy --only firestore:rules,firestore:indexes --project prod
+   ```
+4. **Allow the Clinician.** The seed commands use the Admin SDK with Application Default Credentials and take the project ID, not the alias:
+   ```sh
+   gcloud auth application-default login
+   cd seed && npm install
+   npm run allow-clinician -- --email <clinician-email> --project <your-project-id>
+   ```
+5. **Seed the Demo Patients** (optional; they are readable by any signed-in user, by design of the demo):
+   ```sh
+   npm run seed -- --project <your-project-id> --clinician <clinician-email>
+   ```
+6. **Set the Gemini key** for Intake and the Digest (it prompts for the value):
+   ```sh
+   cd .. && firebase functions:secrets:set GEMINI_API_KEY --project prod
+   ```
+7. **Deploy the functions** (the predeploy step builds them):
+   ```sh
+   firebase deploy --only functions --project prod
+   ```
 
-Before a production deploy, require `email_verified` in `authEmail()` in `firestore.rules` (see the comment there) and change the demo Clinician in `linkableClinicians()` together with `DemoConfig.CLINICIAN_EMAIL` (a functions test keeps the two in step).
+The dashboard can then be deployed with `firebase deploy --only hosting --project prod`.
 
 ## Run the walking skeleton locally
 
@@ -93,12 +146,14 @@ firebase emulators:start --project demo-twoam
 
 This starts Auth (9099), Firestore (8080), Functions (5001), Hosting (5002) and the Emulator UI (4000). Then:
 
-1. Create the demo Clinician in the Auth emulator:
+1. Create the Clinician in the Auth emulator and allow them. `<clinician-email>` is the app's configured email: `clinician@example.com` unless `demo.clinicianEmail` is set.
    ```sh
    curl -s -X POST 'http://127.0.0.1:9099/identitytoolkit.googleapis.com/v1/accounts:signUp?key=demo-api-key' \
      -H 'Content-Type: application/json' \
-     -d '{"email":"clinician@example.com","password":"demo-password-1","returnSecureToken":true}'
+     -d '{"email":"<clinician-email>","password":"demo-password-1","returnSecureToken":true}'
+   cd seed && npm install && npm run allow-clinician -- --email <clinician-email>
    ```
+   (`npm run seed` allows its Clinician too.)
 2. Open http://localhost:5002 and sign in as that Clinician. The Patient list is empty.
 3. Run the Android debug build (after `adb reverse`, above). The app signs in anonymously and creates the Patient record, then shows the welcome and the sharing choice. Choose **Share**: the app lands on Today and "Live patient" appears on the dashboard without a reload. **Don't share** also lands on Today, and the Patient stays off the dashboard (the security rules allow the Clinician to see a Patient only while sharing is granted). Withdrawing in Settings → Sharing and privacy removes them from the open dashboard at once. Sharing again shows what is saved from then on and what was shared before, never what was saved in between: every shared record is stamped `sharedWithClinician` when it is saved (see [the sharing stamp](docs/firestore-schema.md#the-sharing-stamp)).
 
@@ -159,7 +214,9 @@ One command deletes every Demo Patient (Patients marked `synthetic`) and creates
 cd firebase/seed && npm install
 npm run seed                                  # emulator at $FIRESTORE_EMULATOR_HOST or 127.0.0.1:8080
 npm run seed -- --today 2026-11-14            # a fixed day, for a rehearsal
-npm run seed -- --project <your-project-id>   # a real project (Application Default Credentials)
+npm run seed -- --clinician <clinician-email> # link them to another Clinician (or set CLINICIAN_EMAIL)
+npm run seed -- --project <your-project-id> --clinician <clinician-email>
+                                              # a real project (Application Default Credentials)
 ```
 
-The same inputs (`--today`, `--seed`) give the same data. The Clinician sees `demo-declining` (red), `demo-sparse` (amber) and `demo-steady` (green), in that order. `demo-steady` stopped sharing for three days about four weeks ago, so its Signals and Summaries show a gap there: what was saved while not sharing stays hidden from the Clinician. Live Patients are never touched. Needs Node 22 or newer.
+The Demo Patients are linked to the Clinician from `--clinician` or `CLINICIAN_EMAIL`, and the seed adds that Clinician to the `clinicians` allowlist. Only the emulator falls back to `clinician@example.com`; a real project must be given the email, and the placeholder is refused there. The same inputs (`--today`, `--seed`, the Clinician) give the same data. The Clinician sees `demo-declining` (red), `demo-sparse` (amber) and `demo-steady` (green), in that order. `demo-steady` stopped sharing for three days about four weeks ago, so its Signals and Summaries show a gap there: what was saved while not sharing stays hidden from the Clinician. Live Patients are never touched. Needs Node 22 or newer.
