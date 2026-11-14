@@ -2,7 +2,7 @@
 
 Until now the Patient app signed in anonymously on first open, and the Patient record's id was that anonymous uid. Patients now sign in with an account of their own: email and password, or Google. Sign-up is open, but an email and password account must verify its email before it can create a Patient record or start a Check-in; Google accounts arrive verified. The Clinician is told apart by a custom claim, `role: "clinician"`, which only the Admin sets, rather than by their email alone.
 
-This replaces "the Patient signs in anonymously for the demo" in the [system design](../context/system-design.md#roles-and-sign-in) and user story 1 of the spec ("open the app without creating an account"). The Invite stays deferred.
+This replaces "the Patient signs in anonymously for the demo" in the [system design](../context/system-design.md#roles-and-sign-in), and in the v1 spec (issue #5): user story 1 ("open the app without creating an account"), "anonymous Patient sign-in" in the v1 scope, and "Patient accounts with Google sign-in" under Out of Scope. It also changes issue #7's "First open signs in anonymously and creates the Patient record" (the app now signs in first) and issue #8's demo shortcut, which now needs a verified account instead of any signed-in user. The Invite stays deferred.
 
 ## Why
 
@@ -22,7 +22,7 @@ This replaces "the Patient signs in anonymously for the demo" in the [system des
   - Creating a Patient record needs the owner's verified account (`patientId == auth.uid`, as before).
   - The demo shortcut (acting as a Patient marked `synthetic`) needs a verified account too, so an anonymous or unverified account reaches no data.
   - The Clinician needs a verified account with `role == "clinician"` and `token.email == patient.clinicianEmail`, while sharing is granted. A new Patient may still link only to a Clinician in the `clinicians` allowlist.
-- **Functions:** `assertClinicianOf` (Intake, Digest) checks the same claim and verified email. `assertActsAsPatient` (Start and Finish Check-in) needs a verified account and answers an anonymous or unverified caller with `failed-precondition`, "Verify your account to start a Check-in."
+- **Functions:** `assertClinicianOf` (Intake, Digest) checks the same claim and verified email. `assertActsAsPatient` (Start and Finish Check-in) needs a verified account and answers an anonymous or unverified caller with `failed-precondition`, "Verify your account to continue."
 - **Admin:** `npm run allow-clinician -- --email <email>` writes the allowlist entry, sets the claim on the Auth account with that email and marks the email verified. With open sign-up, anyone could register a Clinician's address before the Clinician does, so an account whose email is not yet verified is refused unless the Admin names it with `--uid` (the account they added in the console, which they vouch for). The Clinician picks up the claim at their next sign-in or token refresh.
 
 ## Transition

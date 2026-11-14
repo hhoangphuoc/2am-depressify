@@ -6,7 +6,7 @@ import { isVerifiedAccount, type CallerAuth } from "./clinician";
 import type { PatientDoc } from "./types";
 
 /** What an anonymous or unverified caller is told. The app shows it with the way to verify. */
-export const VERIFY_ACCOUNT_MESSAGE = "Verify your account to start a Check-in.";
+export const VERIFY_ACCOUNT_MESSAGE = "Verify your account to continue.";
 
 /**
  * Throws unless the caller may act as this Patient, with an account of their own. Start and

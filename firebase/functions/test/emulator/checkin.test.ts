@@ -308,7 +308,7 @@ describe.skipIf(!withFunctions)("Check-in callables through the Functions emulat
   it("an anonymous Patient is told to verify their account, and nothing is started or finished", async () => {
     const refusal = (call: Promise<unknown>) => call.then(() => null, (e: { code: string; message: string }) => ({ code: e.code, message: e.message }));
     // The SDK adds the HTTP status to the message.
-    const verify = { code: "functions/failed-precondition", message: expect.stringContaining("Verify your account to start a Check-in.") };
+    const verify = { code: "functions/failed-precondition", message: expect.stringContaining("Verify your account to continue.") };
     expect(await refusal(anonymous.start({ patientId: anonymousUid, brief: BRIEF }))).toEqual(verify);
     expect(await refusal(anonymous.finish({ patientId: anonymousUid, checkInId: "any", draft: { turns: [] } }))).toEqual(verify);
     expect(await refusal(anonymous.start({ patientId: uid, brief: BRIEF }))).toEqual(verify);

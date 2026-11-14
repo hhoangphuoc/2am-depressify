@@ -81,7 +81,7 @@ The Clinician's email is configuration, never code: the rules check the `clinici
 | Part | Status |
 |---|---|
 | Rules: a new Patient record, and the demo shortcut, need a verified account; the Clinician needs the `role: "clinician"` claim and a verified email; existing records stay their owners' (anonymous included) | **Built**, rules tests 74 (6 new) |
-| `assertActsAsPatient` (Start and Finish Check-in): verified account, else `failed-precondition` "Verify your account to start a Check-in." | **Built**, `test/accounts.test.ts` and the Functions emulator |
+| `assertActsAsPatient` (Start and Finish Check-in): verified account, else `failed-precondition` "Verify your account to continue." | **Built**, `test/accounts.test.ts` and the Functions emulator |
 | `assertClinicianOf` (Intake, Digest): claim and verified email | **Built** |
 | `npm run allow-clinician`: also sets the claim and marks the email verified; says so when the account does not exist yet; refuses an unverified account unless `--uid` names it | **Built**, Auth emulator tests |
 | Dashboard: an account without the claim or a verified email is signed out with "This account isn't set up as a Clinician yet…" | **Built**, `node --test` and the walking skeleton |
@@ -259,7 +259,7 @@ Write plan, mirroring `raisedAttention` and `hasOpenFlag` in the functions:
 | Live tokens and Decisions need `v1beta` | Gemini research, API versions | Holds: both are called with `fetch` on `v1beta` (`src/live.ts`, `src/decisionsApi.ts`); the SDK, used only for the text model, defaults to `v1`. |
 | EU region | System design, ADR 0008 | `europe-north1` for the functions and the dashboard; the scheduled `weeklyDigest` and `silenceCheck` run in `europe-west1`, because Cloud Scheduler has no `europe-north1` location. |
 | GitLive `firebase-kotlin-sdk` 2.8.0 in shared code | ADR 0008 | Holds. |
-| Anonymous Patient sign-in, linked to the one Clinician on first open | System design, roles | Holds, now behind `main`'s screens. |
+| Anonymous Patient sign-in, linked to the one Clinician on first open | System design, roles | Replaced by [ADR 0010](adr/0010-patients-sign-in-with-their-own-account.md): the Patient signs in with a verified account. The app still signs in anonymously until its half ships. |
 | Attention flag: three levels, written reasons, never a number; a refusal is amber, a failure is never green | ADR 0009, spec #5 | Holds for Finish Check-in's flags (#20): fixed reason sentences, no score stored or shown, `assessment: "unavailable"` instead of a made-up green. |
 | The Patient never sees a flag | Spec #5 | Holds for Finish Check-in: its response carries only the Summary; `assessment` and the flags are on documents the app does not show. |
 

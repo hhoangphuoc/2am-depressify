@@ -86,7 +86,7 @@ describe("assertActsAsPatient: the Patient's own verified account (Start and Fin
       const error = thrown(() => assertActsAsPatient(PATIENT_ID, live, auth));
       expect(error.code).toBe("failed-precondition");
       expect(error.message).toBe(VERIFY_ACCOUNT_MESSAGE);
-      expect(error.message).toBe("Verify your account to start a Check-in.");
+      expect(error.message).toBe("Verify your account to continue.");
     }
   });
 

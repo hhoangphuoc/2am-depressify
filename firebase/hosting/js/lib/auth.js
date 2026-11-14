@@ -27,7 +27,7 @@ export const CLINICIAN_ROLE = "clinician";
 // Shown after a correct password when the account lacks the Clinician's claim or a verified email
 // (ADR 0010). Both come from the admin's `npm run allow-clinician`, so the message names that step.
 const NOT_CLINICIAN_MESSAGE =
-  "This account isn't set up as a Clinician yet. Ask the admin to add it as a Clinician, then sign in again.";
+  "This account isn't set up as a Clinician yet. Ask the Admin to add it as a Clinician, then sign in again.";
 
 /**
  * Why a signed-in account may not use the dashboard, or null when it may. The Clinician's ID token

@@ -76,7 +76,7 @@ Patients sign in with an account of their own, email and password or Google, ins
 |---|---|
 | Create `patients/{uid}` | A verified account whose uid is the document id, linked to an allowlisted Clinician (as before) |
 | Read and write an existing `patients/{uid}` and its collections | The owner (`auth.uid == patientId`), whatever the account, so Patients who signed in anonymously before keep their records |
-| `startCheckIn`, `finishCheckIn` | A verified account. Otherwise `failed-precondition` with "Verify your account to start a Check-in." |
+| `startCheckIn`, `finishCheckIn` | A verified account. Otherwise `failed-precondition` with "Verify your account to continue." |
 | Act as a Demo Patient (`demo.patientId`) | A verified account. An anonymous one reads nothing |
 
 **Flow**, with the GitLive SDK the app already uses (`dev.gitlive.firebase.auth`):
@@ -102,7 +102,7 @@ Patients sign in with an account of their own, email and password or Google, ins
 **Console steps (a person with access to the project):**
 1. Authentication → Sign-in method → **Google** → Enable, with a support email. Download `google-services.json` and `GoogleService-Info.plist` again for the client ids.
 2. **Email/Password** stays enabled. Optionally, Authentication → Settings → User actions → **Email enumeration protection** on, so sign-in and password reset don't reveal which emails have accounts.
-3. Before deploying the new rules: run `npm run allow-clinician -- --email <clinician-email> --project <project-id>` for every Clinician, or the dashboard loses access (it now needs the claim), and ship the app's new sign-in, or new Patients cannot create their record and the demo phone's Demo Patient reads nothing.
+3. Before deploying the new rules or functions: run `npm run allow-clinician -- --email <clinician-email> --project <project-id>` for every Clinician, or the dashboard, Intake and the Digest lose access (they now need the claim), and ship the app's new sign-in, or new Patients cannot create their record, the demo phone's Demo Patient reads nothing, and no Check-in starts or finishes (`startCheckIn` and `finishCheckIn` refuse anonymous accounts).
 4. Later, once every tester has upgraded or signed up: **Anonymous** → Disable. That stops new anonymous sign-ins; records already made stay their owners'.
 
 ## Build
@@ -172,7 +172,7 @@ The Firestore database and every function are in `europe-north1` (Finland), exce
    ```sh
    cd .. && firebase functions:secrets:set GEMINI_API_KEY --project prod
    ```
-7. **Deploy the functions** (the predeploy step builds them):
+7. **Deploy the functions** (the predeploy step builds them). `startCheckIn` and `finishCheckIn` refuse anonymous accounts (ADR 0010), and the app still signs in anonymously, so until the app ships the [Patient sign-in](#patient-sign-in) deploy other functions by name (`--only functions:<name>`) and leave those two as they are:
    ```sh
    firebase deploy --only functions --project prod
    ```
@@ -266,7 +266,7 @@ The fictional Intake for the live demo Patient is in [docs/demo/intake-live-pati
 
 ### Check-in (Start and Finish)
 
-Two callables in `europe-north1` serve a Check-in (#14). The caller must have a verified account ([Patient sign-in](#patient-sign-in)) and be the Patient (`auth.uid == patientId`), or any verified account when the Patient is a Demo Patient (`synthetic: true`), as in the rules. Signed out: `unauthenticated`; anonymous or not yet verified: `failed-precondition`, "Verify your account to start a Check-in."; anyone else, or a missing Patient: `permission-denied`. On a Demo Patient only the caller who started a Check-in may finish it, so the seeded Summaries cannot be overwritten. One Patient record starts at most 10 Check-ins an hour; past that `startCheckIn` answers `resource-exhausted` without minting a token.
+Two callables in `europe-north1` serve a Check-in (#14). The caller must have a verified account ([Patient sign-in](#patient-sign-in)) and be the Patient (`auth.uid == patientId`), or any verified account when the Patient is a Demo Patient (`synthetic: true`), as in the rules. Signed out: `unauthenticated`; anonymous or not yet verified: `failed-precondition`, "Verify your account to continue."; anyone else, or a missing Patient: `permission-denied`. On a Demo Patient only the caller who started a Check-in may finish it, so the seeded Summaries cannot be overwritten. One Patient record starts at most 10 Check-ins an hour; past that `startCheckIn` answers `resource-exhausted` without minting a token.
 
 | Callable | Request | Response |
 |---|---|---|
