@@ -180,11 +180,12 @@ A short weekly account of one Patient for the Clinician (issue #23), written by 
 | `weekStart` | date string | First date covered: the Monday. |
 | `weekEnd` | date string | Last date covered: the Sunday, or the day "Generate now" ran for a week still in progress. |
 | `summaryCount` | int | How many Summaries the text drew on. `0` means the week had no Check-ins. |
+| `sourceCheckInIds` | string[] | The Summaries the text drew on, by id (a Summary's id is its Check-in id), oldest first: one per Summary counted in `summaryCount`, all stamped `sharedWithClinician: true`, so the Clinician can open every one. `[]` for a week with no Check-ins. The dashboard lists them as the Digest's sources ("View source Summaries"). Digests written before the field existed lack it; the dashboard then shows the count only. |
 | `text` | string | At most 180 words. Written by the text model with storage off, from that week's Summaries and daily Signals only; or, for a week with no Check-ins, a fixed sentence saying so (the model is not called). |
 | `generatedAtMillis` | int | |
 | `sharedWithClinician` | boolean | The sharing stamp (`sharingStamp`). Digests are written only for sharing Patients, so it is `true`. |
 
-The text and `summaryCount` draw only on Summaries and daily records stamped `sharedWithClinician: true` (`weekData` in `firebase/functions/src/digest.ts`): a week that spans a time without sharing never tells the Clinician what was said or measured then.
+The text, `summaryCount` and `sourceCheckInIds` draw only on Summaries and daily records stamped `sharedWithClinician: true` (`weekData` in `firebase/functions/src/digest.ts`): a week that spans a time without sharing never tells the Clinician what was said or measured then.
 
 Which week each writer covers:
 

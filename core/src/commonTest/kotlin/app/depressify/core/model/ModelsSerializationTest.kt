@@ -227,14 +227,17 @@ class ModelsSerializationTest {
     @Test
     fun digestStatesTheDatesCoveredAndHowManySummaries() {
         val digest = Digest(
-            isoWeek = "2026-W46", weekStart = "2026-11-09", weekEnd = "2026-11-15", summaryCount = 5,
+            isoWeek = "2026-W46", weekStart = "2026-11-09", weekEnd = "2026-11-15", summaryCount = 2,
+            sourceCheckInIds = listOf("checkin-2026-11-10", "checkin-2026-11-12"),
             text = "A steady week.", generatedAtMillis = 1_763_000_000_000L, sharedWithClinician = true,
         )
         val m = FirestoreJson.encode(Digest.serializer(), digest)
         assertEquals(
-            setOf("isoWeek", "weekStart", "weekEnd", "summaryCount", "text", "generatedAtMillis", "sharedWithClinician"),
+            setOf("isoWeek", "weekStart", "weekEnd", "summaryCount", "sourceCheckInIds", "text", "generatedAtMillis", "sharedWithClinician"),
             m.keys,
         )
+        // One id per Summary drawn on, so the dashboard can list the Digest's sources.
+        assertEquals(digest.summaryCount, digest.sourceCheckInIds.size)
         assertTrue(DateKeys.isDateKey(digest.weekStart) && DateKeys.isDateKey(digest.weekEnd))
         assertEquals(digest, FirestoreJson.decode(Digest.serializer(), m))
     }

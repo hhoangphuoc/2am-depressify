@@ -308,6 +308,13 @@ data class Digest(
     val weekEnd: String,
     /** How many Summaries the text drew on. 0 means the week had no Check-ins. */
     val summaryCount: Int,
+    /**
+     * The Summaries the text drew on, by id (a Summary's id is its Check-in id), oldest first: one
+     * per Summary counted in [summaryCount], all stamped `sharedWithClinician`. The dashboard lists
+     * them as the Digest's sources. Empty for a week with no Check-ins, and on Digests written
+     * before the field existed.
+     */
+    val sourceCheckInIds: List<String> = emptyList(),
     val text: String,
     val generatedAtMillis: Long,
     /** Whether the Patient was sharing when this Digest was written ([sharingStamp]). */

@@ -93,6 +93,7 @@ describe("Digest handlers with the Admin SDK on the Firestore emulator", () => {
     );
 
     expect(digest).toMatchObject({ isoWeek: period.isoWeek, weekStart: period.weekStart, weekEnd: today, summaryCount: expected.length });
+    expect(digest.sourceCheckInIds).toEqual([...expected].sort((a, b) => a.createdAtMillis - b.createdAtMillis).map((s) => s.checkInId));
     expect(await digestDoc(DECLINING, period.isoWeek)).toEqual(digest);
 
     if (expected.length === 0) {
@@ -128,6 +129,7 @@ describe("Digest handlers with the Admin SDK on the Firestore emulator", () => {
       weekStart: period.weekStart,
       weekEnd: period.weekEnd,
       summaryCount: declining.length,
+      sourceCheckInIds: [...declining].sort((a, b) => a.createdAtMillis - b.createdAtMillis).map((s) => s.checkInId),
       text: MODEL_TEXT,
       generatedAtMillis: nowMillis,
       sharedWithClinician: true,

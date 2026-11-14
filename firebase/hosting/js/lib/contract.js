@@ -38,6 +38,8 @@
  * @property {string} weekStart first date covered (the Monday), yyyy-MM-dd
  * @property {string} weekEnd last date covered: the Sunday, or the day "Generate now" ran
  * @property {number} summaryCount Summaries the text drew on; 0 means no Check-ins that week
+ * @property {string[]} [sourceCheckInIds] those Summaries' ids (= Check-in ids), oldest first; missing
+ *   on Digests written before the field existed
  * @property {string} text
  * @property {number} generatedAtMillis
  * @property {boolean} sharedWithClinician whether the Patient was sharing when it was written
@@ -49,6 +51,7 @@ export const DIGEST_FIELDS = Object.freeze([
   "weekStart",
   "weekEnd",
   "summaryCount",
+  "sourceCheckInIds",
   "text",
   "generatedAtMillis",
   "sharedWithClinician",
