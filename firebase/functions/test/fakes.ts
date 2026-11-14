@@ -1,9 +1,10 @@
 // Fakes for the function handlers: in-memory stores and a scripted text model.
 import type { TextModelClient, TextRequest } from "../src/gemini";
 import type { CallerAuth } from "../src/clinician";
+import type { AlertStore } from "../src/alertFunctions";
 import type { DigestStore } from "../src/digestFunctions";
 import type { PatientStore } from "../src/intakeFunctions";
-import { newPatientDoc, type DailyDoc, type Digest, type PatientDoc, type Summary } from "../src/types";
+import { newPatientDoc, type DailyDoc, type Digest, type MailDoc, type PatientDoc, type Summary } from "../src/types";
 
 export const CLINICIAN_EMAIL = "clinician@example.com";
 export const OTHER_CLINICIAN_EMAIL = "other-clinician@example.com";
@@ -100,5 +101,31 @@ export class FakeDigestStore implements DigestStore {
     this.writes.push({ patientId, digest });
     if (!this.digests.has(patientId)) this.digests.set(patientId, new Map());
     this.digests.get(patientId)!.set(digest.isoWeek, digest);
+  }
+}
+
+/** Patient records and the `mail` collection; `createMail` refuses an id that exists, like `create()`. */
+export class FakeAlertStore implements AlertStore {
+  readonly mail = new Map<string, MailDoc>();
+  reads = 0;
+  creates = 0;
+  failReads = false;
+  failWrites = false;
+
+  constructor(private readonly patients: Record<string, Partial<PatientDoc>>) {}
+
+  async getPatient(patientId: string) {
+    this.reads += 1;
+    if (this.failReads) throw new Error("read failed");
+    const patient = this.patients[patientId];
+    return patient ? { ...patient } : undefined;
+  }
+
+  async createMail(id: string, mail: MailDoc) {
+    this.creates += 1;
+    if (this.failWrites) throw new Error("write failed");
+    if (this.mail.has(id)) return false;
+    this.mail.set(id, mail);
+    return true;
   }
 }
