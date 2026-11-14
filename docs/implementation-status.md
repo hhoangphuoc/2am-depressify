@@ -19,7 +19,7 @@ Kept up to date as PRs are opened and merged. Each PR also updates its own rows 
 | #68 | `feat/27-nudge-rules` → `main` | #27, pure logic: the Nudge decision and quiet-hours rules in `core` | Open |
 | #69 | `feat/26-daily-job-rules` → `main` | #26, pure logic: the daily job as one pure pipeline in `core` | Open |
 | #70 | `feat/live-demo-patient` → `main` | `npm run seed-live-patient`: a rich mock history for one real test account (already run on the real project) | Open |
-| (to open) | `feat/dashboard-backend-sync` → `main` | Dashboard design ↔ backend sync: the design adapter, live data helpers, `Digest.sourceCheckInIds`, two indexes | To open; tested (hosting 371, functions 292, seed 89, emulators 91 + 23). See [design/dashboard-backend-sync.md](design/dashboard-backend-sync.md). |
+| #74 | `feat/dashboard-backend-sync` → `main` | Dashboard design ↔ backend sync: the design adapter, live data helpers, `Digest.sourceCheckInIds`, two indexes | Open; tested on top of the latest `main` (hosting 373, functions 426, seed 103, emulators 97 + 23). See [design/dashboard-backend-sync.md](design/dashboard-backend-sync.md). |
 
 **Deployed on `junction26hel-7400`:**
 - Rules and indexes.
