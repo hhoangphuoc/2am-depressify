@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { isSharingActive } from "../src/sharing";
+import { isSharingActive, sharingStamp } from "../src/sharing";
 import { newPatientDoc, type PatientDoc } from "../src/types";
 
 const patient = (sharingConsent: PatientDoc["sharingConsent"]): PatientDoc => ({
@@ -22,5 +22,15 @@ describe("isSharingActive", () => {
     expect(isSharingActive(null)).toBe(false);
     expect(isSharingActive(undefined)).toBe(false);
     expect(isSharingActive({ sharingConsent: "maybe" as PatientDoc["sharingConsent"] })).toBe(false);
+  });
+});
+
+describe("sharingStamp", () => {
+  it("stamps a new document true only while the Patient shares, the same decision as isSharingActive", () => {
+    expect(sharingStamp(patient("granted"))).toBe(true);
+    expect(sharingStamp(patient("declined"))).toBe(false);
+    expect(sharingStamp(patient("undecided"))).toBe(false);
+    expect(sharingStamp(null)).toBe(false);
+    expect(sharingStamp({ sharingConsent: "maybe" as PatientDoc["sharingConsent"] })).toBe(false);
   });
 });

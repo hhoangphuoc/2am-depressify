@@ -1,6 +1,11 @@
 // The dashboard's copy of the data contract. It mirrors firebase/functions/src/types.ts, which
 // mirrors the Kotlin contract in core; firebase/functions/test/contract.test.ts checks that all three
 // agree. Field-by-field documentation is in docs/firestore-schema.md.
+//
+// Documents in daily, checkIns, summaries, suggestions, flags and digests carry
+// `sharedWithClinician` (whether the Patient was sharing when the document was created). The
+// Clinician reads only those stamped true; every query on these collections goes through
+// `patientCollectionQuery` in lib/sharing.js, whose STAMPED_COLLECTIONS lists them.
 
 /** @typedef {"higher_is_better" | "lower_is_better" | "none"} SignalDirection */
 /** @typedef {"green" | "amber" | "red"} FlagLevel */
@@ -14,8 +19,8 @@
  * @property {string} clinicianEmail
  * @property {string} intakeHighlights
  * @property {string | null} tmsEndDate yyyy-MM-dd
- * @property {FlagLevel} flagLevel
- * @property {string[]} flagReasons
+ * @property {FlagLevel} flagLevel the highest uncleared flag stamped `sharedWithClinician`, or green
+ * @property {string[]} flagReasons those flags' reasons; the dashboard shows the visible open flags instead once loaded
  * @property {number} quietHoursStart
  * @property {number} quietHoursEnd
  * @property {number | null} lastSeenAtMillis
@@ -35,10 +40,19 @@
  * @property {number} summaryCount Summaries the text drew on; 0 means no Check-ins that week
  * @property {string} text
  * @property {number} generatedAtMillis
+ * @property {boolean} sharedWithClinician whether the Patient was sharing when it was written
  */
 
 /** The Digest's fields, in contract order. firebase/functions/test/contract.test.ts checks them. */
-export const DIGEST_FIELDS = Object.freeze(["isoWeek", "weekStart", "weekEnd", "summaryCount", "text", "generatedAtMillis"]);
+export const DIGEST_FIELDS = Object.freeze([
+  "isoWeek",
+  "weekStart",
+  "weekEnd",
+  "summaryCount",
+  "text",
+  "generatedAtMillis",
+  "sharedWithClinician",
+]);
 
 export const SIGNALS = Object.freeze([
   { key: "sleepMinutes", direction: "higher_is_better" },

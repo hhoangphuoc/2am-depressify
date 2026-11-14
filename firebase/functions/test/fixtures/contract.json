@@ -128,7 +128,8 @@
             "values",
             "vsBaseline",
             "composite",
-            "demoOverride"
+            "demoOverride",
+            "sharedWithClinician"
         ],
         "Consent": [
             "subject",
@@ -148,7 +149,8 @@
             "energy",
             "sleepQuality",
             "voiceCues",
-            "crisis"
+            "crisis",
+            "sharedWithClinician"
         ],
         "Summary": [
             "checkInId",
@@ -161,7 +163,8 @@
             "voiceCues",
             "suggestion",
             "previousOutcome",
-            "quotes"
+            "quotes",
+            "sharedWithClinician"
         ],
         "Suggestion": [
             "id",
@@ -173,14 +176,16 @@
             "tried",
             "felt",
             "objectiveChange",
-            "outcomeScore"
+            "outcomeScore",
+            "sharedWithClinician"
         ],
         "Flag": [
             "level",
             "kind",
             "reason",
             "raisedAtMillis",
-            "clearedAtMillis"
+            "clearedAtMillis",
+            "sharedWithClinician"
         ],
         "Visit": [
             "date",
@@ -193,7 +198,8 @@
             "weekEnd",
             "summaryCount",
             "text",
-            "generatedAtMillis"
+            "generatedAtMillis",
+            "sharedWithClinician"
         ],
         "MailMessage": [
             "subject",

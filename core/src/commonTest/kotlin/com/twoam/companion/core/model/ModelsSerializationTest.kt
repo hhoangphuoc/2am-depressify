@@ -24,9 +24,10 @@ class ModelsSerializationTest {
                 mapOf("sleepMinutes" to 420.0, "steps" to null),
                 mapOf("sleepMinutes" to -1.2),
                 -0.4,
+                sharedWithClinician = true,
             ),
         )
-        assertEquals(setOf("date", "values", "vsBaseline", "composite", "demoOverride"), m.keys)
+        assertEquals(setOf("date", "values", "vsBaseline", "composite", "demoOverride", "sharedWithClinician"), m.keys)
         assertTrue((m["values"] as Map<*, *>).containsKey("steps"))
     }
 
@@ -37,6 +38,7 @@ class ModelsSerializationTest {
             values = mapOf(Signal.SLEEP_MINUTES to 420.0),
             vsBaseline = emptyMap(),
             composite = null,
+            sharedWithClinician = false,
         )
         val m = FirestoreJson.encode(DailyDoc.serializer(), doc)
         val values = m["values"] as Map<*, *>
@@ -71,13 +73,13 @@ class ModelsSerializationTest {
 
     @Test
     fun unansweredRatingsAndOutcomesAreNull() {
-        val checkIn = FirestoreJson.encode(CheckIn.serializer(), CheckIn(id = "c1", startedAtMillis = 1L))
+        val checkIn = FirestoreJson.encode(CheckIn.serializer(), CheckIn(id = "c1", startedAtMillis = 1L, sharedWithClinician = true))
         for (key in listOf("endedAtMillis", "mood", "energy", "sleepQuality")) {
             assertTrue(checkIn.containsKey(key)); assertNull(checkIn[key])
         }
         val suggestion = FirestoreJson.encode(
             Suggestion.serializer(),
-            Suggestion(id = "s1", kind = SuggestionKind.walk, details = "A short walk", suggestedAtMillis = 1L),
+            Suggestion(id = "s1", kind = SuggestionKind.walk, details = "A short walk", suggestedAtMillis = 1L, sharedWithClinician = true),
         )
         for (key in listOf("tried", "felt", "objectiveChange", "outcomeScore")) {
             assertTrue(suggestion.containsKey(key)); assertNull(suggestion[key])
@@ -89,7 +91,7 @@ class ModelsSerializationTest {
 
     @Test
     fun flagEnumsSerializeLowercase() {
-        val m = FirestoreJson.encode(Flag.serializer(), Flag(FlagLevel.red, FlagKind.sleep_collapse, "r", 1L))
+        val m = FirestoreJson.encode(Flag.serializer(), Flag(FlagLevel.red, FlagKind.sleep_collapse, "r", 1L, sharedWithClinician = true))
         assertEquals("red", m["level"])
         assertEquals("sleep_collapse", m["kind"])
     }
@@ -217,7 +219,7 @@ class ModelsSerializationTest {
         val summary = Summary(
             checkInId = "c1", createdAtMillis = 2L, mood = 3, energy = null, sleepQuality = 4,
             sleepLine = "Slept a little less than usual", themes = listOf("work"), voiceCues = listOf(VoiceCue("flat tone", 2, "short answers")),
-            suggestion = "A 10-minute walk", previousOutcome = null, quotes = emptyList(),
+            suggestion = "A 10-minute walk", previousOutcome = null, quotes = emptyList(), sharedWithClinician = true,
         )
         assertEquals(summary, FirestoreJson.decode(Summary.serializer(), FirestoreJson.encode(Summary.serializer(), summary)))
     }
@@ -226,12 +228,54 @@ class ModelsSerializationTest {
     fun digestStatesTheDatesCoveredAndHowManySummaries() {
         val digest = Digest(
             isoWeek = "2026-W46", weekStart = "2026-11-09", weekEnd = "2026-11-15", summaryCount = 5,
-            text = "A steady week.", generatedAtMillis = 1_763_000_000_000L,
+            text = "A steady week.", generatedAtMillis = 1_763_000_000_000L, sharedWithClinician = true,
         )
         val m = FirestoreJson.encode(Digest.serializer(), digest)
-        assertEquals(setOf("isoWeek", "weekStart", "weekEnd", "summaryCount", "text", "generatedAtMillis"), m.keys)
+        assertEquals(
+            setOf("isoWeek", "weekStart", "weekEnd", "summaryCount", "text", "generatedAtMillis", "sharedWithClinician"),
+            m.keys,
+        )
         assertTrue(DateKeys.isDateKey(digest.weekStart) && DateKeys.isDateKey(digest.weekEnd))
         assertEquals(digest, FirestoreJson.decode(Digest.serializer(), m))
+    }
+
+    // --- The sharing stamp ---
+
+    @Test
+    fun sharingStampIsTrueOnlyWhileSharingIsGranted() {
+        val patient = PatientDoc(displayName = "Live patient", clinicianEmail = "clinician@example.com")
+        assertEquals(false, patient.sharingStamp())
+        assertEquals(true, patient.copy(sharingConsent = SharingConsent.granted).sharingStamp())
+        assertEquals(false, patient.copy(sharingConsent = SharingConsent.declined).sharingStamp())
+    }
+
+    @Test
+    fun everyDocumentTheClinicianMayReadIsStampedExceptConsentsVisitsAndThePatientRecord() {
+        val stamped = listOf(
+            DailyDoc.serializer().descriptor,
+            CheckIn.serializer().descriptor,
+            Summary.serializer().descriptor,
+            Suggestion.serializer().descriptor,
+            Flag.serializer().descriptor,
+            Digest.serializer().descriptor,
+        )
+        for (descriptor in stamped) {
+            val i = descriptor.getElementIndex("sharedWithClinician")
+            assertTrue(i >= 0, "${descriptor.serialName} has no sharedWithClinician")
+            assertTrue(!descriptor.isElementOptional(i), "${descriptor.serialName}.sharedWithClinician must be set by every writer")
+        }
+        for (descriptor in listOf(PatientDoc.serializer().descriptor, Consent.serializer().descriptor, Visit.serializer().descriptor)) {
+            assertTrue(descriptor.getElementIndex("sharedWithClinician") < 0, "${descriptor.serialName} is not stamped")
+        }
+    }
+
+    @Test
+    fun aCheckInAndASuggestionAsTheAppCreatesThemLeaveTheFunctionsFieldsEmpty() {
+        val checkIn = CheckIn(id = "c1", startedAtMillis = 1L, sharedWithClinician = false)
+        assertNull(checkIn.mood); assertNull(checkIn.energy); assertNull(checkIn.sleepQuality)
+        assertTrue(checkIn.voiceCues.isEmpty()); assertEquals(false, checkIn.crisis)
+        val suggestion = Suggestion(id = "s1", kind = SuggestionKind.walk, details = "", suggestedAtMillis = 1L, sharedWithClinician = false)
+        assertNull(suggestion.tried); assertNull(suggestion.felt); assertNull(suggestion.objectiveChange); assertNull(suggestion.outcomeScore)
     }
 
     private fun <T> encodeAll(serializer: KSerializer<T>, values: List<T>): List<String> =

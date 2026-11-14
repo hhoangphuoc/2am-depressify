@@ -3,6 +3,7 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import * as types from "../src/types";
 import * as dashboard from "../../hosting/js/lib/contract.js";
+import * as dashboardSharing from "../../hosting/js/lib/sharing.js";
 
 // contract.json is written by core's JVM tests (ContractExportTest) from the Kotlin data contract.
 const contract = JSON.parse(readFileSync(join(__dirname, "fixtures", "contract.json"), "utf8"));
@@ -11,24 +12,26 @@ const contract = JSON.parse(readFileSync(join(__dirname, "fixtures", "contract.j
 // when a field is missing or extra; the tests below then compare the field names with Kotlin.
 const samples: Record<string, object> = {
   PatientDoc: types.newPatientDoc("Live patient", "clinician@example.com"),
-  DailyDoc: { date: "2026-11-13", values: {}, vsBaseline: {}, composite: null, demoOverride: false } satisfies types.DailyDoc,
+  DailyDoc: { date: "2026-11-13", values: {}, vsBaseline: {}, composite: null, demoOverride: false, sharedWithClinician: true } satisfies types.DailyDoc,
   Consent: { subject: "steps", granted: true, changedAtMillis: 1 } satisfies types.Consent,
   VoiceCue: { label: "flat tone", intensity: 2, heard: "short answers" } satisfies types.VoiceCue,
   CheckIn: {
     id: "c1", startedAtMillis: 1, endedAtMillis: null, mood: null, energy: null, sleepQuality: null, voiceCues: [], crisis: false,
+    sharedWithClinician: true,
   } satisfies types.CheckIn,
   Summary: {
     checkInId: "c1", createdAtMillis: 1, mood: null, energy: null, sleepQuality: null, sleepLine: "", themes: [],
-    voiceCues: [], suggestion: null, previousOutcome: null, quotes: [],
+    voiceCues: [], suggestion: null, previousOutcome: null, quotes: [], sharedWithClinician: true,
   } satisfies types.Summary,
   Suggestion: {
     id: "s1", kind: "walk", details: "", suggestedAtMillis: 1, status: "proposed", booked: false, tried: null, felt: null,
-    objectiveChange: null, outcomeScore: null,
+    objectiveChange: null, outcomeScore: null, sharedWithClinician: true,
   } satisfies types.Suggestion,
-  Flag: { level: "red", kind: "silent", reason: "", raisedAtMillis: 1, clearedAtMillis: null } satisfies types.Flag,
+  Flag: { level: "red", kind: "silent", reason: "", raisedAtMillis: 1, clearedAtMillis: null, sharedWithClinician: true } satisfies types.Flag,
   Visit: { date: "2026-11-13", questionnaire: null, score: null } satisfies types.Visit,
   Digest: {
     isoWeek: "2026-W46", weekStart: "2026-11-09", weekEnd: "2026-11-15", summaryCount: 0, text: "", generatedAtMillis: 1,
+    sharedWithClinician: true,
   } satisfies types.Digest,
   MailMessage: { subject: "", text: "" } satisfies types.MailMessage,
   MailDoc: { to: "c@example.com", message: { subject: "", text: "" } } satisfies types.MailDoc,
@@ -62,6 +65,18 @@ describe("TypeScript mirror of the data contract", () => {
     expect(Object.keys(samples[name]).sort()).toEqual([...contract.documents[name]].sort());
   });
 
+  it("stamps exactly the collections whose Kotlin documents carry sharedWithClinician", () => {
+    const documentOf: Record<string, string> = {
+      daily: "DailyDoc", consents: "Consent", checkIns: "CheckIn", summaries: "Summary", suggestions: "Suggestion",
+      flags: "Flag", visits: "Visit", digests: "Digest",
+    };
+    const stampedInKotlin = (contract.collections.patientSubcollections as string[]).filter((c) =>
+      (contract.documents[documentOf[c]!] as string[]).includes("sharedWithClinician"),
+    );
+    expect([...types.STAMPED_COLLECTIONS]).toEqual(stampedInKotlin);
+    expect(contract.documents.PatientDoc).not.toContain("sharedWithClinician");
+  });
+
   it("creates a new Patient with the same defaults as Kotlin, nulls included", () => {
     expect(types.newPatientDoc("Live patient", "clinician@example.com")).toEqual(contract.defaults.newPatient);
   });
@@ -80,6 +95,10 @@ describe("dashboard copy of the data contract", () => {
     expect(dashboard.QUESTIONNAIRE_KINDS).toEqual(types.QUESTIONNAIRE_KINDS);
     expect(dashboard.COLLECTIONS).toEqual(types.COLLECTIONS);
     expect(dashboard.PATIENT_SUBCOLLECTIONS).toEqual(types.PATIENT_SUBCOLLECTIONS);
+  });
+
+  it("filters on the sharing stamp in exactly the stamped collections", () => {
+    expect(dashboardSharing.STAMPED_COLLECTIONS).toEqual(types.STAMPED_COLLECTIONS);
   });
 
   it("has the Digest fields the Kotlin contract has", () => {

@@ -20,6 +20,9 @@ import kotlinx.serialization.encoding.Encoder
 // - Dates are `yyyy-MM-dd` strings in the device time zone (Europe/Helsinki in the demo); see DateKeys.
 // - Enumerations are stored as lower-case words (the entry names below).
 // - A missing value is null, never zero, and nulls are written explicitly (see FirestoreJson).
+// - Documents in daily, checkIns, summaries, suggestions, flags and digests carry
+//   `sharedWithClinician`: whether the Patient was sharing when the document was created (see
+//   [sharingStamp]). It never changes, and the Clinician reads only documents stamped true.
 
 // ---------------------------------------------------------------------------------------------
 // Enumerations
@@ -113,7 +116,12 @@ data class PatientDoc(
     val intakeHighlights: String = "",
     /** Date (yyyy-MM-dd) the TMS course ended, set by the Clinician. */
     val tmsEndDate: String? = null,
+    /**
+     * The highest uncleared flag the Clinician can see (stamped `sharedWithClinician`), or green.
+     * A flag raised while sharing was off never counts, so the record never carries its reason.
+     */
     val flagLevel: FlagLevel = FlagLevel.green,
+    /** The reasons of those flags: highest level first, then newest. Plain sentences, never a number. */
     val flagReasons: List<String> = emptyList(),
     /** Quiet hours start, hour of day 0..23 (default 21:00). The window may cross midnight. */
     val quietHoursStart: Int = 21,
@@ -130,6 +138,16 @@ data class PatientDoc(
 )
 
 /**
+ * The `sharedWithClinician` stamp for a document created now: true only while the Patient's sharing
+ * Consent is granted. Every writer of daily, checkIns, summaries, suggestions, flags and digests sets
+ * it at creation and keeps it on every later write; the security rules check both. The Clinician
+ * never sees what was saved while sharing was off, and sees again what was saved during an earlier
+ * sharing period once the Patient shares again. Mirrored by `sharingStamp` in
+ * firebase/functions/src/sharing.ts.
+ */
+fun PatientDoc.sharingStamp(): Boolean = sharingConsent == SharingConsent.granted
+
+/**
  * `patients/{id}/daily/{date}`. [values] and [vsBaseline] are keyed by [Signal.key] and hold every
  * Signal, with null where there is no value (a night without the watch is null, never zero).
  * [vsBaseline] is the comparison with the Patient's own Baseline, in units of their spread.
@@ -142,6 +160,8 @@ data class DailyDoc(
     val composite: Double?,
     /** True when a demo control wrote this record; overrides only ever touch these. */
     val demoOverride: Boolean = false,
+    /** Whether the Patient was sharing when this record was created ([sharingStamp]). Never changes. */
+    val sharedWithClinician: Boolean,
 ) {
     companion object {
         /** Builds a daily record holding every Signal key, null where [values] or [vsBaseline] has none. */
@@ -150,6 +170,7 @@ data class DailyDoc(
             values: Map<Signal, Double?>,
             vsBaseline: Map<Signal, Double?>,
             composite: Double?,
+            sharedWithClinician: Boolean,
             demoOverride: Boolean = false,
         ): DailyDoc = DailyDoc(
             date = date,
@@ -157,6 +178,7 @@ data class DailyDoc(
             vsBaseline = Signal.entries.associate { it.key to vsBaseline[it] },
             composite = composite,
             demoOverride = demoOverride,
+            sharedWithClinician = sharedWithClinician,
         )
     }
 }
@@ -178,7 +200,13 @@ data class VoiceCue(
     val heard: String,
 )
 
-/** `patients/{id}/checkIns/{checkInId}`. Ratings are 1 to 5, or null when not given. */
+/**
+ * `patients/{id}/checkIns/{checkInId}`. Ratings are 1 to 5, or null when not given.
+ *
+ * The app creates the Check-in and owns only its times. The ratings, Voice cues and crisis marker
+ * are written by Finish Check-in from the draft, so the app creates them empty (null, empty, false)
+ * and never changes them; the security rules enforce it.
+ */
 @Serializable
 data class CheckIn(
     val id: String,
@@ -189,6 +217,8 @@ data class CheckIn(
     val sleepQuality: Int? = null,
     val voiceCues: List<VoiceCue> = emptyList(),
     val crisis: Boolean = false,
+    /** Whether the Patient was sharing when this Check-in was created ([sharingStamp]). Never changes. */
+    val sharedWithClinician: Boolean,
 )
 
 /**
@@ -211,9 +241,15 @@ data class Summary(
     val previousOutcome: String?,
     /** At most three short quotes that explain a flag. */
     val quotes: List<String>,
+    /** Whether the Patient was sharing when this Summary was created ([sharingStamp]). Never changes. */
+    val sharedWithClinician: Boolean,
 )
 
-/** `patients/{id}/suggestions/{suggestionId}`. */
+/**
+ * `patients/{id}/suggestions/{suggestionId}`. The app creates it and changes only [status] and
+ * [booked]. The Outcome ([tried], [felt], [objectiveChange], [outcomeScore]) is written by functions
+ * only: null when the app creates it, and never changed by the app.
+ */
 @Serializable
 data class Suggestion(
     val id: String,
@@ -229,6 +265,8 @@ data class Suggestion(
     /** That day's oriented steps comparison with Baseline, or null. */
     val objectiveChange: Double? = null,
     val outcomeScore: Double? = null,
+    /** Whether the Patient was sharing when this Suggestion was created ([sharingStamp]). Never changes. */
+    val sharedWithClinician: Boolean,
 )
 
 /** `patients/{id}/flags/{flagId}`. The reason is a plain sentence and never contains a score. */
@@ -240,6 +278,12 @@ data class Flag(
     val raisedAtMillis: Long,
     /** Set only by the Clinician after following up. History is kept. */
     val clearedAtMillis: Long? = null,
+    /**
+     * Whether the Patient was sharing when this flag was raised ([sharingStamp]). Never changes. A
+     * flag stamped false is never shown to the Clinician and never counts toward the Patient's
+     * `flagLevel`.
+     */
+    val sharedWithClinician: Boolean,
 )
 
 /** `patients/{id}/visits/{visitId}`. Written by the Clinician. */
@@ -266,6 +310,8 @@ data class Digest(
     val summaryCount: Int,
     val text: String,
     val generatedAtMillis: Long,
+    /** Whether the Patient was sharing when this Digest was written ([sharingStamp]). */
+    val sharedWithClinician: Boolean,
 )
 
 /** Message body for the Trigger Email extension. */

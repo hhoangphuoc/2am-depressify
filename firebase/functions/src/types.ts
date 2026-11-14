@@ -8,6 +8,9 @@
 // - Dates are `yyyy-MM-dd` strings in the device time zone (Europe/Helsinki in the demo).
 // - Enumerations are stored as lower-case words.
 // - A missing value is null, never zero, and nulls are written explicitly: every field is present.
+// - Documents in daily, checkIns, summaries, suggestions, flags and digests carry
+//   `sharedWithClinician`: whether the Patient was sharing when the document was created
+//   (`sharingStamp` in src/sharing.ts). It never changes; the Clinician reads only those stamped true.
 
 // ---------------------------------------------------------------------------------------------
 // Enumerations
@@ -101,6 +104,19 @@ export const PATIENT_SUBCOLLECTIONS = [
   COLLECTIONS.digests,
 ] as const;
 
+/**
+ * The collections whose documents carry `sharedWithClinician` (see `sharingStamp` in sharing.ts).
+ * Consents, Visits and the Patient record are not stamped.
+ */
+export const STAMPED_COLLECTIONS = [
+  COLLECTIONS.daily,
+  COLLECTIONS.checkIns,
+  COLLECTIONS.summaries,
+  COLLECTIONS.suggestions,
+  COLLECTIONS.flags,
+  COLLECTIONS.digests,
+] as const;
+
 // ---------------------------------------------------------------------------------------------
 // Documents
 // ---------------------------------------------------------------------------------------------
@@ -112,7 +128,9 @@ export interface PatientDoc {
   intakeHighlights: string;
   /** yyyy-MM-dd */
   tmsEndDate: string | null;
+  /** The highest uncleared flag stamped `sharedWithClinician`, or green. */
   flagLevel: FlagLevel;
+  /** Those flags' reasons, highest level first, then newest. */
   flagReasons: string[];
   /** Hour of day 0..23. Default 21. */
   quietHoursStart: number;
@@ -134,6 +152,8 @@ export interface DailyDoc {
   vsBaseline: Partial<Record<SignalKey, number | null>>;
   composite: number | null;
   demoOverride: boolean;
+  /** Whether the Patient was sharing when this record was created. Never changes. */
+  sharedWithClinician: boolean;
 }
 
 /** `patients/{id}/consents/{subject}`; subject is a SignalKey or a ConsentPurpose. */
@@ -150,7 +170,10 @@ export interface VoiceCue {
   heard: string;
 }
 
-/** `patients/{id}/checkIns/{checkInId}`. Ratings are integers 1 to 5, or null. */
+/**
+ * `patients/{id}/checkIns/{checkInId}`. Ratings are integers 1 to 5, or null. The app owns only the
+ * times; the ratings, Voice cues and crisis marker are written by Finish Check-in.
+ */
 export interface CheckIn {
   id: string;
   startedAtMillis: number;
@@ -160,6 +183,8 @@ export interface CheckIn {
   sleepQuality: number | null;
   voiceCues: VoiceCue[];
   crisis: boolean;
+  /** Whether the Patient was sharing when this Check-in was created. Never changes. */
+  sharedWithClinician: boolean;
 }
 
 /** `patients/{id}/summaries/{checkInId}`. Keyed by the Check-in id, so a retried finish overwrites. */
@@ -176,9 +201,14 @@ export interface Summary {
   previousOutcome: string | null;
   /** At most three, each at most 200 characters. */
   quotes: string[];
+  /** Whether the Patient was sharing when this Summary was created. Never changes. */
+  sharedWithClinician: boolean;
 }
 
-/** `patients/{id}/suggestions/{suggestionId}`. */
+/**
+ * `patients/{id}/suggestions/{suggestionId}`. The app changes only `status` and `booked`; the Outcome
+ * (`tried`, `felt`, `objectiveChange`, `outcomeScore`) is written by functions only.
+ */
 export interface Suggestion {
   id: string;
   kind: SuggestionKind;
@@ -192,6 +222,8 @@ export interface Suggestion {
   felt: number | null;
   objectiveChange: number | null;
   outcomeScore: number | null;
+  /** Whether the Patient was sharing when this Suggestion was created. Never changes. */
+  sharedWithClinician: boolean;
 }
 
 /** `patients/{id}/flags/{flagId}`. The reason is a plain sentence, never a score. */
@@ -201,6 +233,8 @@ export interface Flag {
   reason: string;
   raisedAtMillis: number;
   clearedAtMillis: number | null;
+  /** Whether the Patient was sharing when this flag was raised. Never changes; false never counts toward `flagLevel`. */
+  sharedWithClinician: boolean;
 }
 
 /** `patients/{id}/visits/{visitId}`. Written by the Clinician. */
@@ -225,6 +259,8 @@ export interface Digest {
   summaryCount: number;
   text: string;
   generatedAtMillis: number;
+  /** Whether the Patient was sharing when this Digest was written (`sharingStamp`). */
+  sharedWithClinician: boolean;
 }
 
 export interface MailMessage {
