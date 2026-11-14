@@ -1,9 +1,9 @@
 // `core`: pure Kotlin Multiplatform common code. No platform, Android or java.* imports in
 // commonMain; the `checkCommonPurity` task below enforces that and runs with `:core:jvmTest`.
 plugins {
-    alias(libs.plugins.kotlinMultiplatform)
-    alias(libs.plugins.kotlinSerialization)
-    alias(libs.plugins.androidKotlinMultiplatformLibrary)
+    alias(libs.plugins.kotlin.multiplatform)
+    alias(libs.plugins.kotlin.serialization)
+    alias(libs.plugins.android.kmp.library)
 }
 
 kotlin {
