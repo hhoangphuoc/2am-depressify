@@ -155,6 +155,8 @@ describe("the structured-output request", () => {
     expect([...schema.required].sort()).toEqual([...recordedFormat.schema.required].sort());
     expect(schema.additionalProperties).toBe(false);
     expect(schema.properties.quotes.maxItems).toBe(3);
+    // #20: the few quotes are the ones that explain a concern, when there is one.
+    expect(request.system_instruction).toMatch(/quotes[^\n]*concern/i);
     expect(schema.properties.mood.type).toEqual(["integer", "null"]);
     expect(schema).toBe(SUMMARY_SCHEMA);
   });
@@ -356,9 +358,12 @@ describe("finishWrites", () => {
     expect(retry.themes).toEqual(["Retry theme"]);
   });
 
-  it("sets the ratings, Voice cues, crisis marker and end time on the Check-in, and nothing else", () => {
+  it("sets the ratings, Voice cues, crisis marker, assessment and end time on the Check-in, and nothing else", () => {
     const writes = finishWrites({ patient: sharing, checkIn, summary: undefined }, "c1", { ...content, crisis: true }, 1_000);
-    expect(writes.checkIn).toEqual({ mood: 3, energy: 2, sleepQuality: 2, voiceCues: DRAFT.voiceCues, crisis: true, endedAtMillis: 1_000 });
+    expect(writes.checkIn).toEqual({
+      mood: 3, energy: 2, sleepQuality: 2, voiceCues: DRAFT.voiceCues, crisis: true, endedAtMillis: 1_000, assessment: null, previousTried: null,
+    });
+    expect(writes.flags).toEqual([]);
     expect(Object.keys(writes.checkIn)).not.toContain("sharedWithClinician");
     expect(Object.keys(writes.checkIn)).not.toContain("startedAtMillis");
   });
@@ -391,6 +396,8 @@ describe("newCheckIn", () => {
       sleepQuality: null,
       voiceCues: [],
       crisis: false,
+      assessment: null,
+      previousTried: null,
       sharedWithClinician: true,
     });
     expect(newCheckIn("c1", { sharingConsent: "undecided" }, 42).sharedWithClinician).toBe(false);

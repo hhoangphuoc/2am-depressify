@@ -74,7 +74,7 @@ class ModelsSerializationTest {
     @Test
     fun unansweredRatingsAndOutcomesAreNull() {
         val checkIn = FirestoreJson.encode(CheckIn.serializer(), CheckIn(id = "c1", startedAtMillis = 1L, sharedWithClinician = true))
-        for (key in listOf("endedAtMillis", "mood", "energy", "sleepQuality")) {
+        for (key in listOf("endedAtMillis", "mood", "energy", "sleepQuality", "assessment", "previousTried")) {
             assertTrue(checkIn.containsKey(key)); assertNull(checkIn[key])
         }
         val suggestion = FirestoreJson.encode(
@@ -108,6 +108,7 @@ class ModelsSerializationTest {
             addAll(encodeAll(SignalDirection.serializer(), SignalDirection.entries))
             addAll(encodeAll(SharingConsent.serializer(), SharingConsent.entries))
             addAll(encodeAll(ConsentPurpose.serializer(), ConsentPurpose.entries))
+            addAll(encodeAll(Assessment.serializer(), Assessment.entries))
             addAll(encodeAll(QuestionnaireKind.serializer(), QuestionnaireKind.entries))
         }
         for (word in encoded) assertTrue(lowerCaseWord.matches(word), "'$word' is not a lower-case word")
@@ -274,8 +275,19 @@ class ModelsSerializationTest {
         val checkIn = CheckIn(id = "c1", startedAtMillis = 1L, sharedWithClinician = false)
         assertNull(checkIn.mood); assertNull(checkIn.energy); assertNull(checkIn.sleepQuality)
         assertTrue(checkIn.voiceCues.isEmpty()); assertEquals(false, checkIn.crisis)
+        assertNull(checkIn.assessment); assertNull(checkIn.previousTried)
         val suggestion = Suggestion(id = "s1", kind = SuggestionKind.walk, details = "", suggestedAtMillis = 1L, sharedWithClinician = false)
         assertNull(suggestion.tried); assertNull(suggestion.felt); assertNull(suggestion.objectiveChange); assertNull(suggestion.outcomeScore)
+    }
+
+    @Test
+    fun aReviewedCheckInStoresItsAssessmentAsAWord() {
+        val m = FirestoreJson.encode(
+            CheckIn.serializer(),
+            CheckIn(id = "c1", startedAtMillis = 1L, assessment = Assessment.unavailable, previousTried = false, sharedWithClinician = true),
+        )
+        assertEquals("unavailable", m["assessment"])
+        assertEquals(false, m["previousTried"])
     }
 
     private fun <T> encodeAll(serializer: KSerializer<T>, values: List<T>): List<String> =

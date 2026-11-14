@@ -8,7 +8,25 @@ import type { CallerAuth } from "../src/clinician";
 import { LIMIT_WINDOW_MS, MAX_CHECK_IN_STARTS_PER_HOUR } from "../src/limits";
 import { LIVE_ENDPOINT, LIVE_NEW_SESSION_WINDOW_MS, LIVE_TOKEN_LIFETIME_MS } from "../src/live";
 import { newPatientDoc, type PatientDoc } from "../src/types";
-import { CLINICIAN_EMAIL, FakeCheckInStore, FakeLiveTokens, FakeTextModel, PATIENT_ID, failingTextModel } from "./fakes";
+import {
+  CRISIS_FROM_CHECK_IN_REASON,
+  CRISIS_FROM_REVIEW_REASON,
+  DECLINE_REASON,
+  UNASSESSED_REASON,
+} from "../src/decisions";
+import {
+  CLINICIAN_EMAIL,
+  FakeCheckInStore,
+  FakeDecisions,
+  FakeLiveTokens,
+  FakeTextModel,
+  PATIENT_ID,
+  decisionsError,
+  decisionsRefusal,
+  decisionsReply,
+  decisionsTimeout,
+  failingTextModel,
+} from "./fakes";
 
 const SPIKE = join(__dirname, "..", "..", "..", "fixtures", "spike", "interactions");
 const recorded = JSON.parse(readFileSync(join(SPIKE, "finish-checkin-structured-v1.json"), "utf8"));
@@ -36,6 +54,7 @@ const DRAFT = {
 
 let store: FakeCheckInStore;
 let tokens: FakeLiveTokens;
+let decisions: FakeDecisions;
 let ids: number;
 
 function patients(): Record<string, Partial<PatientDoc>> {
@@ -48,6 +67,7 @@ function patients(): Record<string, Partial<PatientDoc>> {
 beforeEach(() => {
   store = new FakeCheckInStore(patients());
   tokens = new FakeLiveTokens();
+  decisions = new FakeDecisions();
   ids = 0;
 });
 
@@ -58,7 +78,7 @@ type Caller = CallerAuth | typeof SIGNED_OUT;
 const authOf = (caller: Caller) => (caller === SIGNED_OUT ? undefined : caller);
 const start = (data: unknown, caller: Caller = patientAuth) => startCheckInHandler({ data, auth: authOf(caller) }, startDeps());
 const finish = (data: unknown, textModel = new FakeTextModel(MODEL_JSON), caller: Caller = patientAuth, clock = () => NOW + 180_000) =>
-  finishCheckInHandler({ data, auth: authOf(caller) }, { store, textModel, clock });
+  finishCheckInHandler({ data, auth: authOf(caller) }, { store, textModel, decisions, clock });
 
 async function started(patientId = PATIENT_ID, auth: CallerAuth = patientAuth) {
   return (await start({ patientId, brief: BRIEF }, auth)).checkInId;
@@ -85,6 +105,8 @@ describe("startCheckIn", () => {
       sleepQuality: null,
       voiceCues: [],
       crisis: false,
+      assessment: null,
+      previousTried: null,
       sharedWithClinician: true,
     });
   });
@@ -382,5 +404,173 @@ describe("finishCheckIn", () => {
     store.failReads = true;
     await expect(finish({ patientId: PATIENT_ID, checkInId: "", draft: DRAFT })).rejects.toMatchObject({ code: "invalid-argument" });
     await expect(finish({ patientId: PATIENT_ID, checkInId: "c", draft: "transcript" })).rejects.toMatchObject({ code: "invalid-argument" });
+  });
+});
+
+describe("finishCheckIn: the flag judgment (#20)", () => {
+  const checkInOf = (checkInId: string) => store.checkIns.get(`${PATIENT_ID}/${checkInId}`)!;
+  const flagsOf = () => [...store.flags.entries()].filter(([k]) => k.startsWith(`${PATIENT_ID}/`)).map(([k, f]) => ({ id: k.split("/")[1], ...f }));
+  const patient = () => store.patients.get(PATIENT_ID)!;
+  const crisisReply = decisionsReply({ crisis: 0.93, decline: 0.99, triedLast: 0.01 });
+
+  it("asks the three questions about the same transcript, alongside the text model", async () => {
+    const checkInId = await started();
+    store.suggestions.set(`${PATIENT_ID}/s-walk`, { details: "A short walk by the harbour" });
+    // The text model answers only once the Decisions call has been made: run one after the other,
+    // this finish would never end.
+    let asked!: () => void;
+    const decisionsAsked = new Promise<void>((resolve) => (asked = resolve));
+    decisions = new FakeDecisions(async () => {
+      asked();
+      return decisionsReply({ crisis: 0.02, decline: 0.06, triedLast: 0.98 });
+    });
+    const textModel = new FakeTextModel(async () => {
+      await decisionsAsked;
+      return MODEL_JSON;
+    });
+    await finish({ patientId: PATIENT_ID, checkInId, draft: DRAFT, lastSuggestionId: "s-walk" }, textModel);
+
+    expect(decisions.requests).toHaveLength(1);
+    const request = decisions.requests[0]!;
+    expect(request.model).toBe("gemini-decision-1");
+    expect(Object.keys(request.questions)).toEqual(["crisis", "decline", "triedLast"]);
+    expect(request.input).toContain("Patient: Work has been a lot this week");
+    expect(request.input).toContain("The previous Suggestion the Companion asked about: A short walk by the harbour");
+  });
+
+  it("a routine Check-in raises nothing; the Check-in records 'assessed' and that the last Suggestion was tried", async () => {
+    const checkInId = await started();
+    await finish({ patientId: PATIENT_ID, checkInId, draft: DRAFT, lastSuggestionId: "s-none" });
+    expect(flagsOf()).toEqual([]);
+    expect(checkInOf(checkInId)).toMatchObject({ assessment: "assessed", previousTried: null });
+    expect(patient()).toMatchObject({ flagLevel: "green", flagReasons: [] });
+
+    store.suggestions.set(`${PATIENT_ID}/s-walk`, { details: "A short walk" });
+    const second = await started();
+    await finish({ patientId: PATIENT_ID, checkInId: second, draft: DRAFT, lastSuggestionId: "s-walk" });
+    expect(checkInOf(second)).toMatchObject({ assessment: "assessed", previousTried: true });
+  });
+
+  it("a crisis answer raises red crisis and a decline answer amber decline; the response says nothing of them", async () => {
+    const checkInId = await started();
+    decisions = new FakeDecisions(crisisReply);
+    const result = await finish({ patientId: PATIENT_ID, checkInId, draft: DRAFT });
+
+    expect(flagsOf()).toEqual([
+      { id: `crisis-${checkInId}`, level: "red", kind: "crisis", reason: CRISIS_FROM_REVIEW_REASON, raisedAtMillis: NOW + 180_000, clearedAtMillis: null, sharedWithClinician: true },
+      { id: `decline-${checkInId}`, level: "amber", kind: "decline", reason: DECLINE_REASON, raisedAtMillis: NOW + 180_000, clearedAtMillis: null, sharedWithClinician: true },
+    ]);
+    expect(patient()).toMatchObject({ flagLevel: "red", flagReasons: [CRISIS_FROM_REVIEW_REASON, DECLINE_REASON] });
+    // Nothing about the judgment reaches the phone.
+    expect(Object.keys(result).sort()).toEqual(["checkInId", "minimal", "summary"]);
+    expect(Object.keys(result.summary)).not.toContain("assessment");
+    const text = JSON.stringify(result);
+    expect(text).not.toMatch(/flag|\bred\b|amber|crisis|decline|assess|tried|level/i);
+  });
+
+  it("a decline answer alone turns the Patient amber with the reason", async () => {
+    const checkInId = await started();
+    decisions = new FakeDecisions(decisionsReply({ crisis: 0.1, decline: 0.8 }));
+    await finish({ patientId: PATIENT_ID, checkInId, draft: DRAFT });
+    expect(flagsOf().map((f) => f.id)).toEqual([`decline-${checkInId}`]);
+    expect(patient()).toMatchObject({ flagLevel: "amber", flagReasons: [DECLINE_REASON] });
+  });
+
+  it("a safety refusal raises amber unassessed, and the Summary is still saved", async () => {
+    const checkInId = await started();
+    decisions = decisionsRefusal();
+    const result = await finish({ patientId: PATIENT_ID, checkInId, draft: DRAFT });
+    expect(result.minimal).toBe(false);
+    expect(flagsOf()).toMatchObject([{ id: `unassessed-${checkInId}`, level: "amber", kind: "unassessed", reason: UNASSESSED_REASON }]);
+    expect(checkInOf(checkInId)).toMatchObject({ assessment: "unassessed", previousTried: null });
+    expect(patient()).toMatchObject({ flagLevel: "amber", flagReasons: [UNASSESSED_REASON] });
+  });
+
+  it("a timeout or other failure raises nothing, never blocks the Summary, and marks the assessment unavailable", async () => {
+    store.patients.set(PATIENT_ID, { ...patient(), flagLevel: "amber", flagReasons: ["Poor sleep on the last three nights."] });
+    for (const failing of [decisionsTimeout(), decisionsError(500), decisionsError(429), decisionsError(400), new FakeDecisions({ answers: {} })]) {
+      decisions = failing;
+      const checkInId = await started();
+      const result = await finish({ patientId: PATIENT_ID, checkInId, draft: DRAFT });
+      expect(result.minimal).toBe(false);
+      expect(store.summaries.has(`${PATIENT_ID}/${checkInId}`)).toBe(true);
+      expect(checkInOf(checkInId)).toMatchObject({ assessment: "unavailable", previousTried: null });
+    }
+    expect(flagsOf()).toEqual([]);
+    // The last known flag stays; no green is made up.
+    expect(patient()).toMatchObject({ flagLevel: "amber", flagReasons: ["Poor sleep on the last three nights."] });
+  });
+
+  it("the draft's crisis marker raises red crisis even when the model says no or the call fails", async () => {
+    for (const judge of [new FakeDecisions(), decisionsTimeout()]) {
+      store = new FakeCheckInStore(patients());
+      decisions = judge;
+      const checkInId = await started();
+      await finish({ patientId: PATIENT_ID, checkInId, draft: { ...DRAFT, crisis: true } });
+      expect(flagsOf()).toMatchObject([{ id: `crisis-${checkInId}`, level: "red", reason: CRISIS_FROM_CHECK_IN_REASON }]);
+      expect(patient().flagLevel).toBe("red");
+    }
+  });
+
+  it("a silent Check-in is not sent for review, but its crisis marker still raises red crisis", async () => {
+    const silent = { turns: [{ speaker: "companion", text: "Hi, are you there?" }], crisis: true };
+    const checkInId = await started();
+    await finish({ patientId: PATIENT_ID, checkInId, draft: silent });
+    expect(decisions.requests).toHaveLength(0);
+    expect(checkInOf(checkInId)).toMatchObject({ assessment: null, previousTried: null });
+    expect(flagsOf().map((f) => f.id)).toEqual([`crisis-${checkInId}`]);
+  });
+
+  it("does not raise a second crisis while the phone's own crisis flag is open", async () => {
+    store.flags.set(`${PATIENT_ID}/crisis-${NOW}`, { level: "red", kind: "crisis", reason: "The Companion heard signs of a crisis in a Check-in.", raisedAtMillis: NOW, clearedAtMillis: null, sharedWithClinician: true });
+    const checkInId = await started();
+    decisions = new FakeDecisions(crisisReply);
+    await finish({ patientId: PATIENT_ID, checkInId, draft: { ...DRAFT, crisis: true } });
+    expect(flagsOf().map((f) => f.id)).toEqual([`crisis-${NOW}`, `decline-${checkInId}`]);
+  });
+
+  it("a retried finish never duplicates a flag, and one whose review failed keeps the first assessment", async () => {
+    const checkInId = await started();
+    decisions = new FakeDecisions(crisisReply);
+    store.suggestions.set(`${PATIENT_ID}/s-walk`, { details: "A short walk" });
+    await finish({ patientId: PATIENT_ID, checkInId, draft: DRAFT, lastSuggestionId: "s-walk" });
+    // The Clinician clears the crisis; the phone, which never got the reply, retries.
+    store.flags.set(`${PATIENT_ID}/crisis-${checkInId}`, { ...store.flags.get(`${PATIENT_ID}/crisis-${checkInId}`)!, clearedAtMillis: NOW + 200_000 });
+    decisions = new FakeDecisions(crisisReply);
+    await finish({ patientId: PATIENT_ID, checkInId, draft: DRAFT, lastSuggestionId: "s-walk" });
+    decisions = decisionsTimeout();
+    await finish({ patientId: PATIENT_ID, checkInId, draft: DRAFT, lastSuggestionId: "s-walk" });
+    expect(flagsOf().map((f) => f.id)).toEqual([`crisis-${checkInId}`, `decline-${checkInId}`]);
+    expect(checkInOf(checkInId)).toMatchObject({ assessment: "assessed", previousTried: false });
+  });
+
+  it("stamps the flags like the Summary and leaves the level alone while the Patient is not sharing", async () => {
+    store.patients.set(PATIENT_ID, { ...patient(), sharingConsent: "declined" });
+    const checkInId = await started();
+    decisions = new FakeDecisions(crisisReply);
+    const { summary } = await finish({ patientId: PATIENT_ID, checkInId, draft: DRAFT });
+    expect(summary.sharedWithClinician).toBe(false);
+    expect(flagsOf().map((f) => f.sharedWithClinician)).toEqual([false, false]);
+    expect(patient()).toMatchObject({ flagLevel: "green", flagReasons: [] });
+  });
+
+  it("when the text model fails in a way that may pass: unavailable and no Summary, but the raised flags are kept; the retry adds none", async () => {
+    const checkInId = await started();
+    decisions = new FakeDecisions(crisisReply);
+    await expect(finish({ patientId: PATIENT_ID, checkInId, draft: DRAFT }, failingTextModel(503))).rejects.toMatchObject({ code: "unavailable" });
+    expect(store.summaries.has(`${PATIENT_ID}/${checkInId}`)).toBe(false);
+    expect(checkInOf(checkInId)).toMatchObject({ endedAtMillis: null, assessment: null });
+    expect(flagsOf().map((f) => f.id)).toEqual([`crisis-${checkInId}`, `decline-${checkInId}`]);
+    expect(patient().flagLevel).toBe("red");
+
+    await finish({ patientId: PATIENT_ID, checkInId, draft: DRAFT });
+    expect(store.summaries.has(`${PATIENT_ID}/${checkInId}`)).toBe(true);
+    expect(flagsOf()).toHaveLength(2);
+    expect(checkInOf(checkInId)).toMatchObject({ assessment: "assessed" });
+
+    // A flag write that fails then still answers unavailable.
+    const other = await started();
+    store.failFlagWrites = true;
+    await expect(finish({ patientId: PATIENT_ID, checkInId: other, draft: DRAFT }, failingTextModel(500))).rejects.toMatchObject({ code: "unavailable" });
   });
 });

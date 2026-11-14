@@ -9,8 +9,8 @@ rules_version = '2';
 //   Patient    reads and writes their own record and its collections. Summaries, Visits and
 //              Digests are read-only to them; flags are append-only (only the Clinician clears
 //              one); on a Check-in they own only the times, and on a Suggestion only its status
-//              and booking (ratings, Voice cues, the crisis marker and the Outcome are written by
-//              functions); on the record they write only the fields the phone owns, and may raise
+//              and booking (ratings, Voice cues, the crisis marker, the assessment and the Outcome
+//              are written by functions); on the record they write only the fields the phone owns, and may raise
 //              but never lower their own flag level.
 //   Clinician  reads the record, Consents and Visits of the Patients whose clinicianEmail is their
 //              sign-in email, while that Patient's sharing Consent is granted, and of the other
@@ -250,8 +250,10 @@ service cloud.firestore {
       }
 
       // The app creates a Check-in and owns only its times. The ratings, Voice cues and crisis
-      // marker are written by Finish Check-in (Admin SDK) from the draft, so they are empty when
-      // the app creates the Check-in and the app never changes them.
+      // marker are written by Finish Check-in (Admin SDK) from the draft, and the assessment and
+      // previousTried from the Decisions API (#20), so they are empty when the app creates the
+      // Check-in and the app never changes them. An app built before #20 leaves the two new
+      // fields out, which counts as empty.
       match /checkIns/{checkInId} {
         allow read: if canReadStamped();
         allow create: if patientAccess() && stampedNow() && checkInAsAppCreatesIt();
@@ -263,7 +265,9 @@ service cloud.firestore {
         let c = request.resource.data;
         return c.mood == null && c.energy == null && c.sleepQuality == null
           && c.voiceCues is list && c.voiceCues.size() == 0
-          && c.crisis == false;
+          && c.crisis == false
+          && c.get('assessment', null) == null
+          && c.get('previousTried', null) == null;
       }
 
       // Written only by Finish Check-in (Admin SDK) from the Check-in itself. Read-only to every

@@ -11,6 +11,7 @@
 /** @typedef {"green" | "amber" | "red"} FlagLevel */
 /** @typedef {"undecided" | "granted" | "declined"} SharingConsent */
 /** @typedef {"device" | "synthetic"} HealthSource */
+/** @typedef {"assessed" | "unassessed" | "unavailable"} Assessment */
 
 /**
  * `patients/{patientId}`.
@@ -29,6 +30,25 @@
  * @property {boolean} synthetic
  * @property {SharingConsent} sharingConsent
  * @property {number | null} sharingChangedAtMillis
+ */
+
+/**
+ * `patients/{id}/checkIns/{checkInId}`. The ratings, Voice cues, crisis marker, assessment and
+ * previousTried are written by Finish Check-in.
+ * @typedef {object} CheckIn
+ * @property {string} id
+ * @property {number} startedAtMillis
+ * @property {number | null} endedAtMillis
+ * @property {number | null} mood
+ * @property {number | null} energy
+ * @property {number | null} sleepQuality
+ * @property {{ label: string, intensity: number, heard: string }[]} voiceCues
+ * @property {boolean} crisis
+ * @property {Assessment | null} assessment how the automatic review went (#20). `unavailable`: show
+ *   "assessment unavailable" beside the last known flag, never a new green. Null: not reviewed.
+ * @property {boolean | null} previousTried whether the Patient tried the previous Suggestion, as the
+ *   review heard it; null when unknown
+ * @property {boolean} sharedWithClinician
  */
 
 /**
@@ -92,6 +112,8 @@ export const HEALTH_SOURCES = Object.freeze(["device", "synthetic"]);
 export const SHARING_CONSENTS = Object.freeze(["undecided", "granted", "declined"]);
 export const CONSENT_PURPOSES = Object.freeze(["sharing", "ratings", "voice_cues"]);
 export const QUESTIONNAIRE_KINDS = Object.freeze(["phq2", "phq9"]);
+/** How Finish Check-in's automatic review of a Check-in went (`CheckIn.assessment`). */
+export const ASSESSMENTS = Object.freeze(["assessed", "unassessed", "unavailable"]);
 
 export const COLLECTIONS = Object.freeze({
   patients: "patients",

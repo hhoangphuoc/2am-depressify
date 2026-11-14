@@ -17,7 +17,7 @@ const samples: Record<string, object> = {
   VoiceCue: { label: "flat tone", intensity: 2, heard: "short answers" } satisfies types.VoiceCue,
   CheckIn: {
     id: "c1", startedAtMillis: 1, endedAtMillis: null, mood: null, energy: null, sleepQuality: null, voiceCues: [], crisis: false,
-    sharedWithClinician: true,
+    assessment: null, previousTried: null, sharedWithClinician: true,
   } satisfies types.CheckIn,
   Summary: {
     checkInId: "c1", createdAtMillis: 1, mood: null, energy: null, sleepQuality: null, sleepLine: "", themes: [],
@@ -52,6 +52,7 @@ describe("TypeScript mirror of the data contract", () => {
     expect(types.SHARING_CONSENTS).toEqual(contract.enums.SharingConsent);
     expect(types.CONSENT_PURPOSES).toEqual(contract.enums.ConsentPurpose);
     expect(types.QUESTIONNAIRE_KINDS).toEqual(contract.enums.QuestionnaireKind);
+    expect(types.ASSESSMENTS).toEqual(contract.enums.Assessment);
   });
 
   it("has the same collections", () => {
@@ -93,6 +94,7 @@ describe("dashboard copy of the data contract", () => {
     expect(dashboard.SHARING_CONSENTS).toEqual(types.SHARING_CONSENTS);
     expect(dashboard.CONSENT_PURPOSES).toEqual(types.CONSENT_PURPOSES);
     expect(dashboard.QUESTIONNAIRE_KINDS).toEqual(types.QUESTIONNAIRE_KINDS);
+    expect(dashboard.ASSESSMENTS).toEqual(types.ASSESSMENTS);
     expect(dashboard.COLLECTIONS).toEqual(types.COLLECTIONS);
     expect(dashboard.PATIENT_SUBCOLLECTIONS).toEqual(types.PATIENT_SUBCOLLECTIONS);
   });

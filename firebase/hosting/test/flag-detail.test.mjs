@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { asSentence, flagDetailModel, flagSource, flagTimeText } from "../js/lib/flag-detail.js";
+import { asSentence, assessmentNote, flagDetailModel, flagSource, flagTimeText } from "../js/lib/flag-detail.js";
 
 const TZ = "Europe/Helsinki";
 const at = (iso) => Date.parse(iso);
@@ -26,6 +26,18 @@ test("each kind names where the flag came from", () => {
 test("times show the date and the 24-hour clock", () => {
   assert.equal(flagTimeText(at("2026-11-14T05:10:00Z"), TZ), "14 Nov 2026, 07:10");
   assert.equal(flagTimeText(null, TZ), "Time not recorded");
+});
+
+test("the note says the latest reviewed Check-in could not be assessed, beside the last known level", () => {
+  const failed = { startedAtMillis: 2, assessment: "unavailable" };
+  assert.match(assessmentNote([{ startedAtMillis: 1, assessment: "assessed" }, failed]), /^Assessment unavailable/);
+  // A silent Check-in after it was not reviewed, so it changes nothing.
+  assert.match(assessmentNote([failed, { startedAtMillis: 3, assessment: null }]), /^Assessment unavailable/);
+  // A later Check-in that was reviewed replaces it, whatever the order of the list.
+  assert.equal(assessmentNote([{ startedAtMillis: 3, assessment: "assessed" }, failed]), null);
+  assert.equal(assessmentNote([{ startedAtMillis: 3, assessment: "unassessed" }, failed]), null);
+  assert.equal(assessmentNote([]), null);
+  assert.equal(assessmentNote(null), null);
 });
 
 test("open flags come first by level then newest; cleared flags are history, newest cleared first", () => {

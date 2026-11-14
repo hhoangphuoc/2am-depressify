@@ -90,6 +90,11 @@
         "QuestionnaireKind": [
             "phq2",
             "phq9"
+        ],
+        "Assessment": [
+            "assessed",
+            "unassessed",
+            "unavailable"
         ]
     },
     "collections": {
@@ -150,6 +155,8 @@
             "sleepQuality",
             "voiceCues",
             "crisis",
+            "assessment",
+            "previousTried",
             "sharedWithClinician"
         ],
         "Summary": [
