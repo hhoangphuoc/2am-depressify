@@ -56,8 +56,8 @@ clinicians/{email}                   (allowlist)     the Clinicians a new Patien
 | `flagReasons` | string[] | `[]` | The reasons of those flags, highest level first, then newest. Plain sentences, never a number. |
 | `quietHoursStart` | int 0..23 | `21` | No Nudges inside quiet hours; the window may cross midnight. |
 | `quietHoursEnd` | int 0..23 | `9` | |
-| `lastSeenAtMillis` | int or null | `null` | Last sign of life from the phone. The hourly silence check reads it. |
-| `lastCheckInAtMillis` | int or null | `null` | |
+| `lastSeenAtMillis` | int or null | `null` | Last sign of life from the phone. The hourly silence check reads it. Finish Check-in moves it to the time of the finish (never back). |
+| `lastCheckInAtMillis` | int or null | `null` | The end of the latest finished Check-in. Finish Check-in moves it forward (never back). `null` means no Check-in has finished yet: Start Check-in then adds the first-Check-in AI disclosure to the token's instruction. |
 | `healthSource` | HealthSource | `device` | Exactly one source per Patient. |
 | `synthetic` | boolean | `false` | `true` for Demo Patients. |
 | `sharingConsent` | SharingConsent | `undecided` | The Patient's Consent for the Clinician's view. Only `granted` lets the Clinician see anything; see [Sharing Consent](#sharing-consent). |
@@ -100,13 +100,13 @@ The rule is pinned by a shared fixture, [`fixtures/baseline/baseline-cases.json`
 
 ### `checkIns/{checkInId}`: CheckIn
 
-The app creates the Check-in and owns only its times. The ratings, Voice cues and crisis marker are written by Finish Check-in (#14) from the draft it receives, the same draft the Summary is made from, so the app creates them empty (`null`, `[]`, `false`) and never changes them. Write the Check-in once and change its times with an update of those fields; a full rewrite after Finish Check-in would be refused.
+Start Check-in (#14, `startCheckIn`) creates the Check-in with the Admin SDK when it mints the Live token: `startedAtMillis` is the server time, the ratings, Voice cues and crisis marker are empty (`null`, `[]`, `false`), and it is stamped with `sharingStamp`. Finish Check-in (`finishCheckIn`) writes the ratings, Voice cues and crisis marker from the draft it receives, the same draft the Summary is made from, and `endedAtMillis` if it is still `null`. The app owns only the times: it may change them with an update of those fields, and never changes the rest. The rules still let the app create a Check-in as it would (empty function-only fields, stamped as now), but with Start Check-in it does not need to, and Finish Check-in refuses a Check-in id that does not exist (`not-found`).
 
 | Field | Type | Notes |
 |---|---|---|
 | `id` | string | Same as the document id. |
-| `startedAtMillis` | int | Written by the app. |
-| `endedAtMillis` | int or null | Written by the app. |
+| `startedAtMillis` | int | Set by Start Check-in; the app may update it. |
+| `endedAtMillis` | int or null | Set by Finish Check-in when still `null` (a time the app already wrote is kept); the app may update it. |
 | `mood`, `energy`, `sleepQuality` | int 1..5 or null | Unanswered is `null`. Written by Finish Check-in only. |
 | `voiceCues` | VoiceCue[] | `{label, intensity 1..5, heard}`. Observations, never a diagnosis. Written by Finish Check-in only, from the draft. |
 | `crisis` | boolean | `true` when the Check-in raised a crisis. Written by Finish Check-in only, from the draft's crisis marker. The red crisis flag itself is still raised by the phone at once (`flags`). |
@@ -114,19 +114,19 @@ The app creates the Check-in and owns only its times. The ratings, Voice cues an
 
 ### `summaries/{checkInId}`: Summary
 
-The Patient reads exactly what the Clinician reads.
+The Patient reads exactly what the Clinician reads. Written only by Finish Check-in (`finishCheckIn`), in one transaction with the Check-in's fields and the Patient's `lastCheckInAtMillis` and `lastSeenAtMillis`. Without usable model output (a silent Check-in, a failed or malformed model reply) it is the minimal Summary: empty `themes`, `sleepLine` and `quotes`, `null` ratings, Voice cues and the Suggestion still from the draft. The transcript itself is never written.
 
 | Field | Type | Notes |
 |---|---|---|
 | `checkInId` | string | Same as the document id. |
-| `createdAtMillis` | int | |
-| `mood`, `energy`, `sleepQuality` | int 1..5 or null | |
+| `createdAtMillis` | int | When the first finish wrote it. A retried finish keeps it. |
+| `mood`, `energy`, `sleepQuality` | int 1..5 or null | Only a number the Patient said; out-of-range values become `null`. `null` when the Patient left ratings out (`consents/ratings` `granted: false`). The same values go on the Check-in. |
 | `sleepLine` | string | |
 | `themes` | string[] | |
-| `voiceCues` | VoiceCue[] | Taken from the Check-in draft, never from the model. |
-| `suggestion` | string or null | The Suggestion made, or `null`. |
+| `voiceCues` | VoiceCue[] | Taken from the Check-in draft, never from the model. `[]` when the Patient left Voice cues out (`consents/voice_cues` `granted: false`). |
+| `suggestion` | string or null | The Suggestion made: the draft's accepted one, else its open proposal (`null` if every one was declined); when the draft has none, the line the text model heard agreed. |
 | `previousOutcome` | string or null | What the Patient said about the previous Suggestion. |
-| `quotes` | string[] | At most three, each at most 200 characters. |
+| `quotes` | string[] | At most three, each at most 200 characters, and only the Patient's own words: a quote the model returns that is not in a Patient turn of the draft is dropped. |
 | `sharedWithClinician` | boolean | The sharing stamp, from `sharingStamp` when Finish Check-in writes it. A retried finish keeps the stamp the Summary already has. |
 
 ### `suggestions/{suggestionId}`: Suggestion

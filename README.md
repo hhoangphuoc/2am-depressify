@@ -211,6 +211,35 @@ firebase emulators:exec --only auth,firestore,functions --project demo-twoam "np
 
 The fictional Intake for the live demo Patient is in [docs/demo/intake-live-patient.md](docs/demo/intake-live-patient.md).
 
+### Check-in (Start and Finish)
+
+Two callables in `europe-north1` serve a Check-in (#14). The caller must be the Patient (`auth.uid == patientId`), or anyone signed in when the Patient is a Demo Patient (`synthetic: true`), as in the rules. Signed out: `unauthenticated`; anyone else, or a missing Patient: `permission-denied`.
+
+| Callable | Request | Response |
+|---|---|---|
+| `startCheckIn` | `{patientId, brief, mode?}`. `brief` is the Brief built on the phone (1 to 12,000 characters); `mode` is `"typed"` or `"spoken"` (default). | `{checkInId, token, model, endpoint, mode, connectByMillis, expiresAtMillis}` |
+| `finishCheckIn` | `{patientId, checkInId, draft, todayLines?, lastSuggestionId?}` | `{checkInId, summary, minimal}` |
+
+**Start.** The function mints a single-use ephemeral Live token (`POST /v1beta/auth_tokens`, the shape recorded in [spike-results.md](docs/spike-results.md#1-ephemeral-token-for-gemini-live)) that locks `models/gemini-3.8-live`, the system instruction (the Brief, then fixed rules: not a clinician, no diagnosis, treatment or questionnaires, the crisis instruction, the AI disclosure while `lastCheckInAtMillis` is `null`, and short replies when typed), the tool declarations (`firebase/functions/src/tools.ts`; empty until #17), AUDIO output and both transcriptions. Then it creates `checkIns/{checkInId}` with empty ratings, Voice cues and crisis marker, stamped with `sharingStamp`. The phone:
+- opens `endpoint + "?access_token=" + token` before `connectByMillis` (60 s), sends `{"setup":{"model":"<model>"}}` (or `{"setup":{}}`) and waits for `setupComplete`. The token expires at `expiresAtMillis` (10 minutes: the 8-minute cap plus margin). A reused or late token is refused as a WebSocket close 1011 with a reason, never as an HTTP error.
+- reads every server frame as binary UTF-8 JSON.
+- in a typed Check-in sends `{"realtimeInput":{"text":"..."}}` and shows `serverContent.outputTranscription.text` as the Companion's words. The reply is still audio (the only modality verified with `gemini-3.8-live`); playing it is the app's choice.
+
+**Finish.** `draft` is what the phone recorded, never stored anywhere:
+
+```json
+{
+  "turns": [{"speaker": "patient" | "companion", "text": "..."}],
+  "voiceCues": [{"label": "...", "intensity": 1, "heard": "..."}],
+  "suggestions": [{"id": "...", "kind": "walk", "details": "...", "status": "proposed" | "accepted" | "declined"}],
+  "crisis": false
+}
+```
+
+`todayLines` are today's Signals against Baseline as words (at most 12), and `lastSuggestionId` the previous Suggestion the Companion asked about. Malformed items inside the lists are dropped and long text is cut (turns 2,000 characters, at most 400 turns); a wrong overall shape is `invalid-argument`. The function calls `gemini-4-hydrogen` with storage off and structured output (15-second timeout), then writes `summaries/{checkInId}`, the ratings, Voice cues, crisis marker and end time on the Check-in, and `lastCheckInAtMillis` / `lastSeenAtMillis` on the Patient, in one transaction. A silent Check-in, a failed model call or malformed output still succeeds with the minimal Summary (`minimal: true`). A Check-in that Start Check-in never created is `not-found`. A failed write is `unavailable`: retry with the same `checkInId`, which overwrites the one Summary and never makes a second. The returned `summary` is exactly what the Patient and the Clinician read.
+
+Both need the `GEMINI_API_KEY` secret. In the emulator there is no secret, so `startCheckIn` fails with `unavailable` after its checks and creates nothing, and `finishCheckIn` works only for a silent Check-in (no model call). The emulator suite exercises exactly those paths. With `CHECKIN_REAL_GEMINI=1` and `GEMINI_API_KEY` in the environment, `test/emulator/checkin.test.ts` also runs the handlers against the real API with fictional text, writing only to the Firestore emulator; it never runs by default.
+
 ### Attention work queue
 
 The Patient list shows a red banner for every uncleared red flag of the Clinician's Patients, with one reason and a "Review Patient" link. It stays until the flag is cleared; search by name and the level filter never hide it. A red flag that arrives while the dashboard is open is announced, and plays a short chime (WebAudio, no file) only after the Clinician turns on "Sound for red flags" in the header; the choice is kept in this browser.
