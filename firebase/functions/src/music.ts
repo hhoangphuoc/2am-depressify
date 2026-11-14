@@ -61,12 +61,15 @@ export function buildArtworkRequest(mood: string) {
   return {
     model: ARTWORK_MODEL,
     store: false,
-    input: buildMusicRequest(mood).input + "\n\n" +
-      "Create cover artwork matching this musical brief, the same mood and gentle hopeful intent. " +
+    // The image instruction leads: opening with the music brief made the model sometimes answer in text only.
+    input: "Create one full-bleed square illustration that fills the entire canvas. Reply with the image only. " +
+      "It accompanies a piece of calm music made from this brief; match its mood and gentle hopeful intent:\n\"" +
+      buildMusicRequest(mood).input + "\"\n\n" +
       "Show one peaceful nature view: a still lakeshore in soft morning light, a sunlit meadow, or a gentle forest clearing. " +
       "Choose one scene to complement the music's mood, always feeling restful, welcoming and quietly hopeful. " +
       "A simple flat illustration with a few broad, gently curved shapes and two or three muted colors: teal, sage and warm peach with cream sky. " +
-      "Let the landscape fill the square, with an open horizon and generous uncluttered space. Suggest still water, soft daylight or gentle greenery rather than intricate detail. " +
+      "Let the landscape fill the whole square edge to edge as a full-bleed scene, with an open horizon and generous uncluttered space. Suggest still water, soft daylight or gentle greenery rather than intricate detail. " +
+      "Do not draw a border, frame, inset panel, card, mat or margin around the scene. " +
       "No people, faces, buildings, dramatic cliffs, storms, darkness, harsh contrast, texture, patterns, text, logos, photographs or medical claims.",
     response_format: { type: "image", mime_type: "image/jpeg", aspect_ratio: "1:1", image_size: "1K" },
   };
