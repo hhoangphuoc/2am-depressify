@@ -28,7 +28,7 @@ There is no `google-services.json` and no Google Services plugin. The Android ap
   ```sh
   adb reverse tcp:9099 tcp:9099 && adb reverse tcp:8080 tcp:8080
   ```
-- **For a real project**, create a gitignored `secrets.properties` at the repository root:
+- **For a real project**, register an Android app in the Firebase console with the package name `com.depressify.app` (the `applicationId`; the Kotlin packages stay `com.twoam.companion`), then create a gitignored `secrets.properties` at the repository root:
   ```properties
   firebase.projectId=your-project
   firebase.applicationId=1:1234567890:android:abcdef
@@ -37,7 +37,7 @@ There is no `google-services.json` and no Google Services plugin. The Android ap
   firebase.emulatorHost=
   ```
 
-iOS reads `iosApp/iosApp/GoogleService-Info.plist` (gitignored) when it exists, and otherwise uses `demo-twoam` and the emulators. The dashboard uses the emulators when served from `localhost`, and the deployed project's `/__/firebase/init.json` otherwise. The demo Clinician email is `DemoConfig.CLINICIAN_EMAIL` in `shared`.
+iOS reads `iosApp/iosApp/GoogleService-Info.plist` (gitignored) when it exists, and otherwise uses `demo-twoam` and the emulators. Register the iOS app with the bundle ID `com.depressify.app` (`BUNDLE_ID` in `iosApp/Configuration/Config.xcconfig`). The app is called Depressify on both platforms. The dashboard uses the emulators when served from `localhost`, and the deployed project's `/__/firebase/init.json` otherwise. The demo Clinician email is `DemoConfig.CLINICIAN_EMAIL` in `shared`.
 
 ## Build
 
