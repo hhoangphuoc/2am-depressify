@@ -9,13 +9,14 @@ import { initFirebase } from "./firebase.js";
 import { signInErrorMessage } from "./lib/auth.js";
 import { COLLECTIONS } from "./lib/contract.js";
 import { toPatientRows } from "./lib/patients.js";
+import { clinicianListFilters } from "./lib/sharing.js";
 
 const $ = (id) => document.getElementById(id);
 
 const LEVEL_WORDS = { green: "Green", amber: "Amber", red: "Red" };
 const COPY = {
   loading: "Loading Patients…",
-  empty: "No Patients yet. A Patient appears here when they first open the app.",
+  empty: "No Patients yet. A Patient appears here once they choose to share their progress with you.",
   failed: "Could not load the Patient list. Reload the page to try again.",
   startFailed: "The dashboard could not start. Reload the page to try again.",
   noReasons: "—",
@@ -48,7 +49,11 @@ function renderPatients(rows) {
 
 function watchPatients(db, email) {
   $("patients-status").textContent = COPY.loading;
-  const patients = query(collection(db, COLLECTIONS.patients), where("clinicianEmail", "==", email));
+  // Only Patients who share (issue #29): the rules reject the query without the sharing filter.
+  const patients = query(
+    collection(db, COLLECTIONS.patients),
+    ...clinicianListFilters(email).map(([field, op, value]) => where(field, op, value)),
+  );
   return onSnapshot(
     patients,
     (snapshot) => renderPatients(toPatientRows(snapshot.docs.map((d) => ({ id: d.id, data: d.data() })))),
