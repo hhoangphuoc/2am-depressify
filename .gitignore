@@ -71,3 +71,17 @@ tmp/
 # --- Generated media (Gemini outputs, recordings) ---
 generated/
 outputs/
+
+# --- Kotlin / Gradle / Xcode ---
+.gradle/
+.kotlin/
+build/
+local.properties
+*.iml
+.idea/
+iosApp/build/
+xcuserdata/
+*.xcuserstate
+DerivedData/
+iosApp/Depressify.xcodeproj/
+iosApp/Depressify/Info.plist

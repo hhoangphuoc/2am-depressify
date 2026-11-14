@@ -1,0 +1,14 @@
+{
+  "detector": {
+    "ignoreRules": [],
+    "ignoreFiles": [],
+    "ignoreValues": [
+      {
+        "rule": "overused-font",
+        "value": "roboto",
+        "createdAt": "2026-11-13T23:33:04.070Z",
+        "reason": "agent triage: Roboto appears only in the Pixel 10 status bar of the protected mobile template runtime (design/patient/src/styles.css L520); design/patient/AGENTS.md requires Roboto there as Android device chrome and forbids editing that file; the app's own UI uses system-ui"
+      }
+    ]
+  }
+}
