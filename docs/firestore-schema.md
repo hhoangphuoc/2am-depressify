@@ -58,8 +58,8 @@ mail/{autoId}                        MailDoc         written by functions only; 
 | `lastCheckInAtMillis` | int or null | `null` | |
 | `healthSource` | HealthSource | `device` | Exactly one source per Patient. |
 | `synthetic` | boolean | `false` | `true` for Demo Patients. |
-| `sharingConsent` | SharingConsent | `undecided` | The Patient's Consent for the Clinician's view. |
-| `sharingChangedAtMillis` | int or null | `null` | When `sharingConsent` last changed. |
+| `sharingConsent` | SharingConsent | `undecided` | The Patient's Consent for the Clinician's view. Only `granted` lets the Clinician see anything; see [Sharing Consent](#sharing-consent). |
+| `sharingChangedAtMillis` | int or null | `null` | When `sharingConsent` last changed. Written with every change. |
 
 ### `daily/{date}`: DailyDoc
 
@@ -78,6 +78,9 @@ mail/{autoId}                        MailDoc         written by functions only; 
 | `subject` | string | A Signal key, or `sharing`, `ratings`, `voice_cues`. Same as the document id. |
 | `granted` | boolean | |
 | `changedAtMillis` | int | |
+
+- `consents/sharing` mirrors the record's `sharingConsent` (`granted` is `true` only for `granted`) and is written in the same transaction. The record's field is what the rules and functions read.
+- `consents/ratings` and `consents/voice_cues`: with no document, ratings and Voice cues are included in Check-ins; `granted: false` leaves them out of future Check-ins (the Brief's instructions omit them). They are set in Settings → Sharing and privacy and are independent of sharing and of every Signal Consent.
 
 ### `checkIns/{checkInId}`: CheckIn
 
@@ -161,21 +164,23 @@ The shape the Trigger Email extension reads. Written by functions only.
 
 | Who | Query | Index |
 |---|---|---|
-| Dashboard Patient list | `patients` where `clinicianEmail == <signed-in email>` | single field (automatic) |
+| Dashboard Patient list | `patients` where `clinicianEmail == <signed-in email>` and `sharingConsent == "granted"` | none: two equality filters are served by merging the automatic single-field indexes. Adding an `orderBy` on another field needs a composite index in `firestore.indexes.json`. |
+
+The list query must carry the sharing filter (built by `clinicianListFilters` in `firebase/hosting/js/lib/sharing.js`); without it the rules reject the whole query.
 
 ## Security rules
 
 [`firebase/firestore.rules`](../firebase/firestore.rules) encodes who may see a Patient's progress: the Patient themselves, their Clinician, and, as a demo shortcut, any signed-in user for a Patient marked `synthetic`. The tests are in [`firebase/functions/test/rules/`](../firebase/functions/test/rules/firestore-rules.test.ts). Functions and the seed use the Admin SDK, which bypasses the rules.
 
 - **Patient**: the anonymous auth uid equal to `patientId`.
-- **Clinician**: a signed-in user whose token email equals the record's `clinicianEmail`. The demo does not require `email_verified` because emulator accounts are unverified; production must.
+- **Clinician**: a signed-in user whose token email equals the record's `clinicianEmail`, while the record's `sharingConsent` is `granted`. The demo does not require `email_verified` because emulator accounts are unverified; production must.
 - **Demo shortcut**: on a record with `synthetic == true`, any signed-in user has the Patient's access, with the Patient's limits.
 
-| | Patient (or anyone on a Demo Patient) | Clinician of the Patient | Anyone else signed in | Signed out |
+| | Patient (or anyone on a Demo Patient) | Clinician of the Patient, while sharing is granted | Anyone else signed in | Signed out |
 |---|---|---|---|---|
 | Patient record: read | yes | yes | no | no |
 | Patient record: create | own id only, `clinicianEmail` the demo Clinician, `synthetic` false, `tmsEndDate` null, `intakeHighlights` empty | no | no | no |
-| Patient record: update | `quietHoursStart`, `quietHoursEnd`, `lastSeenAtMillis`, `lastCheckInAtMillis`, `healthSource`, `sharingConsent`, `sharingChangedAtMillis`; `flagLevel` and `flagReasons` only to raise (level never lower, reasons kept) | `displayName`, `tmsEndDate`, and a reset of `flagLevel` and `flagReasons` | no | no |
+| Patient record: update | `quietHoursStart`, `quietHoursEnd`, `lastSeenAtMillis`, `lastCheckInAtMillis`, `healthSource`, `sharingConsent` (to `granted` or `declined`, always with a new `sharingChangedAtMillis`), `sharingChangedAtMillis`; `flagLevel` and `flagReasons` only to raise (level never lower, reasons kept) | `displayName`, `tmsEndDate`, and a reset of `flagLevel` and `flagReasons` | no | no |
 | Patient record: delete | no | no | no | no |
 | `daily`, `consents`, `checkIns`, `summaries`, `suggestions` | read, write | read | no | no |
 | `flags` | read; create uncleared flags; no change or delete | read; set `clearedAtMillis` only | no | no |
@@ -185,4 +190,13 @@ The shape the Trigger Email extension reads. Written by functions only.
 
 Anything not listed, including a collection outside this schema, is denied. Field owners: `displayName`, `tmsEndDate` and clearing flags belong to the Clinician; `intakeHighlights` and Summaries are written by functions; `synthetic` and `clinicianEmail` never change after creation from a client.
 
-`flagLevel`, `flagReasons` and `flags` are readable by the Patient's own app, because the phone raises flags and needs the open ones to avoid duplicates. The app never shows them (ADR 0005, ADR 0009). Issue #29 adds the sharing Consent gate to Clinician access, in `clinicianCanRead` in the rules.
+`flagLevel`, `flagReasons` and `flags` are readable by the Patient's own app, because the phone raises flags and needs the open ones to avoid duplicates. The app never shows them (ADR 0005, ADR 0009).
+
+## Sharing Consent
+
+The Patient decides whether their Clinician sees their progress (issue #29, ADR 0005). `undecided` (a new record) and `declined` both mean the Clinician sees nothing.
+
+- **Rules.** `clinicianCanRead` in `firestore.rules` requires `sharingConsent == 'granted'`, and every Clinician read and write of the record and its collections goes through it. Withdrawing takes effect at once: the dashboard's list query (which filters on `granted`) drops the Patient, and a listener already open on the Patient's record or collections gets `permission-denied`. The dashboard maps that error to a "sharing withdrawn" state with `sharingStateFromError` in `firebase/hosting/js/lib/sharing.js`; every Patient view should use it rather than show an error. A Demo Patient stays readable through the demo shortcut, so views also check the field with `sharingStateFromSnapshot`.
+- **Functions.** Functions use the Admin SDK and bypass the rules, so they check `isSharingActive(patient)` from `firebase/functions/src/sharing.ts` themselves. **The flag email (#22) and the silence check (#28) must use it**: while it is false no flag email is sent for the Patient and the silence check skips them. Check-ins, Summaries and the Patient's own records continue.
+- **Granting again** gives access from then on. The rules do not filter by time, so the Clinician can then also read what was saved while the Patient was not sharing; the app says so before the Patient shares again. Whether records are deleted on withdrawal is an open decision.
+- **The app** shows the welcome and the sharing choice while `sharingConsent` is `undecided`, and saves a decision with `sharingChangedAtMillis` and `consents/sharing` in one transaction. Nothing moves a record back to `undecided`.

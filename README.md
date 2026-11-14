@@ -97,6 +97,6 @@ This starts Auth (9099), Firestore (8080), Functions (5001), Hosting (5002) and 
      -d '{"email":"clinician@example.com","password":"demo-password-1","returnSecureToken":true}'
    ```
 2. Open http://localhost:5002 and sign in as that Clinician. The Patient list is empty.
-3. Run the Android debug build (after `adb reverse`, above). The app signs in anonymously, creates the Patient record and lands on Today. "Live patient" appears on the dashboard without a reload.
+3. Run the Android debug build (after `adb reverse`, above). The app signs in anonymously and creates the Patient record, then shows the welcome and the sharing choice. Choose **Share**: the app lands on Today and "Live patient" appears on the dashboard without a reload. **Don't share** also lands on Today, and the Patient stays off the dashboard (the security rules allow the Clinician to see a Patient only while sharing is granted). Withdrawing in Settings → Sharing and privacy removes them from the open dashboard at once.
 
 Use only the `demo-twoam` project with the emulators. Do not run `firebase deploy` against it.
