@@ -3,7 +3,7 @@
 import { CONSENT_PURPOSES } from "../../hosting/js/lib/contract.js";
 import { SIGNAL_KEYS, baselineFor, dailyComparisons, oriented } from "./baseline.js";
 import { DEMO_TIME_ZONE, addDays, dateInZone, isWeekend, zonedMillis } from "./dates.js";
-import { draftsFor } from "./flags.js";
+import { draftsFor, driftComposite } from "./flags.js";
 import { PROFILES } from "./profiles.js";
 import { createRandom, hashString } from "./random.js";
 
@@ -157,15 +157,20 @@ function previousOutcomeLine(suggestion) {
 }
 
 /**
- * The Outcome score once the Patient has answered: not tried is a small negative value; otherwise
- * 0.7 x the feeling (centred on 3, scaled to plus or minus 1) plus 0.3 x that day's oriented steps
- * comparison with Baseline, clamped to plus or minus 1. A missing comparison adds nothing.
- * @param {boolean} tried @param {number | null} felt @param {number | null} objectiveChange
+ * The Outcome score, as Finish Check-in writes it (firebase/functions/src/outcomes.ts; pinned for
+ * both by fixtures/outcomes/outcome-cases.json): null until answered; not tried is a small negative
+ * value; otherwise 0.7 x the feeling (centred on 3, scaled to plus or minus 1) plus 0.3 x that
+ * day's oriented steps comparison with Baseline, itself clamped to plus or minus 1 first, all
+ * clamped to plus or minus 1. A feeling not given and a missing comparison each add nothing.
+ * @param {boolean | null} tried @param {number | null} felt @param {number | null} objectiveChange
+ * @returns {number | null}
  */
 export function outcomeScore(tried, felt, objectiveChange) {
+  if (tried === null) return null;
   if (!tried) return NOT_TRIED_OUTCOME;
-  const feeling = felt === null ? 0 : (felt - 3) / 2;
-  return clamp(0.7 * feeling + 0.3 * (objectiveChange ?? 0), -1, 1);
+  const feeling = Number.isInteger(felt) && /** @type {number} */ (felt) >= 1 && /** @type {number} */ (felt) <= 5 ? (/** @type {number} */ (felt) - 3) / 2 : 0;
+  const steps = typeof objectiveChange === "number" && Number.isFinite(objectiveChange) ? clamp(objectiveChange, -1, 1) : 0;
+  return clamp(0.7 * feeling + 0.3 * steps, -1, 1);
 }
 
 /**
@@ -249,10 +254,21 @@ export function makePatient(profileKey, options) {
         ? [{ ...random.pick(CUES[tone]), intensity: low ? random.int(2, 4) : random.int(1, 2) }]
         : [];
     const checkInId = `checkin-${date}`;
-    checkIns.push({
+    /** @type {CheckIn} */
+    const checkIn = {
       id: checkInId,
-      data: { id: checkInId, startedAtMillis, endedAtMillis, ...ratings, voiceCues, crisis: false, sharedWithClinician: sharedAt(startedAtMillis) },
-    });
+      startedAtMillis,
+      endedAtMillis,
+      ...ratings,
+      voiceCues,
+      crisis: false,
+      // As Finish Check-in writes them (#20): the review answered, and whether the previous
+      // Suggestion was tried (set below when there was one to ask about).
+      assessment: "assessed",
+      previousTried: null,
+      sharedWithClinician: sharedAt(startedAtMillis),
+    };
+    checkIns.push({ id: checkInId, data: checkIn });
 
     // Answer the previous Suggestion now, if the Patient accepted it.
     const previous = suggestions.at(-1)?.data ?? null;
@@ -261,9 +277,11 @@ export function makePatient(profileKey, options) {
       const previousD = DAILY_RECORDS - 1 - days.findIndex((day) => day.date === previousDate);
       const stepsChange = valuesByD.get(previousD)?.vsBaseline.steps ?? null;
       previous.tried = random.chance(low ? 0.45 : 0.75);
+      checkIn.previousTried = previous.tried;
       previous.felt = previous.tried ? clamp(random.int(3, 5) - (low ? 1 : 0), 1, 5) : null;
       previous.objectiveChange = oriented("steps", stepsChange);
       previous.outcomeScore = outcomeScore(previous.tried, previous.felt, previous.objectiveChange);
+      previous.outcomeCheckInId = checkInId;
     }
 
     const kind = random.pick(profile.suggestionKinds);
@@ -282,6 +300,7 @@ export function makePatient(profileKey, options) {
         felt: null,
         objectiveChange: null,
         outcomeScore: null,
+        outcomeCheckInId: null,
         sharedWithClinician: sharedAt(startedAtMillis + 120_000),
       },
     });
@@ -324,7 +343,7 @@ export function makePatient(profileKey, options) {
     const drafts = draftsFor({
       sleepMinutes: values.sleepMinutes,
       sleepOriented: comparisons.slice(0, i + 1).map((c) => oriented("sleepMinutes", c.vsBaseline.sleepMinutes)),
-      composites: comparisons.slice(0, i + 1).map((c) => c.composite),
+      composites: comparisons.slice(0, i + 1).map((c) => driftComposite(c.vsBaseline)),
       moods: checkIns.filter((c) => (c.data.endedAtMillis ?? 0) < jobAtMillis).map((c) => c.data.mood),
     });
     // The stamp is decided at the job's start; a pause starts and ends at 06:00, before any job.

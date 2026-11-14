@@ -1,78 +1,515 @@
 package app.depressify.shared.screens
 
-import androidx.compose.foundation.*
-import androidx.compose.foundation.layout.*
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.WindowInsetsSides
+import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.only
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.safeDrawing
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.runtime.*
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.semantics.*
-import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.unit.dp
-import app.depressify.shared.state.*
-import app.depressify.shared.ui.*
-import app.depressify.shared.ui.theme.Theme
-import app.depressify.shared.ui.theme.DepressifyType
-import app.depressify.shared.resources.Res
-import app.depressify.shared.resources.open_window
-import app.depressify.shared.resources.nearby_map
-import org.jetbrains.compose.resources.painterResource
-import app.depressify.core.greetingFor
-import app.depressify.core.isNightHour
-import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.tween
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalUriHandler
+import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import app.depressify.core.Summary
+import app.depressify.core.isNightHour
+import app.depressify.shared.resources.Res
+import app.depressify.shared.resources.nearby_map
+import app.depressify.shared.resources.open_window
+import app.depressify.shared.state.DemoData
+import app.depressify.shared.state.PatientState
+import app.depressify.shared.state.PatientViewModel
+import app.depressify.shared.state.Place
+import app.depressify.shared.state.Route
+import app.depressify.shared.state.Scenario
+import app.depressify.shared.state.Sheet
+import app.depressify.shared.ui.ChoicePill
+import app.depressify.shared.ui.Disclosure
+import app.depressify.shared.ui.HealthCard
+import app.depressify.shared.ui.Icon
+import app.depressify.shared.ui.Notice
+import app.depressify.shared.ui.Page
+import app.depressify.shared.ui.PhosphorIcons
+import app.depressify.shared.ui.PrimaryButton
+import app.depressify.shared.ui.SoftCard
+import app.depressify.shared.ui.TabBar
+import app.depressify.shared.ui.TextLink
+import app.depressify.shared.ui.TopBar
+import app.depressify.shared.ui.Txt
+import app.depressify.shared.ui.WeekBar
 import app.depressify.shared.ui.theme.DayColors
+import app.depressify.shared.ui.theme.DepressifyType
+import app.depressify.shared.ui.theme.Theme
 import app.depressify.shared.voice.LiveState
 import app.depressify.shared.voice.Orb
+import org.jetbrains.compose.resources.painterResource
 
 @Composable
 fun TodayScreen(vm: PatientViewModel, s: PatientState, hour: Int) {
     val c = Theme.colors
     val night = c.night
-    Page(top = { BrandHeader { vm.showSheet(Sheet.Demo) } }, bottom = { TabBar(Route.Today, vm::selectTab) }, notice = s.notice) {
-        if (s.offline) Notice("You’re offline. Saved content is still here.") { TextLink("Reconnect", { vm.applyScenario(Scenario.Everyday) }) }
-        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            Txt(greetingFor(if (night && !isNightHour(hour)) 23 else hour, DemoData.PatientName), DepressifyType.meta, c.muted)
-            Txt(if (night) "Nights can\nfeel long." else "One small thing\nis enough.", DepressifyType.todayHeadline, c.ink, heading = true)
-            Txt(if (night) "I’m here if you want company." else "A few minutes, at your pace.", DepressifyType.bodyLarge, c.muted)
+    val effectiveHour = if (night && !isNightHour(hour)) 23 else hour
+    val checkedInToday = s.history.any { it.date == "13 November" }
+
+    Column(Modifier.fillMaxSize().background(c.ground)) {
+        Box(
+            Modifier
+                .weight(1f)
+                .fillMaxWidth()
+                .verticalScroll(rememberScrollState()),
+        ) {
+            Column(
+                Modifier.fillMaxWidth(),
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                TodayHeroBanner(
+                    patientName = DemoData.PatientName,
+                    salutation = salutationFor(effectiveHour),
+                    night = night,
+                    nudgesOn = s.nudges && !s.offline,
+                    checkedInToday = checkedInToday,
+                    history = s.history,
+                    onDemo = { vm.showSheet(Sheet.Demo) },
+                    onReminders = { vm.open(Route.QuietHours) },
+                    onOpenSummary = { id -> vm.open(Route.Summary(id)) },
+                    onTalk = { vm.beginCheckIn(typed = false) },
+                    onType = { vm.beginCheckIn(typed = true) },
+                )
+
+                Column(
+                    Modifier
+                        .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal))
+                        .widthIn(max = 560.dp)
+                        .fillMaxWidth()
+                        .padding(horizontal = 24.dp)
+                        .padding(top = 20.dp, bottom = 32.dp),
+                    verticalArrangement = Arrangement.spacedBy(20.dp),
+                ) {
+                    if (s.notice != null) {
+                        Txt(
+                            text = s.notice,
+                            style = DepressifyType.meta,
+                            color = c.ok,
+                            modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
+                        )
+                    }
+                    if (s.offline) {
+                        Notice("You’re offline. Saved content is still here.") {
+                            TextLink("Reconnect", { vm.applyScenario(Scenario.Everyday) })
+                        }
+                    }
+                    if (s.hasHistory) {
+                        WeekBar(DemoData.week(s.history))
+                        PlacesCard(night) { vm.open(Route.Suggestion) }
+                    } else {
+                        Txt(
+                            text = "You can start wherever you are.",
+                            style = DepressifyType.meta,
+                            color = c.muted,
+                            modifier = Modifier.fillMaxWidth().padding(top = 12.dp),
+                            align = TextAlign.Center,
+                        )
+                    }
+                }
+            }
         }
-        CheckInCard(night, onTalk = { vm.beginCheckIn(typed = false) }, onType = { vm.beginCheckIn(typed = true) })
-        if (s.hasHistory) {
-            WeekBar(DemoData.week(s.history))
-            PlacesCard(night) { vm.open(Route.Suggestion) }
-        } else {
-            Txt("You can start wherever you are.", DepressifyType.meta, c.muted, Modifier.fillMaxWidth().padding(top = 16.dp), align = TextAlign.Center)
+        TabBar(Route.Today, vm::selectTab)
+    }
+}
+
+private fun salutationFor(hour: Int): String = when {
+    isNightHour(hour) -> "Still up"
+    hour < 11 -> "Good morning"
+    hour < 17 -> "Good afternoon"
+    else -> "Good evening"
+}
+
+private data class HeroDay(
+    val shortDay: String,
+    val dayNumber: String,
+    val today: Boolean,
+    val summaryId: String?,
+)
+
+private fun heroCalendarDays(history: List<Summary>): List<HeroDay> = listOf(
+    "We" to "11",
+    "Th" to "12",
+    "Fr" to "13",
+    "Sa" to "14",
+    "Su" to "15",
+).map { (shortDay, day) ->
+    HeroDay(
+        shortDay = shortDay,
+        dayNumber = day,
+        today = day == "13",
+        summaryId = history.firstOrNull { it.date == "$day November" }?.id,
+    )
+}
+
+/**
+ * Unified top hero card on Today: greeting + reminder bell, 5-day stadium calendar strip, and the
+ * Check-in reminder banner with action pills on the left and the living Voice Orb on the right.
+ */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun TodayHeroBanner(
+    patientName: String,
+    salutation: String,
+    night: Boolean,
+    nudgesOn: Boolean,
+    checkedInToday: Boolean,
+    history: List<Summary>,
+    onDemo: () -> Unit,
+    onReminders: () -> Unit,
+    onOpenSummary: (String) -> Unit,
+    onTalk: () -> Unit,
+    onType: () -> Unit,
+) {
+    val c = Theme.colors
+    val heroShape = RoundedCornerShape(bottomStart = 32.dp, bottomEnd = 32.dp)
+    val days = remember(history) { heroCalendarDays(history) }
+
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .shadow(
+                elevation = 4.dp,
+                shape = heroShape,
+                ambientColor = c.ink.copy(alpha = 0.05f),
+                spotColor = c.ink.copy(alpha = 0.08f),
+            )
+            .clip(heroShape)
+            .background(c.soft)
+            .border(1.dp, c.border.copy(alpha = 0.7f), heroShape),
+        contentAlignment = Alignment.TopCenter,
+    ) {
+        Column(
+            modifier = Modifier
+                .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Top + WindowInsetsSides.Horizontal))
+                .widthIn(max = 560.dp)
+                .fillMaxWidth()
+                .padding(start = 24.dp, end = 24.dp, top = 12.dp, bottom = 24.dp),
+            verticalArrangement = Arrangement.spacedBy(18.dp),
+        ) {
+            // 1. Greeting + Patient Name on left, Demo & Reminder Bell on right
+            Row(
+                Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween,
+            ) {
+                Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                    Txt(salutation, DepressifyType.meta, c.muted)
+                    Txt(
+                        text = patientName,
+                        style = DepressifyType.display.copy(fontSize = 30.sp, lineHeight = 34.sp),
+                        color = c.ink,
+                        heading = true,
+                    )
+                }
+
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .heightIn(min = 38.dp)
+                            .clip(CircleShape)
+                            .background(c.ground.copy(alpha = if (night) 0.45f else 0.68f))
+                            .border(1.dp, c.border, CircleShape)
+                            .clickable(role = Role.Button, onClick = onDemo)
+                            .padding(horizontal = 12.dp, vertical = 7.dp),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Txt("Demo", DepressifyType.small, c.muted)
+                    }
+
+                    Box(
+                        modifier = Modifier
+                            .size(42.dp)
+                            .clip(CircleShape)
+                            .background(c.ground.copy(alpha = if (night) 0.55f else 0.78f))
+                            .border(1.dp, c.border, CircleShape)
+                            .clickable(role = Role.Button, onClick = onReminders)
+                            .semantics { contentDescription = "Check-in reminders and quiet hours" },
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Icon(PhosphorIcons.bell, 20.dp, c.ink)
+                        if (nudgesOn) {
+                            Box(
+                                Modifier
+                                    .align(Alignment.TopEnd)
+                                    .padding(top = 9.dp, end = 10.dp)
+                                    .size(7.dp)
+                                    .clip(CircleShape)
+                                    .background(c.accent),
+                            )
+                        }
+                    }
+                }
+            }
+
+            // 2. Five-day vertical capsule calendar strip centered on Today
+            HeroCalendarStrip(days = days, night = night, onOpenSummary = onOpenSummary)
+
+            // Subtle hairline divider matching the reference banner
+            Box(
+                Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 4.dp)
+                    .height(1.dp)
+                    .background(c.border.copy(alpha = 0.85f)),
+            )
+
+            // 3. Check-in notification/reminder & CTA on the left, living Voice Orb on the right
+            Row(
+                Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                Column(
+                    Modifier.weight(1f),
+                    verticalArrangement = Arrangement.spacedBy(5.dp),
+                ) {
+                    val kicker = when {
+                        checkedInToday -> "CHECKED IN TODAY"
+                        night -> "QUIET REMINDER · ~3 MIN"
+                        else -> "TODAY'S CHECK-IN · ~3 MIN"
+                    }
+                    val headline = when {
+                        checkedInToday -> "One small step is ready."
+                        night -> "Nights can feel long."
+                        else -> "One small thing is enough."
+                    }
+                    val reminderLine = when {
+                        checkedInToday -> "Come back anytime if you want to talk again."
+                        night -> "I’m here whenever you want calm company."
+                        else -> "A gentle reminder to pause for a few quiet minutes."
+                    }
+
+                    Txt(
+                        text = kicker,
+                        style = DepressifyType.label,
+                        color = if (checkedInToday) c.ok else c.accent,
+                    )
+                    Txt(
+                        text = headline,
+                        style = DepressifyType.title.copy(fontSize = 22.sp, lineHeight = 27.sp),
+                        color = c.ink,
+                        heading = true,
+                    )
+                    Txt(
+                        text = reminderLine,
+                        style = DepressifyType.small,
+                        color = c.muted,
+                    )
+
+                    Spacer(Modifier.height(6.dp))
+
+                    FlowRow(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .heightIn(min = 44.dp)
+                                .clip(CircleShape)
+                                .background(c.ink)
+                                .clickable(role = Role.Button, onClick = onTalk)
+                                .padding(horizontal = 16.dp, vertical = 10.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(7.dp),
+                        ) {
+                            Icon(PhosphorIcons.microphone, 17.dp, c.onInk)
+                            Txt(
+                                text = "Check in",
+                                style = DepressifyType.meta.copy(fontWeight = FontWeight.SemiBold),
+                                color = c.onInk,
+                            )
+                        }
+
+                        Row(
+                            modifier = Modifier
+                                .heightIn(min = 44.dp)
+                                .clip(CircleShape)
+                                .background(c.ground.copy(alpha = if (night) 0.45f else 0.76f))
+                                .border(1.dp, c.border, CircleShape)
+                                .clickable(role = Role.Button, onClick = onType)
+                                .padding(horizontal = 13.dp, vertical = 10.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        ) {
+                            Icon(PhosphorIcons.keyboard, 16.dp, c.ink)
+                            Txt(
+                                text = "Type",
+                                style = DepressifyType.meta,
+                                color = c.ink,
+                            )
+                        }
+                    }
+                }
+
+                Box(
+                    modifier = Modifier
+                        .size(120.dp)
+                        .clip(CircleShape)
+                        .clickable(
+                            interactionSource = remember { MutableInteractionSource() },
+                            indication = null,
+                            role = Role.Button,
+                            onClick = onTalk,
+                        )
+                        .semantics { contentDescription = "Start voice check-in" },
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Orb(
+                        state = LiveState.Listening,
+                        size = 120.dp,
+                        onInterrupt = {},
+                        still = false,
+                        interactive = false,
+                    )
+                }
+            }
         }
     }
 }
 
-/** The one invitation on Today: the date, a still orb, and two ways to begin. */
 @Composable
-private fun CheckInCard(night: Boolean, onTalk: () -> Unit, onType: () -> Unit) {
+private fun HeroCalendarStrip(
+    days: List<HeroDay>,
+    night: Boolean,
+    onOpenSummary: (String) -> Unit,
+) {
     val c = Theme.colors
-    HealthCard {
-        Row(Modifier.fillMaxWidth()) {
-            Txt(DemoData.TodayShort, DepressifyType.small, c.muted, Modifier.weight(1f))
-            Txt("About 3 min · AI Companion", DepressifyType.small, c.muted)
-        }
-        Column(Modifier.fillMaxWidth().padding(vertical = 6.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            Orb(LiveState.Listening, 112.dp, onInterrupt = {}, still = true)
-            Txt(if (night) "Talk for a bit" else "Your Check-in", DepressifyType.title, c.ink, heading = true)
-        }
-        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            PrimaryButton("Talk", onTalk, Modifier.weight(1.4f), icon = PhosphorIcons.microphone)
-            SecondaryButton("Type", onType, Modifier.weight(1f), icon = PhosphorIcons.keyboard)
+    Row(
+        Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        days.forEach { d ->
+            val pillBg = when {
+                d.today && night -> Color(0xFF253942)
+                d.today -> c.field
+                else -> c.ground.copy(alpha = if (night) 0.22f else 0.34f)
+            }
+            val pillBorder = if (d.today) c.border.copy(alpha = 0.65f) else c.border.copy(alpha = 0.72f)
+            val hasSummary = d.summaryId != null
+
+            Column(
+                modifier = Modifier
+                    .weight(1f)
+                    .height(84.dp)
+                    .then(
+                        if (d.today) {
+                            Modifier.shadow(
+                                elevation = 6.dp,
+                                shape = CircleShape,
+                                ambientColor = c.ink.copy(alpha = 0.08f),
+                                spotColor = c.ink.copy(alpha = 0.12f),
+                            )
+                        } else Modifier,
+                    )
+                    .clip(CircleShape)
+                    .background(pillBg)
+                    .border(1.dp, pillBorder, CircleShape)
+                    .then(
+                        if (d.summaryId != null) {
+                            Modifier.clickable(role = Role.Button) { onOpenSummary(d.summaryId) }
+                        } else Modifier,
+                    )
+                    .semantics {
+                        selected = d.today
+                        contentDescription = buildString {
+                            append("${d.shortDay} ${d.dayNumber} November")
+                            if (d.today) append(", today")
+                            if (hasSummary) append(", check-in saved")
+                        }
+                    },
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center,
+            ) {
+                Txt(
+                    text = d.shortDay,
+                    style = DepressifyType.small.copy(
+                        fontWeight = if (d.today) FontWeight.Medium else FontWeight.Normal,
+                    ),
+                    color = c.muted,
+                )
+                Spacer(Modifier.height(4.dp))
+                Txt(
+                    text = d.dayNumber,
+                    style = DepressifyType.title.copy(
+                        fontSize = if (d.today) 21.sp else 19.sp,
+                        lineHeight = 23.sp,
+                        fontWeight = if (d.today) FontWeight.Bold else FontWeight.SemiBold,
+                    ),
+                    color = c.ink,
+                )
+                Spacer(Modifier.height(5.dp))
+                Box(
+                    Modifier
+                        .size(5.dp)
+                        .clip(CircleShape)
+                        .background(
+                            when {
+                                hasSummary && d.today -> c.ok
+                                hasSummary -> c.accent
+                                d.today -> c.accent.copy(alpha = 0.35f)
+                                else -> Color.Transparent
+                            },
+                        ),
+                )
+            }
         }
     }
 }

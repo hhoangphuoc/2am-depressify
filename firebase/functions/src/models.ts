@@ -9,3 +9,9 @@ export const LIVE_MODEL = "gemini-3.8-live";
 
 /** The music model behind the Companion's suggest_music tool. */
 export const MUSIC_MODEL = "lyria-3.5";
+
+/**
+ * The Gemini Decisions API model Finish Check-in asks its three yes/no questions (#20). `v1beta`
+ * only, called with `fetch` (src/decisionsApi.ts); the request shape is the #6 spike's.
+ */
+export const DECISION_MODEL = "gemini-decision-1";

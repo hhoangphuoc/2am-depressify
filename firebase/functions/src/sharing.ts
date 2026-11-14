@@ -30,9 +30,22 @@ export function isSharingActive(patient: Partial<Pick<PatientDoc, "sharingConsen
  * function writer calls this. A function that rewrites an existing document keeps the stamp it has.
  *
  * Writers: the weekly Digest (#23) today; Finish Check-in (#14) for the Summary, the Check-in's
- * ratings and the Outcome; the silence check (#28) for its flag. The phone's Kotlin twin is
+ * ratings and the Outcome, and its flags (#20, through `checkInStamp`); the silence check (#28) for its flag. The phone's Kotlin twin is
  * `PatientDoc.sharingStamp()` in core.
  */
 export function sharingStamp(patient: Partial<Pick<PatientDoc, "sharingConsent">> | null | undefined): boolean {
   return isSharingActive(patient);
+}
+
+/**
+ * The stamp for what Finish Check-in creates from a Check-in (its Summary, #14, and its flags, #20):
+ * true only when the Check-in was started while sharing (its own stamp) and the Patient still shares
+ * now. A conversation held while not sharing, or one the Patient stopped sharing during, never
+ * reaches the Clinician.
+ */
+export function checkInStamp(
+  checkIn: { sharedWithClinician?: unknown } | null | undefined,
+  patient: Partial<Pick<PatientDoc, "sharingConsent">> | null | undefined,
+): boolean {
+  return checkIn?.sharedWithClinician === true && sharingStamp(patient);
 }
