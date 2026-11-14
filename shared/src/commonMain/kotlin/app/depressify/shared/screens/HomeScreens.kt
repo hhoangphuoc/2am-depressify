@@ -2,6 +2,10 @@ package app.depressify.shared.screens
 
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -49,10 +53,12 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalUriHandler
+import androidx.compose.ui.semantics.CustomAccessibilityAction
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.customActions
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
@@ -63,6 +69,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import app.depressify.core.Summary
 import app.depressify.core.isNightHour
+import app.depressify.core.model.PatientLocation
+import app.depressify.shared.data.TodayPlace
+import app.depressify.shared.data.metersFrom
 import app.depressify.shared.resources.Res
 import app.depressify.shared.resources.nearby_map
 import app.depressify.shared.resources.open_window
@@ -78,10 +87,13 @@ import app.depressify.shared.ui.ChoicePill
 import app.depressify.shared.ui.Disclosure
 import app.depressify.shared.ui.HealthCard
 import app.depressify.shared.ui.Icon
+import app.depressify.shared.ui.IconTile
 import app.depressify.shared.ui.Notice
 import app.depressify.shared.ui.Page
 import app.depressify.shared.ui.PhosphorIcons
 import app.depressify.shared.ui.PlacesMap
+import app.depressify.shared.ui.mapsAvailable
+import app.depressify.shared.ui.placeIcon
 import app.depressify.shared.ui.PrimaryButton
 import app.depressify.shared.ui.SoftCard
 import app.depressify.shared.ui.TabBar
@@ -95,6 +107,7 @@ import app.depressify.shared.ui.theme.Theme
 import app.depressify.shared.voice.LiveState
 import app.depressify.shared.voice.Orb
 import app.depressify.core.model.SuggestionKind
+import app.depressify.shared.voice.live.CompanionTools
 import app.depressify.shared.voice.live.mapsSearchUrl
 import app.depressify.shared.voice.live.musicSearchUrl
 import org.jetbrains.compose.resources.painterResource
@@ -551,7 +564,7 @@ private val SuggestionKind.icon: ImageVector
  */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun TodaySuggestionsCard(s: PatientState, onRetry: () -> Unit) {
+internal fun TodaySuggestionsCard(s: PatientState, onRetry: () -> Unit) {
     val c = Theme.colors
     val uri = LocalUriHandler.current
     HealthCard {
@@ -579,24 +592,14 @@ private fun TodaySuggestionsCard(s: PatientState, onRetry: () -> Unit) {
             if (suggestion.reason.isNotBlank()) Txt(suggestion.reason, DepressifyType.meta, c.muted)
         }
         if (suggestion.places.isNotEmpty()) {
-            PlacesMap(today.location, suggestion.places, selectedPlace, { selectedPlace = it }, Modifier.fillMaxWidth().aspectRatio(1.6f).clip(RoundedCornerShape(14.dp)))
-            Column {
-                suggestion.places.forEachIndexed { i, place ->
-                    Row(
-                        Modifier.fillMaxWidth().heightIn(min = 48.dp).clickable(role = Role.Button) { selectedPlace = i }.semantics { selected = i == selectedPlace },
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Icon(PhosphorIcons.mapPin, 18.dp, if (i == selectedPlace) c.accent else c.muted)
-                        Column(Modifier.weight(1f).padding(horizontal = 10.dp)) {
-                            Txt(place.name, DepressifyType.meta.copy(fontWeight = FontWeight.SemiBold), c.ink)
-                            if (place.address.isNotBlank()) Txt(place.address, DepressifyType.small, c.muted)
-                        }
-                        TextLink("Maps", { uri.openUri(place.mapsUrl) }, Modifier.semantics { contentDescription = "Open " + place.name + " in Google Maps" }, trailing = PhosphorIcons.arrowSquareOut)
-                    }
+            val places = suggestion.places
+            if (mapsAvailable()) {
+                PlacesMap(today.location, places, selectedPlace, { selectedPlace = it }, suggestion.kind, Modifier.fillMaxWidth().aspectRatio(1.4f).clip(RoundedCornerShape(16.dp)))
+                // The map names the places; one row says how far the chosen one is and opens it.
+                AnimatedContent(places[selectedPlace.coerceIn(places.indices)], transitionSpec = { fadeIn(tween(200)) togetherWith fadeOut(tween(120)) }) { place ->
+                    PlaceRow(place, today.location, suggestion.kind, onNext = if (places.size > 1) ({ selectedPlace = (selectedPlace + 1) % places.size }) else null)
                 }
-            }
-            // The Maps terms ask for the source beside place content shown off the map.
-            Txt("Places from Google Maps" + (today.location?.let { ", near " + it.label.replaceFirstChar(Char::lowercase) } ?: ""), DepressifyType.small, c.muted)
+            } else places.forEach { PlaceRow(it, today.location, suggestion.kind, onNext = null) }
         } else suggestion.placeQuery?.let { query ->
             TextLink("Search “$query” in Google Maps", { uri.openUri(mapsSearchUrl(query)) }, trailing = PhosphorIcons.arrowSquareOut)
         }
@@ -611,6 +614,30 @@ private fun TodaySuggestionsCard(s: PatientState, onRetry: () -> Unit) {
             }
         }
         Txt("Made by AI from your own Check-ins and Signals. Wellbeing ideas, not treatment advice.", DepressifyType.small, c.muted)
+    }
+}
+
+/**
+ * One place: what it is for, its name, how far it is from the Patient's area, and a link that opens
+ * it in Google Maps. The link's words also name the source, which the Maps terms ask for beside
+ * place content. [onNext] lets a screen reader step through the places the map shows as pins.
+ */
+@Composable
+private fun PlaceRow(place: TodayPlace, near: PatientLocation?, kind: SuggestionKind, onNext: (() -> Unit)?) {
+    val c = Theme.colors
+    val uri = LocalUriHandler.current
+    Row(
+        Modifier.fillMaxWidth().heightIn(min = 56.dp).semantics {
+            if (onNext != null) customActions = listOf(CustomAccessibilityAction("Next place") { onNext(); true })
+        },
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        IconTile(kind.placeIcon)
+        Column(Modifier.weight(1f).padding(horizontal = 12.dp)) {
+            Txt(place.name, DepressifyType.meta.copy(fontWeight = FontWeight.SemiBold), c.ink)
+            near?.let { Txt(CompanionTools.distanceLabel(place.metersFrom(it)) + " away", DepressifyType.small, c.muted) }
+        }
+        TextLink("Google Maps", { uri.openUri(place.mapsUrl) }, Modifier.semantics { contentDescription = "Open " + place.name + " in Google Maps" }, trailing = PhosphorIcons.arrowSquareOut)
     }
 }
 

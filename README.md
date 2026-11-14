@@ -50,6 +50,7 @@ The repository is public, so the Clinician's email is configuration, never code.
 |---|---|---|
 | Android app | `demo.clinicianEmail` in `secrets.properties` (becomes `BuildConfig.CLINICIAN_EMAIL`) | `clinician@example.com` for the `demo-twoam` emulator project; with a real `firebase.projectId` the build fails |
 | iOS app | `ClinicianEmail` (string) in a gitignored `iosApp/Depressify/Secrets.plist` | `clinician@example.com` with the emulators; with `GoogleService-Info.plist` the app stops at launch |
+| iOS app | Optional `MapsApiKey` (string) in the same `Secrets.plist`: a Maps SDK for iOS key restricted to the bundle ID `app.depressify.patient`, never the server's `MAPS_API_KEY` | No map on Today; the places are listed instead |
 | Allowlist and Clinician role | `npm run allow-clinician -- --email <clinician-email> [--uid <uid>] [--project <project-id>]` in `firebase/seed`. Also gives the Clinician's sign-in account the `role: "clinician"` claim and a verified email ([ADR 0010](docs/adr/0010-patients-sign-in-with-their-own-account.md)); an account not yet verified needs `--uid` | a new Patient cannot create their record, and the Clinician's account reads nothing |
 | Seed | `--clinician <clinician-email>` or `CLINICIAN_EMAIL` (the option wins); the seed also allows that email | `clinician@example.com` in the emulator; a real project (`--project`) refuses to seed |
 | Live demo Patient | `--clinician <clinician-email>` or `CLINICIAN_EMAIL`; it must already be allowed (a warning if not) | `clinician@example.com` in the emulator; a real project refuses to seed |
@@ -126,6 +127,7 @@ The Patient app runs on local demo data until Firebase answers. With a backend i
 | 3. Dashboard helpers (Node test runner) | `cd firebase/hosting && node --test` |
 | 3. Seed generator and Baseline fixture (Node test runner, plus a type check) | `cd firebase/seed && npm install && npm test` |
 | 4. `shared` common tests (the session and the view model's backend wiring, with fakes) | `./gradlew :shared:testAndroidHostTest` |
+| 5. `shared` Compose UI tests (the voice Check-in screen), on a running emulator or device | `./gradlew :shared:connectedAndroidDeviceTest` |
 
 `./gradlew :core:jvmTest` also regenerates `firebase/functions/test/fixtures/contract.json`, which the functions tests compare with the TypeScript and dashboard mirrors. Commit that file when it changes.
 

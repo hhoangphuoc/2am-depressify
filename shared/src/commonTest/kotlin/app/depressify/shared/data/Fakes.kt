@@ -82,6 +82,8 @@ class FakeCheckInGateway : CheckInGateway {
     var places: List<NearbyPlace>? = emptyList()
     /** What the weather lookup returns; null makes it fail. */
     var weather: Weather? = null
+    /** Where the last place or weather lookup looked. */
+    var lookedNear: PatientLocation? = null
     /** What music generation returns; null makes it fail. */
     var music: MusicClip? = null
     /** What cover generation returns; null means none came back. */
@@ -108,8 +110,14 @@ class FakeCheckInGateway : CheckInGateway {
         check(!failReads)
         return days.take(count)
     }
-    override suspend fun findPlaces(patientId: String, query: String, near: PatientLocation): List<NearbyPlace> = places ?: throw IllegalStateException("UNAVAILABLE")
-    override suspend fun weather(patientId: String, near: PatientLocation): Weather = weather ?: throw IllegalStateException("UNAVAILABLE")
+    override suspend fun findPlaces(patientId: String, query: String, near: PatientLocation): List<NearbyPlace> {
+        lookedNear = near
+        return places ?: throw IllegalStateException("UNAVAILABLE")
+    }
+    override suspend fun weather(patientId: String, near: PatientLocation): Weather {
+        lookedNear = near
+        return weather ?: throw IllegalStateException("UNAVAILABLE")
+    }
     override suspend fun generateMusic(patientId: String, mood: String): MusicClip = music ?: throw IllegalStateException("UNAVAILABLE")
     override suspend fun generateMusicCover(patientId: String, mood: String): ByteArray? = cover
     override suspend fun recentSummaries(patientId: String, count: Int): List<Summary> {

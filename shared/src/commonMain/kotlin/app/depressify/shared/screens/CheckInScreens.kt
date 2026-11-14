@@ -99,7 +99,7 @@ fun CheckInScreen(vm: PatientViewModel, s: PatientState) {
 }
 
 @Composable
-private fun VoiceCheckInScreen(vm: PatientViewModel, s: PatientState, snap: LiveSnapshot, playback: MusicPlayback, onOpenMusic: () -> Unit) {
+internal fun VoiceCheckInScreen(vm: PatientViewModel, s: PatientState, snap: LiveSnapshot, playback: MusicPlayback, onOpenMusic: () -> Unit) {
     val c = Theme.colors
     val density = LocalDensity.current
     val state = snap.shownState
@@ -109,7 +109,6 @@ private fun VoiceCheckInScreen(vm: PatientViewModel, s: PatientState, snap: Live
     var sheetOpen by rememberSaveable { mutableStateOf(false) }
     var activeCardIndex by rememberSaveable { mutableIntStateOf(0) }
     var lastSeenNewestId by rememberSaveable { mutableStateOf<String?>(null) }
-    var wasWrapped by rememberSaveable { mutableStateOf(false) }
     var sheetOpenFraction by remember { mutableFloatStateOf(0f) }
 
     val newestId = snap.suggestions.firstOrNull()?.id
@@ -122,13 +121,6 @@ private fun VoiceCheckInScreen(vm: PatientViewModel, s: PatientState, snap: Live
             lastSeenNewestId = null
             sheetOpen = false
         }
-    }
-
-    LaunchedEffect(snap.wrapped) {
-        if (snap.wrapped && !wasWrapped) {
-            sheetOpen = false
-        }
-        wasWrapped = snap.wrapped
     }
 
     Box(Modifier.fillMaxSize().background(c.ground)) {
@@ -224,6 +216,7 @@ private fun VoiceCheckInScreen(vm: PatientViewModel, s: PatientState, snap: Live
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
+                snap.cards.filterIsInstance<ToolCard.Weather>().lastOrNull()?.let { WeatherCard(it) }
                 AnimatedVisibility(
                     visible = snap.suggestions.isNotEmpty() && !sheetOpen,
                     enter = fadeIn() + slideInVertically { it / 2 },
@@ -233,12 +226,6 @@ private fun VoiceCheckInScreen(vm: PatientViewModel, s: PatientState, snap: Live
                         suggestions = snap.suggestions,
                         onClick = { sheetOpen = true },
                         modifier = Modifier.padding(bottom = 4.dp),
-                    )
-                }
-                if (snap.wrapped) {
-                    PrimaryButton(
-                        text = if (s.consents[SignalId.Ratings] == true) "Continue to ratings" else "Finish Check-in",
-                        onClick = vm::finishCheckIn,
                     )
                 }
             }
@@ -456,26 +443,6 @@ private fun Composer(onSend: (String) -> Unit, onVoice: (() -> Unit)?) {
             Box(Modifier.size(48.dp).clickable(enabled = text.isNotBlank(), role = Role.Button) { send() }.semantics { contentDescription = "Send reply" }, contentAlignment = Alignment.Center) {
                 Icon(PhosphorIcons.paperPlaneTilt, 20.dp, if (text.isNotBlank()) c.ink else c.muted)
             }
-        }
-    }
-}
-
-@Composable
-fun RatingsScreen(vm: PatientViewModel, s: PatientState) {
-    val c = Theme.colors
-    val step = s.ratingStep
-    val value = when (step) { 0 -> s.ratings.mood; 1 -> s.ratings.energy; else -> s.ratings.sleepQuality }
-    Page(top = { TopBar("Your ratings", null) }) {
-        Spacer(Modifier.height(24.dp))
-        Txt("Before you go · " + (step + 1) + " of 3", DepressifyType.meta, c.muted)
-        Txt(listOf("How is your mood?", "How is your energy?", "How was your sleep?")[step], DepressifyType.title, c.ink, heading = true)
-        Txt("Just how it feels to you.", DepressifyType.body)
-        RatingRow(value, { vm.rate(it) }, if (step == 2) "Very poor" else "Very low", if (step == 1) "Very high" else "Very good", listOf("Mood", "Energy", "Sleep quality")[step])
-        Spacer(Modifier.height(12.dp))
-        PrimaryButton(if (step < 2) "Continue" else "Make my Summary", vm::nextRating, enabled = value != null)
-        Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
-            TextLink("Skip this question", { vm.rate(null); vm.nextRating() })
-            if (step > 0) TextLink("Previous question", vm::previousRating)
         }
     }
 }

@@ -1,4 +1,5 @@
 import FirebaseCore
+import GoogleMaps
 import Shared
 import SwiftUI
 
@@ -19,6 +20,11 @@ private func configuredClinicianEmail() -> String? { secret("ClinicianEmail") }
 @main
 struct iOSApp: App {
     init() {
+        // The map of places on Today, only with a Maps SDK for iOS key (MapsApiKey in Secrets.plist).
+        if let mapsKey = secret("MapsApiKey") {
+            GMSServices.provideAPIKey(mapsKey)
+            NativeMaps.shared.factory = { GooglePlacesMap(frame: .zero) }
+        }
         // A real project ships GoogleService-Info.plist (gitignored). Without it, the app uses the
         // emulator-only demo project and the local emulators, like the Android debug build.
         if Bundle.main.path(forResource: "GoogleService-Info", ofType: "plist") != nil {

@@ -82,11 +82,6 @@ export const LIVE_TOOL_DECLARATIONS: readonly FunctionDeclaration[] = (
       parameters: NO_ARGUMENTS,
     },
     {
-      name: "wrap_up",
-      description: "Call when the conversation is ready to close. The app then asks for the three ratings on screen.",
-      parameters: NO_ARGUMENTS,
-    },
-    {
       name: RAISE_CRISIS_TOOL,
       description: "Call at once if the person mentions thoughts of harming themselves. Shows the help buttons on their screen.",
       parameters: { type: "OBJECT", properties: { reason: { type: "STRING", description: "One plain sentence." } }, required: ["reason"] },

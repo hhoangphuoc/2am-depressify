@@ -8,6 +8,7 @@ import app.depressify.core.model.Summary
 import app.depressify.shared.data.CheckInDraft
 import app.depressify.shared.data.CheckInGateway
 import app.depressify.shared.data.DraftTurn
+import app.depressify.shared.data.PatientLocation
 import app.depressify.shared.data.PatientStore
 import app.depressify.shared.voice.live.AudioIO
 import app.depressify.shared.voice.live.CheckInBrief
@@ -93,11 +94,14 @@ class GeminiLiveSession(
         openLine = null
         job = scope.launch {
             try {
-                val brief = CheckInBrief.build(patients.get(id)?.intakeHighlights.orEmpty())
+                val patient = patients.get(id)
+                val brief = CheckInBrief.build(patient?.intakeHighlights.orEmpty())
                 val start = checkIns.startCheckIn(id, brief, typed = state.value.muted)
                 checkInId = start.checkInId
                 // This coroutine's scope: music still being made is cancelled with the Check-in.
-                val tools = CompanionTools(patients, checkIns, id, nowMillis, effects, scope = this)
+                // Today's places come from the stored location too, so both screens suggest the same neighbourhood.
+                val near = patient?.location?.let { PatientLocation(it.label, it.latitude, it.longitude) } ?: PatientLocation.Sample
+                val tools = CompanionTools(patients, checkIns, id, nowMillis, effects, scope = this, location = near)
                 client.run(start.endpoint, start.token, start.model, out) { handle(it, tools, out) }
                 lost()
             } catch (e: CancellationException) {
@@ -148,7 +152,7 @@ class GeminiLiveSession(
 
     private fun show(live: LiveState, tool: String? = null) = state.update { it.copy(event = LiveEvent(live, step(it), tool = tool)) }
 
-    private fun step(s: LiveSnapshot) = when { s.wrapped -> 3; s.offer != null -> 2; else -> s.event.step }
+    private fun step(s: LiveSnapshot) = if (s.offer != null) 2 else s.event.step
 
     private fun lost() = state.update { it.copy(connected = false) }
 
@@ -176,9 +180,13 @@ class GeminiLiveSession(
                     }
                 }
                 is ToolCard.Places -> {
+                    // The places come nearest first, and the Brief tells the Companion to name the first.
+                    val nearest = card.places.firstOrNull()
+                    val url = nearest?.mapsUrl ?: card.url
+                    val label = nearest?.let { it.name + " · " + CompanionTools.howFar(it) } ?: "Open in Google Maps"
                     val top = s.suggestions.firstOrNull()
                     if (top != null && top.kind == SuggestionKind.Walk && top.actionUrl == null) {
-                        listOf(top.copy(actionUrl = card.url, actionLabel = "Open in Google Maps")) + s.suggestions.drop(1)
+                        listOf(top.copy(actionUrl = url, actionLabel = label)) + s.suggestions.drop(1)
                     } else {
                         listOf(
                             SessionSuggestion(
@@ -186,8 +194,8 @@ class GeminiLiveSession(
                                 kind = SuggestionKind.Walk,
                                 title = card.query.replaceFirstChar { it.uppercase() },
                                 detail = SuggestionKind.Walk.detail,
-                                actionUrl = card.url,
-                                actionLabel = "Open in Google Maps",
+                                actionUrl = url,
+                                actionLabel = label,
                             )
                         ) + s.suggestions
                     }
@@ -222,17 +230,15 @@ class GeminiLiveSession(
             }
         }
 
-        override fun wrapUp() = state.update { it.copy(wrapped = true) }
         override fun crisis() { crisis = true; onCrisis() }
     }
 
-    override suspend fun finish(ratingsLine: String?): Summary? {
+    override suspend fun finish(): Summary? {
         val id = patient
         val checkIn = checkInId
         if (scripted || id == null || checkIn == null) return null
         val snap = state.value
-        val turns = snap.transcript.map { DraftTurn(fromPatient = it.speaker == Speaker.You, text = it.text) } +
-            listOfNotNull(ratingsLine?.let { DraftTurn(fromPatient = true, text = it) })
+        val turns = snap.transcript.map { DraftTurn(fromPatient = it.speaker == Speaker.You, text = it.text) }
         val chosenId = acceptedSuggestionId
         val hasExactChosen = chosenId != null && offered.any { it.id == chosenId }
         val suggestions = offered.mapIndexed { i, s ->

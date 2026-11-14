@@ -7,6 +7,13 @@ import app.depressify.core.model.Suggestion
 import app.depressify.core.model.SuggestionKind
 import app.depressify.core.model.Summary
 import kotlinx.serialization.Serializable
+import kotlin.math.PI
+import kotlin.math.asin
+import kotlin.math.cos
+import kotlin.math.pow
+import kotlin.math.roundToInt
+import kotlin.math.sin
+import kotlin.math.sqrt
 
 /** One started Check-in: its id, and the single-use token, model and endpoint for the Gemini Live connection. */
 data class LiveStart(val checkInId: String, val token: String, val model: String, val endpoint: String)
@@ -20,7 +27,7 @@ data class CheckInDraft(val turns: List<DraftTurn>, val suggestions: List<Sugges
 /** Where the Patient is, for a place lookup. Sent only with that lookup and never stored. */
 data class PatientLocation(val label: String, val latitude: Double, val longitude: Double) {
     companion object {
-        // shortcut: every Patient is at the Junction venue (Dipoli, Aalto University); replace with the phone's last known location once location Consent and sampling exist (#18).
+        // shortcut: a Patient without a stored location is at the Junction venue (Dipoli, Aalto University); replace with the phone's last known location once location Consent and sampling exist (#18).
         val Sample = PatientLocation("Otaniemi, Espoo", 60.1850, 24.8324)
     }
 }
@@ -45,6 +52,14 @@ data class Weather(
 /** A place from Google Maps near the Patient. [mapsUrl] opens it in Google Maps. */
 @Serializable
 data class TodayPlace(val id: String, val name: String, val address: String = "", val latitude: Double, val longitude: Double, val mapsUrl: String)
+
+/** The straight-line distance from [near] in metres (great circle). */
+fun TodayPlace.metersFrom(near: StoredPatientLocation): Int {
+    fun rad(degrees: Double) = degrees * PI / 180
+    val h = sin(rad(latitude - near.latitude) / 2).pow(2) +
+        cos(rad(near.latitude)) * cos(rad(latitude)) * sin(rad(longitude - near.longitude) / 2).pow(2)
+    return (2 * 6_371_000 * asin(sqrt(h))).roundToInt()
+}
 
 @Serializable
 data class MusicPick(val title: String, val artist: String)

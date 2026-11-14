@@ -5,6 +5,7 @@ import app.depressify.core.live.LiveEvent as ServerEvent
 import app.depressify.core.model.DailyDoc
 import app.depressify.core.model.FlagLevel
 import app.depressify.core.model.PatientDoc
+import app.depressify.core.model.PatientLocation as StoredPatientLocation
 import app.depressify.core.model.SharingConsent
 import app.depressify.core.model.Signal
 import app.depressify.core.model.SuggestionStatus
@@ -12,6 +13,7 @@ import app.depressify.shared.data.FakeCheckInGateway
 import app.depressify.shared.data.FakePatientStore
 import app.depressify.shared.data.MusicClip
 import app.depressify.shared.data.NearbyPlace
+import app.depressify.shared.data.PatientLocation
 import app.depressify.shared.data.Weather
 import app.depressify.shared.voice.live.LiveClient
 import app.depressify.shared.voice.live.AudioIO
@@ -127,7 +129,6 @@ class GeminiLiveSessionTest {
             call("suggest_music", "mood" to JsonPrimitive("tired after a long week")),
             call("find_places", "query" to JsonPrimitive("park near me")),
             call("no_such_tool"),
-            call("wrap_up"),
         ))
         val live = session(client)
         live.start(returning = true)
@@ -141,9 +142,8 @@ class GeminiLiveSessionTest {
         assertEquals(ToolCard.Music("tired after a long week", null, failed = true), snap.cards.filterIsInstance<ToolCard.Music>().single())
         assertEquals("https://www.google.com/maps/search/?api=1&query=park%20near%20me", snap.cards.filterIsInstance<ToolCard.Places>().single().url)
         assertEquals(SuggestionKind.Music to "One calm song tonight", snap.offer to snap.offerDetails)
-        assertTrue(snap.wrapped)
         assertTrue(gateway.suggestions.single().sharedWithClinician)
-        assertEquals(7, client.sent.count { it.contains("toolResponse") })
+        assertEquals(6, client.sent.count { it.contains("toolResponse") })
         assertTrue(client.sent.any { it.contains("\"c-no_such_tool\"") && it.contains("unknown_tool") })
         live.stop()
     }
@@ -170,6 +170,23 @@ class GeminiLiveSessionTest {
     }
 
     @Test
+    fun aWalkSuggestionLinksTheNearestPlaceFoundWithItsMinutesOnFoot() {
+        gateway.places = listOf(
+            NearbyPlace("Karhupuisto", "https://maps.google.com/?cid=1", 350, walkMinutes = 5),
+            NearbyPlace("Kaisaniemi Park", "https://maps.google.com/?cid=2", 1400, walkMinutes = 18),
+        )
+        val client = FakeLiveClient(listOf(
+            call("record_suggestion", "kind" to JsonPrimitive("walk"), "details" to JsonPrimitive("Ten minutes outside before dark")),
+            call("find_places", "query" to JsonPrimitive("park")),
+        ))
+        session(client).apply { start(returning = true) }.let { live ->
+            val card = live.snapshot.value.suggestions.single()
+            assertEquals("Karhupuisto · 5 min walk" to "https://maps.google.com/?cid=1", card.actionLabel to card.actionUrl)
+            live.stop()
+        }
+    }
+
+    @Test
     fun getWeatherShowsTheWeatherWithItsSourceAndAFailedLookupIsANamedError() {
         gateway.weather = Weather("Cloudy", 3, -3, 10, 26, goodForAWalk = true, sourceTitle = "Weather for Espoo - Google", sourceUrl = "https://www.google.com/search?q=Weather")
         val found = FakeLiveClient(listOf(call("get_weather")))
@@ -184,6 +201,16 @@ class GeminiLiveSessionTest {
         session(failed).apply { start(returning = true) }.let { live ->
             assertEquals(emptyList(), live.snapshot.value.cards)
             assertTrue(failed.sent.any { it.contains("backend_failed") })
+            live.stop()
+        }
+    }
+
+    @Test
+    fun theCompanionLooksForPlacesAroundThePatientsOwnLocation() {
+        patients.records["p1"] = patients.records.getValue("p1").copy(location = StoredPatientLocation("Kallio, Helsinki", 60.1841, 24.9497))
+        val client = FakeLiveClient(listOf(call("find_places", "query" to JsonPrimitive("park"))))
+        session(client).apply { start(returning = true) }.let { live ->
+            assertEquals(PatientLocation("Kallio, Helsinki", 60.1841, 24.9497), gateway.lookedNear)
             live.stop()
         }
     }
@@ -231,7 +258,7 @@ class GeminiLiveSessionTest {
     }
 
     @Test
-    fun finishingHandsOverTheConversationTheRatingsAndTheAgreedSuggestion() = runTest {
+    fun finishingHandsOverTheConversationAndTheAgreedSuggestion() = runTest {
         val client = FakeLiveClient(listOf(
             ServerEvent.OutputText("How was today?"), ServerEvent.TurnComplete, ServerEvent.InputText("Tired."),
             call("record_suggestion", "kind" to JsonPrimitive("music"), "details" to JsonPrimitive("One calm song tonight")),
@@ -241,12 +268,12 @@ class GeminiLiveSessionTest {
         live.respond(Reply.Accept)
         live.stop()
 
-        val summary = live.finish("My ratings on the screen: mood 3.")
+        val summary = live.finish()
 
         assertEquals("check-in-1", summary?.checkInId)
         val (checkInId, draft) = gateway.finished.single()
         assertEquals("check-in-1", checkInId)
-        assertEquals(listOf(false to "How was today?", true to "Tired.", true to "That works for me.", true to "My ratings on the screen: mood 3."), draft.turns.map { it.fromPatient to it.text })
+        assertEquals(listOf(false to "How was today?", true to "Tired.", true to "That works for me."), draft.turns.map { it.fromPatient to it.text })
         assertEquals(SuggestionStatus.accepted, draft.suggestions.single().status)
         assertFalse(draft.crisis)
     }
@@ -283,7 +310,7 @@ class GeminiLiveSessionTest {
         assertEquals(listOf(false, false, true), live.snapshot.value.suggestions.map { it.accepted })
         live.stop()
 
-        live.finish(ratingsLine = null)
+        live.finish()
         val statuses = gateway.finished.single().second.suggestions.map { it.details to it.status }
         assertEquals(
             listOf(

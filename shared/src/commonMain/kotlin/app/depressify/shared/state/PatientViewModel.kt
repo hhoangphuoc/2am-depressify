@@ -89,8 +89,6 @@ data class PatientState(
     val nudges: Boolean = true,
     val typed: Boolean = false,
     val typedCheckIn: TypedCheckIn = TypedCheckIn(),
-    val ratingStep: Int = 0,
-    val ratings: Ratings = Ratings(),
     val booking: BookingPlan? = null,
     val finish: FinishState = FinishState.Idle,
     val sheet: Sheet? = null,
@@ -254,7 +252,7 @@ class PatientViewModel(
         val returning = state.value.hasHistory
         state.update {
             it.copy(
-                typed = typed, ratings = Ratings(), ratingStep = 0, booking = null, finish = FinishState.Idle,
+                typed = typed, booking = null, finish = FinishState.Idle,
                 typedCheckIn = TypedCheckIn(lines = listOf(TranscriptLine(Speaker.Companion,
                     if (returning) "It’s good to hear from you. Did you try the walk?" else "You can take your time. How are you feeling today?"))),
             )
@@ -304,21 +302,14 @@ class PatientViewModel(
 
     fun voteSuggestion(id: String, vote: SuggestionVote?) = live.voteSuggestion(id, vote)
 
+    /** The Patient ends the Check-in; the reflection and its Summary follow, with no form in between. */
     fun finishCheckIn() {
         live.stop()
-        val ratingsOn = state.value.consents[SignalId.Ratings] == true
-        if (ratingsOn) { state.update { it.copy(ratingStep = 0) }; open(Route.Ratings) } else open(Route.Finishing)
+        open(Route.Finishing)
+        makeSummary()
     }
 
     fun leaveCheckIn() { live.stop(); state.update { it.copy(sheet = null) }; replaceAll(Route.Today) }
-
-    fun rate(value: Int?) = state.update {
-        val r = it.ratings
-        it.copy(ratings = when (it.ratingStep) { 0 -> r.copy(mood = value); 1 -> r.copy(energy = value); else -> r.copy(sleepQuality = value) })
-    }
-
-    fun nextRating() { if (state.value.ratingStep < 2) state.update { it.copy(ratingStep = it.ratingStep + 1) } else open(Route.Finishing) }
-    fun previousRating() = state.update { it.copy(ratingStep = (it.ratingStep - 1).coerceAtLeast(0)) }
 
     fun makeSummary() {
         state.update { it.copy(finish = FinishState.Saving) }
@@ -337,7 +328,7 @@ class PatientViewModel(
                 text = if (chosen == SuggestionKind.Walk) DemoData.SharedSummary
                 else if (chosen != null) "You made space for a Check-in. You chose " + chosen.title.lowercase() + " as your next small step."
                 else "You made space for a Check-in. No Suggestion was chosen this time.",
-                ratings = if (s.consents[SignalId.Ratings] == true) s.ratings else Ratings(),
+                ratings = Ratings(),
                 suggestion = chosen,
                 previousOutcome = if (s.typed) s.typedCheckIn.outcome else snap.outcome,
                 voiceObservation = if (!s.typed && s.consents[SignalId.VoiceObservations] == true) "Long pauses" else null,
@@ -351,11 +342,7 @@ class PatientViewModel(
 
     /** A live Check-in's Summary comes from Finish Check-in. A failure offers the retry, which reuses the Check-in. */
     private suspend fun makeLiveSummary() {
-        val s = state.value
-        val r = s.ratings
-        val ratingsLine = if (s.consents[SignalId.Ratings] != true) null
-        else "My ratings on the screen: mood " + (r.mood ?: "skipped") + ", energy " + (r.energy ?: "skipped") + ", sleep quality " + (r.sleepQuality ?: "skipped") + ", each from 1 to 5."
-        val saved = attempt(FINISH_TIMEOUT) { live.finish(ratingsLine) }
+        val saved = attempt(FINISH_TIMEOUT) { live.finish() }
         if (saved == null) { state.update { it.copy(finish = FinishState.Failed) }; return }
         val snap = live.snapshot.value
         val summary = saved.forHistory().copy(suggestion = snap.offer.takeIf { snap.accepted })

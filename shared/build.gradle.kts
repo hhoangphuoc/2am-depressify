@@ -18,6 +18,8 @@ kotlin {
         androidResources { enable = true }
         // Host tests are off by default in the Android-KMP plugin; they run the common tests on the JVM.
         withHostTest {}
+        // Compose UI tests cannot run as host tests, so they run on an emulator or device: connectedAndroidDeviceTest.
+        withDeviceTest { instrumentationRunner = "androidx.test.runner.AndroidJUnitRunner" }
     }
 
     listOf(iosArm64(), iosSimulatorArm64()).forEach { target ->
@@ -60,6 +62,13 @@ kotlin {
         }
         iosMain.dependencies {
             implementation(libs.ktor.client.darwin)
+        }
+        getByName("androidDeviceTest").dependencies {
+            implementation(libs.kotlin.test)
+            implementation(libs.compose.ui.test)
+            implementation(libs.androidx.test.runner)
+            // Declares the empty activity the Compose UI tests render into.
+            implementation(libs.androidx.compose.ui.test.manifest)
         }
     }
 }
