@@ -38,7 +38,7 @@ val clinicianEmail: String = secrets.getProperty("demo.clinicianEmail")?.trim()?
 fun quoted(value: String): String = "\"" + value.replace("\\", "\\\\").replace("\"", "\\\"") + "\""
 
 android {
-    namespace = "com.twoam.companion"
+    namespace = "app.depressify"
     compileSdk = libs.versions.android.compileSdk.get().toInt()
 
     defaultConfig {

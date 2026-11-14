@@ -17,7 +17,7 @@ kotlin {
     jvmToolchain(21)
 
     android {
-        namespace = "com.twoam.companion.shared"
+        namespace = "app.depressify.shared"
         compileSdk = libs.versions.android.compileSdk.get().toInt()
         minSdk = libs.versions.android.minSdk.get().toInt()
 

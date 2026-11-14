@@ -12,7 +12,7 @@ kotlin {
     jvm()
 
     android {
-        namespace = "com.twoam.companion.core"
+        namespace = "app.depressify.core"
         compileSdk = libs.versions.android.compileSdk.get().toInt()
         minSdk = libs.versions.android.minSdk.get().toInt()
     }

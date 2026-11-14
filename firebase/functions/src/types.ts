@@ -1,5 +1,5 @@
 // Hand-written TypeScript mirror of the Kotlin data contract in
-// core/src/commonMain/kotlin/com/twoam/companion/core/model/Models.kt.
+// core/src/commonMain/kotlin/app/depressify/core/model/Models.kt.
 // test/contract.test.ts compares this file with test/fixtures/contract.json, which core's JVM
 // tests export from Kotlin. The dashboard's copy is firebase/hosting/js/lib/contract.js.
 //

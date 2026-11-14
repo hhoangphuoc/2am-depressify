@@ -99,7 +99,7 @@ There is also a trivial `health` endpoint.
 ### Configuration for a real project
 
 - **Clinician's email:** never in code (the repository is public). Android reads `demo.clinicianEmail` from `secrets.properties` into `BuildConfig.CLINICIAN_EMAIL`; iOS reads `ClinicianEmail` from `iosApp/iosApp/Secrets.plist`. Both pass it into `shared` as `DemoConfig` through Koin. Only the emulator falls back to `clinician@example.com`.
-- **App id:** `app.depressify` on Android and iOS; the app is called Depressify. The Kotlin packages are still `com.twoam.companion`.
+- **App id:** `app.depressify` on Android and iOS; the app is called Depressify. The Kotlin source package is `app.depressify` too (renamed from `com.twoam.companion` to match the frontend team).
 - **Setup steps:** "Set up a real Firebase project" in the [README](../README.md#set-up-a-real-firebase-project).
 
 ## Gemini and Google API integrations
