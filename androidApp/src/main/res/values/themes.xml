@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Paper-white window so launch and Compose share one ground colour. -->
+    <style name="Theme.Depressify" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:windowBackground">@color/ground</item>
+    </style>
+    <color name="ground">#FAFAF7</color>
+</resources>
