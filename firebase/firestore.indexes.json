@@ -7,6 +7,22 @@
         { "fieldPath": "sharedWithClinician", "order": "ASCENDING" },
         { "fieldPath": "isoWeek", "order": "DESCENDING" }
       ]
+    },
+    {
+      "collectionGroup": "daily",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "sharedWithClinician", "order": "ASCENDING" },
+        { "fieldPath": "date", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "checkIns",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "sharedWithClinician", "order": "ASCENDING" },
+        { "fieldPath": "startedAtMillis", "order": "DESCENDING" }
+      ]
     }
   ],
   "fieldOverrides": []
