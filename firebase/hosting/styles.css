@@ -1,0 +1,62 @@
+/* Small Step direction for the dashboard: paper-white ground, deep blue-green ink, system sans,
+   pill primary buttons, flat surfaces. Status colours arrive with the full Patient list. */
+:root {
+  --paper: #f7f5f0;
+  --surface: #ffffff;
+  --ink: #173f45;
+  --ink-muted: #4d6a6e;
+  --hairline: #d9dedb;
+  --on-ink: #f7f5f0;
+  --danger-text: #8a2a24;
+  --min-target: 48px;
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  color: var(--ink);
+  background: var(--paper);
+}
+
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--paper); color: var(--ink); }
+main { max-width: 960px; margin: 0 auto; padding: 24px 16px; }
+
+.bar {
+  display: flex; align-items: center; justify-content: space-between; gap: 16px;
+  padding: 12px 16px; background: var(--surface); border-bottom: 1px solid var(--hairline);
+}
+.bar h1 { font-size: 1.25rem; margin: 0; }
+#account { display: flex; align-items: center; gap: 12px; color: var(--ink-muted); }
+
+.card {
+  max-width: 400px; margin: 48px auto; padding: 24px; display: grid; gap: 8px;
+  background: var(--surface); border: 1px solid var(--hairline); border-radius: 12px;
+}
+.card h2 { margin: 0 0 8px; font-size: 1.25rem; }
+label { font-weight: 600; margin-top: 8px; }
+input {
+  min-height: var(--min-target); padding: 0 12px; font: inherit; color: var(--ink);
+  border: 1px solid var(--ink-muted); border-radius: 8px; background: var(--surface);
+}
+input:focus-visible, button:focus-visible { outline: 3px solid var(--ink); outline-offset: 2px; }
+
+button { font: inherit; cursor: pointer; min-height: var(--min-target); }
+.primary {
+  margin-top: 8px; border: 0; border-radius: 999px; padding: 0 24px;
+  background: var(--ink); color: var(--on-ink); font-weight: 600;
+}
+.primary[disabled] { opacity: 0.6; cursor: progress; }
+.link { background: none; border: 0; color: var(--ink); text-decoration: underline; padding: 0 8px; }
+
+.error { color: var(--danger-text); min-height: 1.5em; margin: 4px 0 0; }
+.muted { color: var(--ink-muted); }
+
+table { width: 100%; border-collapse: collapse; background: var(--surface); border: 1px solid var(--hairline); }
+th, td { text-align: left; padding: 12px 16px; border-bottom: 1px solid var(--hairline); vertical-align: top; }
+th { font-size: 0.875rem; color: var(--ink-muted); font-weight: 600; }
+
+.visually-hidden {
+  position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden;
+  clip: rect(0 0 0 0); white-space: nowrap; border: 0;
+}
+
+@media (max-width: 600px) {
+  th:nth-child(3), td:nth-child(3) { display: none; }
+}

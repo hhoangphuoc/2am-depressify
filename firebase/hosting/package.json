@@ -1,0 +1,9 @@
+{
+  "name": "twoam-dashboard",
+  "private": true,
+  "type": "module",
+  "description": "Clinician dashboard: plain HTML and JavaScript served by Firebase Hosting. No build step.",
+  "scripts": {
+    "test": "node --test"
+  }
+}
