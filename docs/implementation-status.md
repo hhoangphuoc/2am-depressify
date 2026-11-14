@@ -15,7 +15,7 @@ Kept up to date as PRs are opened and merged. Each PR also updates its own rows 
 | #54 | `feat/28-silence-check-on-49` (on #50) | #28: `silenceCheck`, hourly | Open; tested (functions 206, emulators 86 + 16) |
 | #55 | `docs/session-handoff-on-49` | Session handoff, and this overview | Open |
 | #56 | `docs/cloud-setup-on-49` | Firebase and Google Cloud setup record | Open |
-| — | `feat/14-typed-checkin` | #14: Start Check-in and Finish Check-in | In progress. Built on the superseded `integrate/ui-main`; will be ported onto #49. |
+| #57 | `feat/14-typed-checkin-on-49` (on #50, merges #52) | #14, backend: `startCheckIn`, `finishCheckIn`, and `LiveProtocol` in `core` | Open; tested (functions 249, core 39, emulators 87 + 14). Not deployed. |
 | — | — | #20 (Decisions into flags), then #21 (Outcomes) | Next, after #14 |
 | — | — | #18 (Map tool) | Waits on enabling `mapstools.googleapis.com` and the #17 tool catalog |
 
