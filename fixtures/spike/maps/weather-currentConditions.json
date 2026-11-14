@@ -1,0 +1,111 @@
+{
+  "request": {
+    "method": "GET",
+    "url": "https://weather.googleapis.com/v1/currentConditions:lookup?location.latitude=60.1699&location.longitude=24.9384",
+    "headers": {
+      "X-Goog-Api-Key": "REDACTED"
+    },
+    "body": null
+  },
+  "response": {
+    "status": 200,
+    "latencyMs": 1069,
+    "body": {
+      "timeZone": {
+        "id": "Europe/Helsinki",
+        "version": ""
+      },
+      "weatherCondition": {
+        "iconBaseUri": "https://maps.gstatic.com/weather/v1/mostly_cloudy",
+        "description": {
+          "text": "Mostly cloudy",
+          "languageCode": "en"
+        },
+        "type": "MOSTLY_CLOUDY"
+      },
+      "temperature": {
+        "unit": "CELSIUS",
+        "degrees": 3
+      },
+      "feelsLikeTemperature": {
+        "unit": "CELSIUS",
+        "degrees": -2
+      },
+      "dewPoint": {
+        "unit": "CELSIUS",
+        "degrees": 0.2
+      },
+      "heatIndex": {
+        "unit": "CELSIUS",
+        "degrees": 3
+      },
+      "windChill": {
+        "unit": "CELSIUS",
+        "degrees": -2
+      },
+      "precipitation": {
+        "probability": {
+          "type": "SNOW",
+          "percent": 18
+        },
+        "snowQpf": {
+          "unit": "MILLIMETERS",
+          "quantity": 0
+        },
+        "qpf": {
+          "unit": "MILLIMETERS",
+          "quantity": 0
+        }
+      },
+      "airPressure": {
+        "meanSeaLevelMillibars": 996.52
+      },
+      "wind": {
+        "direction": {
+          "cardinal": "WEST_NORTHWEST",
+          "degrees": 293
+        },
+        "speed": {
+          "unit": "KILOMETERS_PER_HOUR",
+          "value": 26
+        },
+        "gust": {
+          "unit": "KILOMETERS_PER_HOUR",
+          "value": 33
+        }
+      },
+      "visibility": {
+        "unit": "KILOMETERS",
+        "distance": 16
+      },
+      "currentConditionsHistory": {
+        "temperatureChange": {
+          "unit": "CELSIUS",
+          "degrees": -2.3
+        },
+        "maxTemperature": {
+          "unit": "CELSIUS",
+          "degrees": 5.3
+        },
+        "minTemperature": {
+          "unit": "CELSIUS",
+          "degrees": 1.2
+        },
+        "snowQpf": {
+          "unit": "MILLIMETERS",
+          "quantity": 18.43
+        },
+        "qpf": {
+          "unit": "MILLIMETERS",
+          "quantity": 3.19
+        }
+      },
+      "currentTime": "2026-11-14T11:28:01.175893717Z",
+      "isDaytime": true,
+      "relativeHumidity": 81,
+      "uvIndex": 0,
+      "thunderstormProbability": 10,
+      "cloudCover": 71
+    }
+  }
+}

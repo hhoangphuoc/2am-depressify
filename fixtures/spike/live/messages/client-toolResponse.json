@@ -1,0 +1,18 @@
+{
+  "direction": "client->server",
+  "websocketFrame": "text",
+  "tMs": 18025,
+  "message": {
+    "toolResponse": {
+      "functionResponses": [
+        {
+          "id": "fc_18429171870273940054",
+          "name": "get_time",
+          "response": {
+            "time": "14:05"
+          }
+        }
+      ]
+    }
+  }
+}

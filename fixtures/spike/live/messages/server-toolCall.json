@@ -1,0 +1,16 @@
+{
+  "direction": "server->client",
+  "websocketFrame": "binary",
+  "tMs": 18022,
+  "message": {
+    "toolCall": {
+      "functionCalls": [
+        {
+          "name": "get_time",
+          "args": {},
+          "id": "fc_18429171870273940054"
+        }
+      ]
+    }
+  }
+}

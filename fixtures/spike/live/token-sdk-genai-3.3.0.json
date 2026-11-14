@@ -1,0 +1,102 @@
+{
+  "sentOnTheWire": [
+    {
+      "url": "https://generativelanguage.googleapis.com/v1beta/auth_tokens",
+      "body": {
+        "expireTime": "2026-11-14T11:58:38.163Z",
+        "newSessionExpireTime": "2026-11-14T11:29:38.165Z",
+        "uses": 1,
+        "bidiGenerateContentSetup": {
+          "model": "models/gemini-3.8-live",
+          "generationConfig": {
+            "responseModalities": [
+              "AUDIO"
+            ]
+          },
+          "systemInstruction": {
+            "parts": [
+              {
+                "text": "You are a calm, friendly wellbeing companion in a short test conversation. Keep every answer to one or two short sentences. When the user asks for the time, call the get_time tool and then say the time you were given."
+              }
+            ],
+            "role": "user"
+          },
+          "tools": [
+            {
+              "functionDeclarations": [
+                {
+                  "name": "get_time",
+                  "description": "Returns the current local time in Helsinki as HH:MM.",
+                  "behavior": "BLOCKING",
+                  "parameters": {
+                    "type": "OBJECT",
+                    "properties": {}
+                  }
+                }
+              ]
+            }
+          ],
+          "inputAudioTranscription": {},
+          "outputAudioTranscription": {}
+        },
+        "fieldMask": "model,generationConfig.responseModalities,systemInstruction.parts,systemInstruction.role,tools,inputAudioTranscription,outputAudioTranscription"
+      }
+    },
+    {
+      "url": "https://generativelanguage.googleapis.com/v1alpha/auth_tokens",
+      "body": {
+        "expireTime": "2026-11-14T11:58:38.715Z",
+        "newSessionExpireTime": "2026-11-14T11:29:38.715Z",
+        "uses": 1,
+        "bidiGenerateContentSetup": {
+          "model": "models/gemini-3.8-live",
+          "generationConfig": {
+            "responseModalities": [
+              "AUDIO"
+            ]
+          },
+          "systemInstruction": {
+            "parts": [
+              {
+                "text": "You are a calm, friendly wellbeing companion in a short test conversation. Keep every answer to one or two short sentences. When the user asks for the time, call the get_time tool and then say the time you were given."
+              }
+            ],
+            "role": "user"
+          },
+          "tools": [
+            {
+              "functionDeclarations": [
+                {
+                  "name": "get_time",
+                  "description": "Returns the current local time in Helsinki as HH:MM.",
+                  "behavior": "BLOCKING",
+                  "parameters": {
+                    "type": "OBJECT",
+                    "properties": {}
+                  }
+                }
+              ]
+            }
+          ],
+          "inputAudioTranscription": {},
+          "outputAudioTranscription": {}
+        },
+        "fieldMask": "model,generationConfig.responseModalities,systemInstruction.parts,systemInstruction.role,tools,inputAudioTranscription,outputAudioTranscription"
+      }
+    }
+  ],
+  "results": {
+    "v1beta": {
+      "ok": true,
+      "responseKeys": [
+        "name"
+      ]
+    },
+    "v1alpha": {
+      "ok": true,
+      "responseKeys": [
+        "name"
+      ]
+    }
+  }
+}

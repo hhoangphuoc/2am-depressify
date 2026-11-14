@@ -1,0 +1,10 @@
+{
+  "direction": "client->server",
+  "websocketFrame": "text",
+  "tMs": 390,
+  "message": {
+    "setup": {
+      "model": "models/gemini-3.8-live"
+    }
+  }
+}

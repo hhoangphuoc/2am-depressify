@@ -1,0 +1,69 @@
+{
+  "request": {
+    "method": "POST",
+    "url": "https://generativelanguage.googleapis.com/v1beta/auth_tokens",
+    "headers": {
+      "x-goog-api-key": "REDACTED",
+      "content-type": "application/json"
+    },
+    "body": {
+      "uses": 1,
+      "expireTime": "2026-11-14T11:58:28.745Z",
+      "newSessionExpireTime": "2026-11-14T11:29:28.747Z",
+      "liveConnectConstraints": {
+        "model": "models/gemini-3.8-live",
+        "config": {
+          "systemInstruction": {
+            "parts": [
+              {
+                "text": "You are a calm, friendly wellbeing companion in a short test conversation. Keep every answer to one or two short sentences. When the user asks for the time, call the get_time tool and then say the time you were given."
+              }
+            ]
+          },
+          "tools": [
+            {
+              "functionDeclarations": [
+                {
+                  "name": "get_time",
+                  "description": "Returns the current local time in Helsinki as HH:MM.",
+                  "behavior": "BLOCKING",
+                  "parameters": {
+                    "type": "OBJECT",
+                    "properties": {}
+                  }
+                }
+              ]
+            }
+          ],
+          "responseModalities": [
+            "AUDIO"
+          ],
+          "inputAudioTranscription": {},
+          "outputAudioTranscription": {}
+        }
+      }
+    }
+  },
+  "response": {
+    "status": 400,
+    "latencyMs": 5577,
+    "body": {
+      "error": {
+        "code": 400,
+        "message": "Invalid JSON payload received. Unknown name \"liveConnectConstraints\" at 'auth_token': Cannot find field.",
+        "status": "INVALID_ARGUMENT",
+        "details": [
+          {
+            "@type": "type.googleapis.com/google.rpc.BadRequest",
+            "fieldViolations": [
+              {
+                "field": "auth_token",
+                "description": "Invalid JSON payload received. Unknown name \"liveConnectConstraints\" at 'auth_token': Cannot find field."
+              }
+            ]
+          }
+        ]
+      }
+    }
+  }
+}

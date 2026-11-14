@@ -1,0 +1,12 @@
+{
+  "_note": "NOT OBSERVED. Shape copied from the Decisions API guide (https://aistudio.google.com/docs/decisions-api). The fictional crisis transcript was answered, not refused. Documented codes: safety, prohibited_content, blocklist, image_safety, content_blocked.",
+  "response": {
+    "status": 400,
+    "body": {
+      "error": {
+        "message": "Request blocked due to safety violations (harmful content).",
+        "code": "safety"
+      }
+    }
+  }
+}

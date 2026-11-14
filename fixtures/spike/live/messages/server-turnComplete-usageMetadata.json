@@ -1,0 +1,32 @@
+{
+  "direction": "server->client",
+  "websocketFrame": "binary",
+  "tMs": 5670,
+  "message": {
+    "serverContent": {
+      "turnComplete": true
+    },
+    "usageMetadata": {
+      "promptTokenCount": 640,
+      "responseTokenCount": 106,
+      "totalTokenCount": 746,
+      "promptTokensDetails": [
+        {
+          "modality": "TEXT",
+          "tokenCount": 379
+        },
+        {
+          "modality": "AUDIO",
+          "tokenCount": 222
+        }
+      ],
+      "responseTokensDetails": [
+        {
+          "modality": "AUDIO",
+          "tokenCount": 106
+        }
+      ],
+      "thoughtsTokenCount": 52
+    }
+  }
+}
