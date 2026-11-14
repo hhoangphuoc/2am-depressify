@@ -6,10 +6,9 @@ import { GEMINI_API_KEY, genaiTextClient } from "./gemini";
 import { adminDigestStore, createDigestFunctions } from "./digestFunctions";
 import { healthStatus } from "./health";
 import { adminPatientStore, createIntakeFunctions } from "./intakeFunctions";
+import { REGION } from "./region";
 
-// All functions run in one EU region. Provisional until the Firestore region is fixed at project
-// creation and recorded with the spike results.
-export const REGION = "europe-west1";
+// All functions run in the Firestore database's region (src/region.ts).
 setGlobalOptions({ region: REGION });
 
 /** The Admin SDK's Firestore, initialised on first use. */

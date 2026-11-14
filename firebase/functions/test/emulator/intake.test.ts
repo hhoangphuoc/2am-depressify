@@ -16,10 +16,10 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { extractIntakeHandler, saveIntakeHandler, adminPatientStore } from "../../src/intakeFunctions";
 import { newPatientDoc, type PatientDoc } from "../../src/types";
 import { FakeTextModel, failingTextModel } from "../fakes";
+import { REGION } from "../../src/region";
 
 const PROJECT_ID = "demo-twoam";
 const HOST = "127.0.0.1";
-const REGION = "europe-west1";
 const CLINICIAN = { email: "clinician@example.com", password: "demo-password-1" };
 const OTHER = { email: "other-clinician@example.com", password: "demo-password-2" };
 const PATIENT_ID = "intake-emulator-patient";

@@ -1,5 +1,6 @@
 // Callable functions for the dashboard. Served locally (localhost), it talks to the Functions
-// emulator; deployed, to the project's functions in the same region as firebase/functions/src/index.ts.
+// emulator; deployed, to the project's functions in their region (REGION in firebase/functions/src/region.ts,
+// kept in step by firebase/functions/test/region.test.ts).
 import {
   connectFunctionsEmulator,
   getFunctions,
@@ -7,7 +8,7 @@ import {
 } from "https://www.gstatic.com/firebasejs/13.3.0/firebase-functions.js";
 import { emulatorHostFor } from "./lib/auth.js";
 
-export const FUNCTIONS_REGION = "europe-west1";
+export const FUNCTIONS_REGION = "europe-north1";
 
 let functions = null;
 

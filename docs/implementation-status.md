@@ -63,7 +63,7 @@ Not enforced for the demo: `email_verified`. Production must require it (see the
   - Every function that writes must stamp what it writes.
 - **Flag level on the Patient record:** `flagLevel` and `flagReasons` count only flags stamped `true`, so a flag raised while sharing was off doesn't leak its reason to the Clinician.
 
-### Cloud Functions (`firebase/functions`, TypeScript, region `europe-west1`)
+### Cloud Functions (`firebase/functions`, TypeScript, region `europe-north1`)
 
 | Function in [system design](context/system-design.md#cloud-functions) | Status | Notes |
 |---|---|---|
@@ -146,7 +146,8 @@ Results on `fix/review-decisions`, all from local runs:
 2. **Re-consent shares future records only.** Only the off period is hidden, using the sharing stamp.
 3. **Ratings and Voice cues** are included until the Patient leaves them out.
 4. **Clearing a flag.** The dashboard computes the new level when a flag is cleared; the rules don't check it.
-5. **Values the spec didn't fix:**
+5. **Region: `europe-north1` (Finland).** The real Firestore database is there, and every function runs there too. It is set once for the functions (`REGION` in `firebase/functions/src/region.ts`) and once for the dashboard (`FUNCTIONS_REGION` in `firebase/hosting/js/functions.js`); `firebase/functions/test/region.test.ts` keeps the two in step. The database location itself is chosen when the database is created, not in this repository.
+6. **Values the spec didn't fix:**
    - The Baseline spread floor: `max(sample SD, 0.05 × |median|, 0.001)`.
    - A 28-day window for "what seems to help".
    - "Stale" means the latest value is more than 2 days old.
@@ -159,7 +160,5 @@ Results on `fix/review-decisions`, all from local runs:
   - Keep each record's stamp; never delete and recreate a record.
   - Retry a refused write with a fresh stamp, especially a crisis flag.
   - Create a new Suggestion rather than editing `kind` or `details`.
-- **Two choices still open from the spec:**
-  - The Firestore region (any EU location).
-  - Whether to delete Summaries and Digests when sharing is withdrawn.
+- **Still open from the spec:** whether to delete Summaries and Digests when sharing is withdrawn.
 - **Blocked on #6** (needs the S24+, the Watch and an iPhone): #14–#22, #24–#28 and #30–#32.
