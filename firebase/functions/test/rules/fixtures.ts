@@ -95,7 +95,14 @@ export const crisisFlag: Flag = {
   clearedAtMillis: null,
 };
 export const visit: Visit = { date: "2026-10-23", questionnaire: "phq9", score: 7 };
-export const digest: Digest = { isoWeek: "2026-W46", text: "A steady week.", generatedAtMillis: 1_700_000_000_000 };
+export const digest: Digest = {
+  isoWeek: "2026-W46",
+  weekStart: "2026-11-09",
+  weekEnd: "2026-11-15",
+  summaryCount: 5,
+  text: "A steady week.",
+  generatedAtMillis: 1_700_000_000_000,
+};
 export const mail: MailDoc = {
   to: CLINICIAN,
   message: { subject: "[RED] Alice", text: "A red flag was raised. Open the dashboard." },

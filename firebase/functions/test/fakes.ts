@@ -1,8 +1,9 @@
-// Fakes for the Intake handlers: an in-memory Patient store and a scripted text model.
+// Fakes for the function handlers: in-memory stores and a scripted text model.
 import type { TextModelClient, TextRequest } from "../src/gemini";
 import type { CallerAuth } from "../src/clinician";
+import type { DigestStore } from "../src/digestFunctions";
 import type { PatientStore } from "../src/intakeFunctions";
-import { newPatientDoc, type PatientDoc } from "../src/types";
+import { newPatientDoc, type DailyDoc, type Digest, type PatientDoc, type Summary } from "../src/types";
 
 export const CLINICIAN_EMAIL = "clinician@example.com";
 export const OTHER_CLINICIAN_EMAIL = "other-clinician@example.com";
@@ -61,4 +62,43 @@ export function failingTextModel(status = 500): FakeTextModel {
 
 export function words(n: number, word = "word"): string {
   return Array.from({ length: n }, (_, i) => `${word}${i + 1}`).join(" ");
+}
+
+export interface DigestPatientData {
+  patient: PatientDoc;
+  summaries?: Summary[];
+  days?: DailyDoc[];
+}
+
+/** Patients with their Summaries and daily records; records every Digest written. */
+export class FakeDigestStore implements DigestStore {
+  readonly digests = new Map<string, Map<string, Digest>>();
+  readonly writes: { patientId: string; digest: Digest }[] = [];
+  failWritesFor = new Set<string>();
+
+  constructor(private readonly data: Record<string, DigestPatientData>) {}
+
+  async getPatient(patientId: string) {
+    const entry = this.data[patientId];
+    return entry ? { ...entry.patient } : undefined;
+  }
+
+  async listPatients() {
+    return Object.entries(this.data).map(([id, entry]) => ({ id, patient: { ...entry.patient } }));
+  }
+
+  async summaries(patientId: string, startMillis: number, endMillis: number) {
+    return (this.data[patientId]?.summaries ?? []).filter((s) => s.createdAtMillis >= startMillis && s.createdAtMillis < endMillis);
+  }
+
+  async days(patientId: string, weekStart: string, weekEnd: string) {
+    return (this.data[patientId]?.days ?? []).filter((d) => d.date >= weekStart && d.date <= weekEnd);
+  }
+
+  async writeDigest(patientId: string, digest: Digest) {
+    if (this.failWritesFor.has(patientId)) throw new Error("write failed");
+    this.writes.push({ patientId, digest });
+    if (!this.digests.has(patientId)) this.digests.set(patientId, new Map());
+    this.digests.get(patientId)!.set(digest.isoWeek, digest);
+  }
 }

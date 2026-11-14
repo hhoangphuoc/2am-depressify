@@ -35,9 +35,9 @@
 //     ✔ overview-timeline        Phase timeline, mood and Questionnaire views/overview.js
 //     ✔ overview-latest-summary  the latest Summary                     views/summaries.js
 //     ✔ overview-what-helps      what seems to help                     views/what-helps.js
-//     ◻ overview-digest          the latest Digest, "Generate now"      #23
+//     ✔ overview-digest          the latest Digest, "Generate now"      views/digest.js (#23)
 //   Summaries
-//     ◻ summaries-digest         this week's Digest                     #23
+//     ✔ summaries-digest         this week's Digest                     views/digest.js (#23)
 //     ✔ summaries-body           Summaries, newest first, one in full   views/summaries.js
 //   Signals
 //     ✔ signals-body             Signal trends for a Phase              views/signals.js
@@ -53,6 +53,7 @@ import { dateInZone } from "../lib/dates.js";
 import { sharingMessage, sharingStateFromError, sharingStateFromSnapshot } from "../lib/sharing.js";
 import { phases } from "../lib/timeline.js";
 import { sortVisits } from "../lib/visit.js";
+import { mountDigest } from "./digest.js";
 import { mountFlagDetail } from "./flags.js";
 import { mountIntake } from "./intake.js";
 import { mountAttention, mountTimeline } from "./overview.js";
@@ -89,16 +90,35 @@ function mountIntakeBlock(container, { patientId, calls }) {
   };
 }
 
-/**
- * Which module fills which slot. One line per block.
- * @type {{ slot: string, mount: (container: HTMLElement, ctx: object) => { update: (view: object) => void, destroy: () => void } }[]}
- */
 /** Flag detail (#10) listens to the Patient and flags itself; it needs no view updates. */
 function mountFlagsBlock(container, { db, patientId }) {
   const stop = mountFlagDetail(container, { db, patientId });
   return { update() {}, destroy: stop };
 }
 
+/**
+ * The Digest (#23) shows in Overview and in Summaries. Both copies share one in-flight
+ * "Generate now" per page, so it cannot run twice at once from either button.
+ */
+const digestCallsByCtx = new WeakMap();
+function mountDigestBlock(container, ctx) {
+  if (!digestCallsByCtx.has(ctx)) {
+    let inFlight = null;
+    digestCallsByCtx.set(ctx, {
+      generateDigest: (patientId) =>
+        (inFlight ??= ctx.calls.generateDigest(patientId).finally(() => {
+          inFlight = null;
+        })),
+    });
+  }
+  const { destroy } = mountDigest(container, { db: ctx.db, patientId: ctx.patientId, calls: digestCallsByCtx.get(ctx) });
+  return { update() {}, destroy };
+}
+
+/**
+ * Which module fills which slot. One line per block.
+ * @type {{ slot: string, mount: (container: HTMLElement, ctx: object) => { update: (view: object) => void, destroy: () => void } }[]}
+ */
 const SLOT_MOUNTS = [
   { slot: "overview-attention", mount: mountAttention },
   { slot: "overview-flags", mount: mountFlagsBlock },
@@ -107,6 +127,8 @@ const SLOT_MOUNTS = [
   { slot: "overview-what-helps", mount: mountWhatHelps },
   { slot: "summaries-body", mount: mountSummaries },
   { slot: "signals-body", mount: mountSignals },
+  { slot: "overview-digest", mount: mountDigestBlock },
+  { slot: "summaries-digest", mount: mountDigestBlock },
   { slot: "intake", mount: mountIntakeBlock },
   { slot: "visits", mount: mountVisits },
 ];

@@ -35,3 +35,16 @@ export function intakeCalls(app) {
     save: async (patientId, highlights) => (await saveIntake({ patientId, highlights })).data,
   };
 }
+
+/**
+ * The weekly Digest's "Generate now" (Clinician only). Writes this ISO week's Digest so far and
+ * returns it. Rejects with a Firebase Functions error whose `code` js/lib/digest.js maps to vetted copy.
+ * @param {import("firebase/app").FirebaseApp} app
+ */
+export function digestCalls(app) {
+  const generateDigest = httpsCallable(functionsFor(app), "generateDigest");
+  return {
+    /** @returns {Promise<{ digest: import("./lib/contract.js").Digest }>} */
+    generateDigest: async (patientId) => (await generateDigest({ patientId })).data,
+  };
+}

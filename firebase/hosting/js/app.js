@@ -8,7 +8,7 @@ import {
 import { collection, onSnapshot, query, where } from "https://www.gstatic.com/firebasejs/13.3.0/firebase-firestore.js";
 import { createAlerts } from "./alerts.js";
 import { initFirebase } from "./firebase.js";
-import { intakeCalls } from "./functions.js";
+import { digestCalls, intakeCalls } from "./functions.js";
 import { signInErrorMessage } from "./lib/auth.js";
 import { COLLECTIONS } from "./lib/contract.js";
 import { clinicianListFilters } from "./lib/sharing.js";
@@ -98,7 +98,7 @@ function applyRoute(firebase, signedIn) {
       root: $("patient"),
       db: firebase.db,
       patientId: route.patientId,
-      calls: intakeCalls(firebase.auth.app),
+      calls: { ...intakeCalls(firebase.auth.app), ...digestCalls(firebase.auth.app) },
     });
   }
 }

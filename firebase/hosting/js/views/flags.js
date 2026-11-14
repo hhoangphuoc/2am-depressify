@@ -23,7 +23,7 @@ const FIRESTORE = { collection, doc, getDocs, runTransaction };
 
 const COPY = {
   heading: "Attention",
-  about: "Attention is a work queue, not a diagnosis. Clear a flag once you have followed up; it stays in the history.",
+  about: "Attention is a work queue for follow-up, not a judgement about the Patient. Clear a flag once you have followed up; it stays in the history.",
   level: "Attention flag",
   open: "Open flags",
   noOpen: "No open flags.",

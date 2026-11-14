@@ -59,7 +59,7 @@ export function adminPatientStore(db: Firestore): PatientStore {
   };
 }
 
-function requireAuth(auth: CallerAuth | undefined): CallerAuth {
+export function requireAuth(auth: CallerAuth | undefined): CallerAuth {
   if (!auth) throw new HttpsError("unauthenticated", "Sign in to continue.");
   return auth;
 }
@@ -76,7 +76,7 @@ async function requireClinician(patients: PatientStore, patientId: string, auth:
 }
 
 /** An HTTP status from a failed model call, and nothing else from the error. */
-function statusOf(error: unknown): number | null {
+export function statusOf(error: unknown): number | null {
   const status = error !== null && typeof error === "object" ? (error as { status?: unknown }).status : undefined;
   return typeof status === "number" ? status : null;
 }
@@ -120,7 +120,7 @@ export async function saveIntakeHandler(call: IntakeCall, deps: Pick<IntakeDeps,
 }
 
 /** Narrows the framework's auth context to what the handlers read. */
-function callerOf(request: CallableRequest<unknown>): IntakeCall {
+export function callerOf(request: CallableRequest<unknown>): IntakeCall {
   return { data: request.data, auth: request.auth ? { uid: request.auth.uid, token: request.auth.token } : undefined };
 }
 
@@ -128,7 +128,7 @@ function callerOf(request: CallableRequest<unknown>): IntakeCall {
  * Lets an HttpsError through and turns anything else into one with fixed wording, so the
  * framework never logs an unexpected error (whose message could echo the input).
  */
-async function safely<T>(name: string, run: () => Promise<T>): Promise<T> {
+export async function safely<T>(name: string, run: () => Promise<T>): Promise<T> {
   try {
     return await run();
   } catch (error) {

@@ -18,7 +18,7 @@ const COPY = {
   failed: "Could not load the Patient list. Reload the page to try again.",
   review: "Review Patient",
   more: (/** @type {number} */ n) => `and ${n} more red ${n === 1 ? "flag" : "flags"}`,
-  workQueue: "Attention is a work queue, not a diagnosis. Each red flag stays here until it is cleared after follow-up.",
+  workQueue: "Attention is a work queue for follow-up, not a judgement about the Patient. Each red flag stays here until it is cleared after follow-up.",
 };
 const REFRESH_MILLIS = 60_000;
 
