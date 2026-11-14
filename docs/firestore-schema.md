@@ -157,11 +157,25 @@ The Patient reads exactly what the Clinician reads.
 
 ### `digests/{isoWeek}`: Digest
 
+A short weekly account of one Patient for the Clinician (issue #23), written by functions only (clients read it). One document per ISO week: weeks run Monday to Sunday in Europe/Helsinki, and a week belongs to the year that holds its Thursday (13 November 2026 is in `2026-W46`).
+
 | Field | Type | Notes |
 |---|---|---|
-| `isoWeek` | string | Same as the document id, for example `2026-W46`. |
-| `text` | string | |
+| `isoWeek` | string | Same as the document id, for example `2026-W46`. Zero-padded, so ids sort by week. |
+| `weekStart` | date string | First date covered: the Monday. |
+| `weekEnd` | date string | Last date covered: the Sunday, or the day "Generate now" ran for a week still in progress. |
+| `summaryCount` | int | How many Summaries the text drew on. `0` means the week had no Check-ins. |
+| `text` | string | At most 180 words. Written by the text model with storage off, from that week's Summaries and daily Signals only; or, for a week with no Check-ins, a fixed sentence saying so (the model is not called). |
 | `generatedAtMillis` | int | |
+
+Which week each writer covers:
+
+- **`weeklyDigest`** runs on Mondays at 07:00 Europe/Helsinki and writes the **previous** ISO week, Monday 00:00 to the next Monday 00:00 in Helsinki: the last complete week. It writes one Digest for every Patient who is sharing.
+- **`generateDigest`** ("Generate now" on the dashboard, the Patient's Clinician only) writes the **current** ISO week from Monday to today. It overwrites that week's document, so pressing it again regenerates, and the next Monday's job replaces it with the complete week.
+
+A Summary belongs to the week of its `createdAtMillis` in Helsinki time; a daily record to the week of its `date`.
+
+**Patients who are not sharing get no Digest.** The weekly job skips them (`isSharingActive`) and `generateDigest` refuses them (`assertClinicianOf`). A Digest is written for the Clinician, who cannot read it while sharing is off, so making one would send the Patient's week to the model with no reader. Digests written before sharing was withdrawn are kept: deleting derived records is an open decision (see [Sharing Consent](#sharing-consent)). Nothing logs a Summary, a quote, the prompt or the Digest text.
 
 ### `mail/{autoId}`: MailDoc
 
@@ -217,6 +231,6 @@ Anything not listed, including a collection outside this schema, is denied. Fiel
 The Patient decides whether their Clinician sees their progress (issue #29, ADR 0005). `undecided` (a new record) and `declined` both mean the Clinician sees nothing.
 
 - **Rules.** `clinicianCanRead` in `firestore.rules` requires `sharingConsent == 'granted'`, and every Clinician read and write of the record and its collections goes through it. Withdrawing takes effect at once: the dashboard's list query (which filters on `granted`) drops the Patient, and a listener already open on the Patient's record or collections gets `permission-denied`. The dashboard maps that error to a "sharing withdrawn" state with `sharingStateFromError` in `firebase/hosting/js/lib/sharing.js`; every Patient view should use it rather than show an error. A Demo Patient stays readable through the demo shortcut, so views also check the field with `sharingStateFromSnapshot`.
-- **Functions.** Functions use the Admin SDK and bypass the rules, so they check `isSharingActive(patient)` from `firebase/functions/src/sharing.ts` themselves. **The flag email (#22) and the silence check (#28) must use it**: while it is false no flag email is sent for the Patient and the silence check skips them. Check-ins, Summaries and the Patient's own records continue.
+- **Functions.** Functions use the Admin SDK and bypass the rules, so they check `isSharingActive(patient)` from `firebase/functions/src/sharing.ts` themselves. **The flag email (#22) and the silence check (#28) must use it**: while it is false no flag email is sent for the Patient and the silence check skips them. The weekly Digest (#23) skips them too, and `generateDigest` refuses them. Check-ins, Summaries and the Patient's own records continue.
 - **Granting again** gives access from then on. The rules do not filter by time, so the Clinician can then also read what was saved while the Patient was not sharing; the app says so before the Patient shares again. Whether records are deleted on withdrawal is an open decision.
 - **The app** shows the welcome and the sharing choice while `sharingConsent` is `undecided`, and saves a decision with `sharingChangedAtMillis` and `consents/sharing` in one transaction. Nothing moves a record back to `undecided`.
