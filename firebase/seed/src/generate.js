@@ -3,7 +3,7 @@
 import { CONSENT_PURPOSES } from "../../hosting/js/lib/contract.js";
 import { SIGNAL_KEYS, baselineFor, dailyComparisons, oriented } from "./baseline.js";
 import { DEMO_TIME_ZONE, addDays, dateInZone, isWeekend, zonedMillis } from "./dates.js";
-import { draftsFor } from "./flags.js";
+import { draftsFor, driftComposite } from "./flags.js";
 import { PROFILES } from "./profiles.js";
 import { createRandom, hashString } from "./random.js";
 
@@ -343,7 +343,7 @@ export function makePatient(profileKey, options) {
     const drafts = draftsFor({
       sleepMinutes: values.sleepMinutes,
       sleepOriented: comparisons.slice(0, i + 1).map((c) => oriented("sleepMinutes", c.vsBaseline.sleepMinutes)),
-      composites: comparisons.slice(0, i + 1).map((c) => c.composite),
+      composites: comparisons.slice(0, i + 1).map((c) => driftComposite(c.vsBaseline)),
       moods: checkIns.filter((c) => (c.data.endedAtMillis ?? 0) < jobAtMillis).map((c) => c.data.mood),
     });
     // The stamp is decided at the job's start; a pause starts and ends at 06:00, before any job.

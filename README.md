@@ -6,7 +6,7 @@ A wellbeing companion for the time between Visits: a Kotlin Multiplatform Patien
 
 | Path | What it is |
 |---|---|
-| `core/` | Pure Kotlin Multiplatform common code (JVM, iOS): the rules the Patient screens use and, in `core/model`, the Firestore data contract. No platform code. |
+| `core/` | Pure Kotlin Multiplatform common code (JVM, iOS): the rules the Patient screens and the phone's daily job use (`core/daily`) and, in `core/model`, the Firestore data contract. No platform code. |
 | `shared/` | Kotlin Multiplatform client code: the Compose Multiplatform Patient UI, its view model, and Firebase through the GitLive SDK (`shared/data`). |
 | `androidApp/` | Android application entry point. |
 | `iosApp/` | XcodeGen spec (`project.yml`) and Swift glue. |
