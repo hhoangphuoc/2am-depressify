@@ -16,6 +16,7 @@ Kept up to date as PRs are opened and merged. Each PR also updates its own rows 
 | #55 | `docs/session-handoff-on-49` | Session handoff, and this overview | Open |
 | #56 | `docs/cloud-setup-on-49` | Firebase and Google Cloud setup record | Open |
 | #57 | `feat/14-typed-checkin-on-49` (on #50, merges #52) | #14, backend: `startCheckIn`, `finishCheckIn`, and `LiveProtocol` in `core` | Open; tested (functions 249, core 39, emulators 87 + 14). Not deployed. |
+| to open | `feat/live-demo-patient` → `main` | Live demo Patient: `npm run seed-live-patient` gives one real test account six weeks of mock history | To open; tested (seed 132, seed emulators 23). Not run against the real project. |
 | — | — | #20 (Decisions into flags), then #21 (Outcomes) | Next, after #14 |
 | — | — | #18 (Map tool) | Waits on enabling `mapstools.googleapis.com` and the #17 tool catalog |
 
@@ -141,6 +142,18 @@ The callables are reached through the Firebase SDK (`httpsCallable` in `europe-n
 - **Clinician:** `--clinician <email>` or `CLINICIAN_EMAIL`. Only the emulator falls back to the placeholder `clinician@example.com`; a real project must be given the email and refuses the placeholder. The seed also adds that Clinician to the `clinicians` allowlist.
 - **`npm run allow-clinician -- --email <email> [--project <id>]`** adds a Clinician to the allowlist, with the same targeting rules.
 - **Shared Baseline fixture:** `fixtures/baseline/baseline-cases.json`, with a 14-day median, at least 5 valid days, and a floor on the spread. The seed and the dashboard check it now, and #16 must check it from Kotlin.
+
+**Live demo Patient** (`feat/live-demo-patient`). `npm run seed-live-patient -- --email <patient-email> [--clinician <email>] [--display-name <name>] [--today <date>] [--seed <n>] [--reset] [--project <id>]` gives one real test account six weeks of mock history, so the Companion and "what seems to help" have context:
+
+| Part | State |
+|---|---|
+| Account | Found by email in Firebase Auth, or created with a verified email and no password; no custom claims. Refuses a Clinician's account. Prints the uid; the email only masked. |
+| Record | `synthetic: false` (owner and Clinician only; alerts apply), `healthSource: "synthetic"`, sharing granted, amber. |
+| History | The `live` profile in `src/live-profile.js`, written by the shared generator: 42 daily records (a stable month, then nine days of drift), 24 Check-ins with Summaries, 24 Suggestions with Outcomes (daylight, walks and nature on top; the latest open), a cleared and an open amber `poor_sleep` flag plus `drift`, two Visits, every Consent. No red flag; no Digests. |
+| Reset | Daily records `demoOverride: true`, other ids `demo-…`; `--reset` deletes only those. What the app wrote is kept, and counts toward the record's level and last Check-in. |
+| Tests | `test/unit/live-patient.test.js` and `live-cli.test.js` (determinism, the story's invariants across seeds and dates, the contract), `test/emulator/live-patient.test.js` (the account, `--reset`, the owner's and the Clinician's reads under the rules). |
+| Results on this branch | Seed 132 pass; seed on the emulators 23 pass (Auth and Firestore, and again with Functions); functions 291 pass; functions on the emulators 91 pass, 1 skipped; dashboard helpers 308 pass. |
+| Still to do | Run it against the real project (a person, with `--project` and the real Clinician). The app on `main` signs in anonymously, so it cannot open this Patient until it signs in with the account (Google, or email and password after a reset). |
 
 ### Configuration for a real project
 
