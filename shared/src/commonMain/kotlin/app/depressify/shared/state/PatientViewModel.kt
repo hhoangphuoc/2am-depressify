@@ -10,17 +10,23 @@ import app.depressify.core.Ratings
 import app.depressify.core.SignalId
 import app.depressify.core.Summary
 import app.depressify.core.SuggestionKind
+import app.depressify.core.model.SharingConsent
+import app.depressify.shared.data.PatientBackend
 import app.depressify.shared.voice.LiveSession
 import app.depressify.shared.voice.Reply
 import app.depressify.shared.voice.ScriptedLiveSession
 import app.depressify.shared.voice.Speaker
 import app.depressify.shared.voice.TranscriptLine
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
+import kotlin.time.Clock
+import kotlin.time.Duration.Companion.seconds
 
 enum class ThemeMode(val label: String) { Auto("By time of day"), Day("Day"), Night("Night") }
 
@@ -63,7 +69,11 @@ data class PatientState(
     val hasHistory get() = history.isNotEmpty()
 }
 
-class PatientViewModel : ViewModel() {
+/** Without a [backend], or while it cannot be reached, the app runs on local demo data only. */
+class PatientViewModel(
+    private val backend: PatientBackend? = null,
+    private val nowMillis: () -> Long = { Clock.System.now().toEpochMilliseconds() },
+) : ViewModel() {
     private val state = MutableStateFlow(PatientState())
     val ui: StateFlow<PatientState> = state.asStateFlow()
 
@@ -71,6 +81,51 @@ class PatientViewModel : ViewModel() {
 
     /** Navigation 3 back stack, owned here so it survives configuration changes. */
     val backStack = mutableStateListOf<Route>(Route.Today)
+
+    /** The signed-in Patient once the backend has answered; null while the app runs on demo data. */
+    private var patientId: String? = null
+
+    init {
+        if (backend != null) viewModelScope.launch { connect(backend) }
+    }
+
+    /** Signs in, makes sure the Patient record exists and shows the stored sharing choice. */
+    private suspend fun connect(backend: PatientBackend) {
+        // shortcut: when the backend can't be reached the app stays on demo data, so the sharing choice
+        // shown is local and can differ from the stored one; block on a retry before real Patients use it.
+        val started = attempt { backend.session.start() } ?: return
+        patientId = started.patientId
+        val choice = started.patient.sharingConsent
+        state.update { it.copy(sharing = choice == SharingConsent.granted) }
+        // First open: ask for the sharing choice, unless the Patient has already moved on from a tab root.
+        if (choice == SharingConsent.undecided && backStack.size == 1) replaceAll(Route.Welcome)
+    }
+
+    /** Null when the backend throws or does not answer in time. */
+    private suspend fun <T : Any> attempt(call: suspend () -> T?): T? = try {
+        withTimeoutOrNull(BACKEND_TIMEOUT) { call() }
+    } catch (e: CancellationException) {
+        throw e
+    } catch (e: Exception) {
+        null
+    }
+
+    /**
+     * Runs [onSaved] once the sharing choice is stored; on demo data that is at once. A failed save
+     * changes nothing and says so, so the Patient never sees a choice that was not saved.
+     */
+    private fun saveSharing(share: Boolean, onSaved: () -> Unit) {
+        val id = patientId
+        if (backend == null || id == null) return onSaved()
+        val choice = if (share) SharingConsent.granted else SharingConsent.declined
+        viewModelScope.launch {
+            // A lost reply can hide a write that did commit, so a failure re-reads what is stored.
+            val saved = attempt { backend.patients.setSharingConsent(id, choice, nowMillis()) } != null ||
+                attempt { backend.patients.get(id) }?.sharingConsent == choice
+            if (saved) onSaved()
+            else state.update { it.copy(sheet = null, notice = "Your sharing choice could not be saved. Check your connection and try again.") }
+        }
+    }
 
     fun open(route: Route) { state.update { it.copy(notice = null) }; backStack.add(route) }
     fun back() { if (backStack.size > 1) backStack.removeAt(backStack.lastIndex) }
@@ -83,7 +138,8 @@ class PatientViewModel : ViewModel() {
 
     fun applyScenario(s: Scenario) {
         live.stop()
-        state.update { PatientState(scenario = s, themeMode = it.themeMode, history = if (s == Scenario.NoHistory) emptyList() else DemoData.history) }
+        // A signed-in Patient keeps their stored sharing choice; demo data starts from sharing on.
+        state.update { PatientState(scenario = s, themeMode = it.themeMode, sharing = patientId == null || it.sharing, history = if (s == Scenario.NoHistory) emptyList() else DemoData.history) }
         when (s) {
             Scenario.FirstUse -> replaceAll(Route.Welcome)
             Scenario.MicDeclined -> replaceAll(Route.Today, Route.CheckInIntro)
@@ -95,7 +151,10 @@ class PatientViewModel : ViewModel() {
         }
     }
 
-    fun finishWelcome(share: Boolean) { state.update { it.copy(sharing = share) }; replaceAll(Route.Today) }
+    fun finishWelcome(share: Boolean) = saveSharing(share) { state.update { it.copy(sharing = share) }; replaceAll(Route.Today) }
+
+    /** Leaves the welcome without recording a sharing choice. On demo data, sharing shows as on. */
+    fun exploreDemo() { if (patientId == null) state.update { it.copy(sharing = true) }; replaceAll(Route.Today) }
 
     fun beginCheckIn(typed: Boolean) {
         if (state.value.offline) { setNotice("Connect to the internet to begin a Check-in."); return }
@@ -214,13 +273,18 @@ class PatientViewModel : ViewModel() {
 
     fun setNudges(on: Boolean) = state.update { it.copy(nudges = on, notice = if (on) "Nudges on. At most one a day." else "Nudges off.") }
 
-    fun setSharing(on: Boolean) = state.update {
-        it.copy(sharing = on, sheet = null, notice = if (on) "Sharing turned on for future progress." else "Sharing stopped. Your Clinician no longer sees new progress.")
+    fun setSharing(on: Boolean) = saveSharing(on) {
+        state.update { it.copy(sharing = on, sheet = null, notice = if (on) "Sharing turned on for future progress." else "Sharing stopped. Your Clinician no longer sees new progress.") }
     }
 
     fun keepTalkingAfterCrisis() {
         state.update { it.copy(scenario = Scenario.Everyday, typed = true, typedCheckIn = TypedCheckIn(lines = listOf(TranscriptLine(Speaker.Companion, "I’m here while you choose human support.")))) }
         live.stop()
         open(Route.CheckIn)
+    }
+
+    private companion object {
+        /** How long sign-in or a Consent write may take before it counts as failed. */
+        val BACKEND_TIMEOUT = 15.seconds
     }
 }

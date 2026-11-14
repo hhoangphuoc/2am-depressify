@@ -14,7 +14,7 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         setContent {
             // The app picks its own night theme by local time, so the system bar icons follow it.
-            DepressifyApp(onNightChange = { night ->
+            DepressifyApp(backend = (application as DepressifyApplication).backend, onNightChange = { night ->
                 val style = if (night) SystemBarStyle.dark(Color.TRANSPARENT)
                 else SystemBarStyle.light(Color.TRANSPARENT, Color.TRANSPARENT)
                 enableEdgeToEdge(statusBarStyle = style, navigationBarStyle = style)
