@@ -5,6 +5,8 @@ import app.depressify.core.model.DailyDoc
 import app.depressify.core.model.Flag
 import app.depressify.core.model.Suggestion
 import app.depressify.core.model.Summary
+import app.depressify.core.model.VoiceCue
+import app.depressify.shared.data.CheckInDraft
 import app.depressify.shared.data.CheckInGateway
 import app.depressify.shared.data.LiveStart
 import dev.gitlive.firebase.firestore.Direction
@@ -12,21 +14,54 @@ import dev.gitlive.firebase.firestore.FirebaseFirestore
 import dev.gitlive.firebase.functions.FirebaseFunctions
 import kotlinx.serialization.Serializable
 
-/** Start Check-in through the callable, and the Patient's records through Firestore (GitLive SDK). */
+/**
+ * Start and Finish Check-in through the callables (the contract is in the README, "Check-in"),
+ * and the Patient's records through Firestore (GitLive SDK).
+ */
 class FirebaseCheckInGateway(private val db: FirebaseFirestore, private val functions: FirebaseFunctions) : CheckInGateway {
     @Serializable
-    private data class StartRequest(val patientId: String)
+    private data class StartRequest(val patientId: String, val brief: String, val mode: String)
 
     @Serializable
-    private data class StartResponse(val token: String, val model: String, val expiresAtMillis: Long = 0)
+    private data class StartResponse(val checkInId: String, val token: String, val model: String, val endpoint: String)
+
+    @Serializable
+    private data class Turn(val speaker: String, val text: String)
+
+    @Serializable
+    private data class DraftSuggestion(val id: String, val kind: String, val details: String, val status: String)
+
+    @Serializable
+    private data class Draft(val turns: List<Turn>, val voiceCues: List<VoiceCue>, val suggestions: List<DraftSuggestion>, val crisis: Boolean)
+
+    @Serializable
+    private data class FinishRequest(val patientId: String, val checkInId: String, val draft: Draft)
+
+    @Serializable
+    private data class FinishResponse(val checkInId: String, val summary: Summary, val minimal: Boolean = false)
 
     private fun patient(patientId: String) = db.collection(Collections.PATIENTS).document(patientId)
 
-    override suspend fun startCheckIn(patientId: String): LiveStart {
+    override suspend fun startCheckIn(patientId: String, brief: String, typed: Boolean): LiveStart {
         val response = functions.httpsCallable("startCheckIn")
-            .invoke(StartRequest.serializer(), StartRequest(patientId))
+            .invoke(StartRequest.serializer(), StartRequest(patientId, brief, if (typed) "typed" else "spoken"))
             .data(StartResponse.serializer())
-        return LiveStart(response.token, response.model)
+        return LiveStart(response.checkInId, response.token, response.model, response.endpoint)
+    }
+
+    override suspend fun finishCheckIn(patientId: String, checkInId: String, draft: CheckInDraft): Summary {
+        val request = FinishRequest(
+            patientId,
+            checkInId,
+            Draft(
+                turns = draft.turns.map { Turn(if (it.fromPatient) "patient" else "companion", it.text) },
+                voiceCues = emptyList(),
+                suggestions = draft.suggestions.map { DraftSuggestion(it.id, it.kind.name, it.details, it.status.name) },
+                crisis = draft.crisis,
+            ),
+        )
+        return functions.httpsCallable("finishCheckIn").invoke(FinishRequest.serializer(), request) { encodeDefaults = true }
+            .data(FinishResponse.serializer()).summary
     }
 
     override suspend fun recentDays(patientId: String, count: Int): List<DailyDoc> =

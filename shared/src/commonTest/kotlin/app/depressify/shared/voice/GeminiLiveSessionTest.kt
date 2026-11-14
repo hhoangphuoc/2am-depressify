@@ -1,21 +1,23 @@
 package app.depressify.shared.voice
 
 import app.depressify.core.SuggestionKind
+import app.depressify.core.live.LiveEvent as ServerEvent
 import app.depressify.core.model.DailyDoc
 import app.depressify.core.model.FlagLevel
 import app.depressify.core.model.PatientDoc
 import app.depressify.core.model.SharingConsent
 import app.depressify.core.model.Signal
+import app.depressify.core.model.SuggestionStatus
 import app.depressify.shared.data.FakeCheckInGateway
 import app.depressify.shared.data.FakePatientStore
 import app.depressify.shared.voice.live.LiveClient
-import app.depressify.shared.voice.live.ServerEvent
 import app.depressify.shared.voice.live.ToolCard
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.channels.ReceiveChannel
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
+import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlin.test.Test
@@ -30,7 +32,7 @@ private class FakeLiveClient(private val events: List<ServerEvent>, private val 
     var token: String? = null
     private val open = CompletableDeferred<Unit>()
 
-    override suspend fun run(token: String, model: String, outgoing: ReceiveChannel<String>, onEvent: suspend (ServerEvent) -> Unit) {
+    override suspend fun run(endpoint: String, token: String, model: String, outgoing: ReceiveChannel<String>, onEvent: suspend (ServerEvent) -> Unit) {
         this.token = token
         events.forEach { onEvent(it) }
         while (true) sent += outgoing.tryReceive().getOrNull() ?: break
@@ -41,7 +43,7 @@ private class FakeLiveClient(private val events: List<ServerEvent>, private val 
 @OptIn(ExperimentalCoroutinesApi::class)
 class GeminiLiveSessionTest {
     private val scope = TestScope(UnconfinedTestDispatcher())
-    private val patients = FakePatientStore().apply { records["p1"] = PatientDoc("Live patient", "c@example.com", sharingConsent = SharingConsent.granted) }
+    private val patients = FakePatientStore().apply { records["p1"] = PatientDoc("Live patient", "c@example.com", intakeHighlights = "- Likes the sea", sharingConsent = SharingConsent.granted) }
     private val gateway = FakeCheckInGateway()
     private var crisisShown = 0
 
@@ -74,6 +76,8 @@ class GeminiLiveSessionTest {
 
         assertTrue(live.isLive)
         assertEquals("token-1", client.token)
+        // The Brief carries the Patient's background; the safety rules are the server's.
+        assertTrue(gateway.brief!!.contains("- Likes the sea"))
         assertTrue(client.sent.first().contains("The Check-in has started."))
         assertEquals(listOf(TranscriptLine(Speaker.Companion, "Hi, good to hear you."), TranscriptLine(Speaker.You, "I slept badly.")), snap.transcript)
         assertEquals(LiveState.Listening, snap.event.state)
@@ -139,5 +143,26 @@ class GeminiLiveSessionTest {
         val failed = session(FakeLiveClient(emptyList()))
         failed.start(returning = true)
         assertFalse(failed.snapshot.value.connected)
+    }
+
+    @Test
+    fun finishingHandsOverTheConversationTheRatingsAndTheAgreedSuggestion() = runTest {
+        val client = FakeLiveClient(listOf(
+            ServerEvent.OutputText("How was today?"), ServerEvent.TurnComplete, ServerEvent.InputText("Tired."),
+            call("record_suggestion", "kind" to JsonPrimitive("music"), "details" to JsonPrimitive("One calm song tonight")),
+        ))
+        val live = session(client)
+        live.start(returning = true)
+        live.respond(Reply.Accept)
+        live.stop()
+
+        val summary = live.finish("My ratings on the screen: mood 3.")
+
+        assertEquals("check-in-1", summary?.checkInId)
+        val (checkInId, draft) = gateway.finished.single()
+        assertEquals("check-in-1", checkInId)
+        assertEquals(listOf(false to "How was today?", true to "Tired.", true to "That works for me.", true to "My ratings on the screen: mood 3."), draft.turns.map { it.fromPatient to it.text })
+        assertEquals(SuggestionStatus.accepted, draft.suggestions.single().status)
+        assertFalse(draft.crisis)
     }
 }

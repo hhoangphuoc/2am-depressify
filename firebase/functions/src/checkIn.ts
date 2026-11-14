@@ -442,6 +442,13 @@ function later(existing: number | null | undefined, nowMillis: number): number {
  */
 export function finishWrites(current: FinishCurrent, checkInId: string, content: FinishContent, nowMillis: number): FinishWrites {
   const existing = current.summary;
+  // A retry that could not use the model (a lost reply, then a model error) must not wipe the
+  // Summary and ratings an earlier attempt saved: keep what the model wrote the first time.
+  const fromModel = (s: Partial<Pick<Summary, "sleepLine" | "themes">>) => (s.sleepLine ?? "") !== "" || (s.themes?.length ?? 0) > 0;
+  if (existing !== undefined && fromModel(existing) && !fromModel(content)) {
+    const kept = existing as Summary;
+    content = { ...kept, voiceCues: kept.voiceCues ?? [], themes: kept.themes ?? [], quotes: kept.quotes ?? [], crisis: content.crisis };
+  }
   const summary: Summary = {
     checkInId,
     createdAtMillis: typeof existing?.createdAtMillis === "number" ? existing.createdAtMillis : nowMillis,

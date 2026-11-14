@@ -18,4 +18,10 @@ interface PatientStore {
      * never assumes a decision that was not saved.
      */
     suspend fun setSharingConsent(patientId: String, choice: SharingConsent, atMillis: Long)
+
+    /**
+     * Records a sign of life from the phone (`lastSeenAtMillis`). The hourly silence check raises a
+     * red flag for a sharing Patient whose phone has been quiet for 24 hours.
+     */
+    suspend fun markSeen(patientId: String, atMillis: Long)
 }

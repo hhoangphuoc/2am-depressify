@@ -32,7 +32,7 @@ sealed interface ToolCard {
 /** What a tool call changes on screen. Called on the session's coroutine. */
 interface ToolEffects {
     fun show(card: ToolCard)
-    fun offer(kind: SuggestionKind, details: String)
+    fun offer(suggestion: Suggestion)
     fun wrapUp()
     fun crisis()
 }
@@ -136,13 +136,12 @@ class CompanionTools(
     private suspend fun recordSuggestion(kindName: String?, details: String?): JsonObject {
         val kind = SuggestionKind.entries.firstOrNull { it.name == kindName }
         if (kind == null || details.isNullOrBlank()) return error("invalid_args")
-        effects.offer(kind, details.trim())
         val patient = patients.get(patientId) ?: return error("backend_failed")
         val now = nowMillis()
-        checkIns.saveSuggestion(
-            patientId,
-            Suggestion(id = "s" + now, kind = kind, details = details.trim(), suggestedAtMillis = now, sharedWithClinician = patient.sharingStamp()),
-        )
+        val suggestion = Suggestion(id = "s" + now, kind = kind, details = details.trim(), suggestedAtMillis = now, sharedWithClinician = patient.sharingStamp())
+        // On screen first: the card does not wait for the write.
+        effects.offer(suggestion)
+        checkIns.saveSuggestion(patientId, suggestion)
         return ok()
     }
 

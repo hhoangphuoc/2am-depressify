@@ -50,6 +50,8 @@ class PatientViewModelBackendTest {
         assertEquals(SharingConsent.undecided, stored.sharingConsent)
         assertEquals(listOf<Route>(Route.Welcome), vm.backStack.toList())
         assertFalse(vm.ui.value.sharing)
+        // Opening the app is a sign of life, so the silence check does not flag a phone that is in use.
+        assertEquals(42, stored.lastSeenAtMillis)
 
         vm.finishWelcome(share = true)
 

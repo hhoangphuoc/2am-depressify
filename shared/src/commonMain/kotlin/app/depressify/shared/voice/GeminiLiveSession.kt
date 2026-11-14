@@ -1,13 +1,18 @@
 package app.depressify.shared.voice
 
 import app.depressify.core.SuggestionKind
+import app.depressify.core.live.LiveProtocol
+import app.depressify.core.model.Suggestion
+import app.depressify.core.model.SuggestionStatus
+import app.depressify.core.model.Summary
+import app.depressify.shared.data.CheckInDraft
 import app.depressify.shared.data.CheckInGateway
+import app.depressify.shared.data.DraftTurn
 import app.depressify.shared.data.PatientStore
 import app.depressify.shared.voice.live.AudioIO
+import app.depressify.shared.voice.live.CheckInBrief
 import app.depressify.shared.voice.live.CompanionTools
 import app.depressify.shared.voice.live.LiveClient
-import app.depressify.shared.voice.live.LiveProtocol
-import app.depressify.shared.voice.live.ServerEvent
 import app.depressify.shared.voice.live.ToolCard
 import app.depressify.shared.voice.live.ToolEffects
 import kotlinx.coroutines.CancellationException
@@ -19,6 +24,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import app.depressify.core.live.LiveEvent as ServerEvent
 import app.depressify.core.model.SuggestionKind as ContractKind
 
 /**
@@ -27,7 +33,8 @@ import app.depressify.core.model.SuggestionKind as ContractKind
  * the Companion's tool calls from the Patient's own records.
  *
  * While no Patient is signed in ([patientId] is null) it plays [fallback], the scripted demo.
- * The transcript lives only in [snapshot], in memory (ADR 0006).
+ * The transcript lives only in [snapshot], in memory, until [finish] hands it to Finish Check-in
+ * (ADR 0006).
  */
 class GeminiLiveSession(
     private val scope: CoroutineScope,
@@ -47,12 +54,18 @@ class GeminiLiveSession(
     private var outgoing: Channel<String>? = null
     private var scripted = true
 
+    /** The Patient and the Check-in that [finish] closes. A reconnect starts a new Check-in id. */
+    private var patient: String? = null
+    private var checkInId: String? = null
+    private val offered = mutableListOf<Suggestion>()
+    private var crisis = false
+
     /** The speaker whose words are still arriving; their next piece joins the same line. */
     private var openLine: Speaker? = null
 
     override val isLive: Boolean get() = !scripted
 
-    override fun start(returning: Boolean) {
+    override fun start(returning: Boolean, typed: Boolean) {
         stop()
         val id = patientId()
         scripted = id == null
@@ -60,7 +73,11 @@ class GeminiLiveSession(
             fallback.start(returning)
             job = scope.launch { fallback.snapshot.collect { state.value = it } }
         } else {
-            state.value = LiveSnapshot(event = LiveEvent(LiveState.Connecting, if (returning) 0 else 1))
+            patient = id
+            checkInId = null
+            offered.clear()
+            crisis = false
+            state.value = LiveSnapshot(event = LiveEvent(LiveState.Connecting, if (returning) 0 else 1), muted = typed)
             connect(id)
         }
     }
@@ -71,9 +88,11 @@ class GeminiLiveSession(
         openLine = null
         job = scope.launch {
             try {
-                val start = checkIns.startCheckIn(id)
+                val brief = CheckInBrief.build(patients.get(id)?.intakeHighlights.orEmpty())
+                val start = checkIns.startCheckIn(id, brief, typed = state.value.muted)
+                checkInId = start.checkInId
                 val tools = CompanionTools(patients, checkIns, id, nowMillis, effects)
-                client.run(start.token, start.model, out) { handle(it, tools, out) }
+                client.run(start.endpoint, start.token, start.model, out) { handle(it, tools, out) }
                 lost()
             } catch (e: CancellationException) {
                 throw e
@@ -92,21 +111,23 @@ class GeminiLiveSession(
         when (event) {
             ServerEvent.SetupComplete -> {
                 // The Companion speaks first: the app, not the Patient, opens the conversation.
-                out.send(LiveProtocol.text("The Check-in has started."))
-                val listening = audio?.start { frame -> if (!state.value.muted) out.trySend(LiveProtocol.audio(frame)) } ?: false
+                out.send(LiveProtocol.textMessage("The Check-in has started."))
+                val listening = audio?.start { frame -> if (!state.value.muted) out.trySend(LiveProtocol.audioMessage(frame)) } ?: false
                 if (!listening) state.update { it.copy(muted = true) }
                 show(LiveState.Thinking, tool = "Getting ready")
             }
-            is ServerEvent.AudioOut -> audio?.play(event.pcm24k)
+            is ServerEvent.AudioOut -> audio?.play(event.pcm)
             is ServerEvent.OutputText -> say(Speaker.Companion, event.text, LiveState.Speaking)
             is ServerEvent.InputText -> say(Speaker.You, event.text, LiveState.Listening)
             is ServerEvent.ToolCall -> {
                 openLine = null
                 show(LiveState.Thinking, tool = CompanionTools.label(event.name))
-                out.send(LiveProtocol.toolResponse(event.id, event.name, tools.dispatch(event.name, event.args)))
+                out.send(LiveProtocol.toolResponseMessage(event.id, event.name, tools.dispatch(event.name, event.args)))
             }
             ServerEvent.Interrupted -> { audio?.stopPlayback(); openLine = null; show(LiveState.Listening) }
             ServerEvent.TurnComplete -> { openLine = null; show(LiveState.Listening) }
+            // Usage counts, voice activity, going-away notices and the rest change nothing on screen.
+            else -> Unit
         }
     }
 
@@ -127,16 +148,31 @@ class GeminiLiveSession(
 
     private val effects = object : ToolEffects {
         override fun show(card: ToolCard) = state.update { it.copy(cards = it.cards.filterNot { c -> c::class == card::class && (c as? ToolCard.Insight)?.title == (card as? ToolCard.Insight)?.title } + card) }
-        override fun offer(kind: ContractKind, details: String) = state.update { it.copy(offer = kind.forScreen(), offerDetails = details, accepted = false) }
+        override fun offer(suggestion: Suggestion) {
+            offered += suggestion
+            state.update { it.copy(offer = suggestion.kind.forScreen(), offerDetails = suggestion.details, accepted = false) }
+        }
         override fun wrapUp() = state.update { it.copy(wrapped = true) }
-        override fun crisis() = onCrisis()
+        override fun crisis() { crisis = true; onCrisis() }
+    }
+
+    override suspend fun finish(ratingsLine: String?): Summary? {
+        val id = patient
+        val checkIn = checkInId
+        if (scripted || id == null || checkIn == null) return null
+        val snap = state.value
+        val turns = snap.transcript.map { DraftTurn(fromPatient = it.speaker == Speaker.You, text = it.text) } +
+            listOfNotNull(ratingsLine?.let { DraftTurn(fromPatient = true, text = it) })
+        // Only the last Suggestion can have been agreed to; earlier ones were replaced by a smaller one.
+        val suggestions = offered.mapIndexed { i, s -> if (i == offered.lastIndex && snap.accepted) s.copy(status = SuggestionStatus.accepted) else s }
+        return checkIns.finishCheckIn(id, checkIn, CheckInDraft(turns, suggestions, crisis))
     }
 
     override fun sendText(text: String) {
         if (scripted) return
         openLine = null
         state.update { it.copy(transcript = it.transcript + TranscriptLine(Speaker.You, text)) }
-        outgoing?.trySend(LiveProtocol.text(text))
+        outgoing?.trySend(LiveProtocol.textMessage(text))
     }
 
     override fun respond(reply: Reply) {
@@ -152,7 +188,7 @@ class GeminiLiveSession(
     override fun setMuted(muted: Boolean) {
         if (scripted) return fallback.setMuted(muted)
         state.update { it.copy(muted = muted) }
-        if (muted) outgoing?.trySend(LiveProtocol.audioStreamEnd())
+        if (muted) outgoing?.trySend(LiveProtocol.audioStreamEndMessage())
     }
 
     /** "Try again" after a lost connection reconnects and keeps what was said so far. */

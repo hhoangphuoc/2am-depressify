@@ -40,6 +40,10 @@ class FirestorePatientStore(private val db: FirebaseFirestore) : PatientStore {
             ) { encodeDefaults = true }
         }
     }
+
+    override suspend fun markSeen(patientId: String, atMillis: Long) {
+        patient(patientId).updateFields { "lastSeenAtMillis" to atMillis }
+    }
 }
 
 /** Consents in Firestore through the GitLive SDK. */

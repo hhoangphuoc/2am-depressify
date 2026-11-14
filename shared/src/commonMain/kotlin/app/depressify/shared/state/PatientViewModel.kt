@@ -26,6 +26,8 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
+import kotlinx.datetime.TimeZone
+import kotlinx.datetime.toLocalDateTime
 import kotlin.time.Clock
 import kotlin.time.Duration.Companion.seconds
 
@@ -111,6 +113,8 @@ class PatientViewModel(
         // shown is local and can differ from the stored one; block on a retry before real Patients use it.
         val started = attempt { backend.session.start() } ?: return
         patientId = started.patientId
+        // shortcut: one sign of life per app start; the daily job (#26) should repeat it while the app runs.
+        attempt { backend.patients.markSeen(started.patientId, nowMillis()) }
         val choice = started.patient.sharingConsent
         state.update { it.copy(sharing = choice == SharingConsent.granted) }
         // First open: ask for the sharing choice, unless the Patient has already moved on from a tab root.
@@ -188,7 +192,7 @@ class PatientViewModel(
                     if (returning) "It’s good to hear from you. Did you try the walk?" else "You can take your time. How are you feeling today?"))),
             )
         }
-        live.start(returning)
+        live.start(returning, typed)
         if (typed) live.setMuted(true)
         open(Route.CheckIn)
     }
@@ -248,6 +252,7 @@ class PatientViewModel(
     fun makeSummary() {
         state.update { it.copy(finish = FinishState.Saving) }
         viewModelScope.launch {
+            if (live.isLive) return@launch makeLiveSummary()
             delay(700)
             val s = state.value
             if (s.scenario == Scenario.SummaryFailure) { state.update { it.copy(finish = FinishState.Failed) }; return@launch }
@@ -272,6 +277,31 @@ class PatientViewModel(
     }
 
     fun retrySummary() { state.update { it.copy(scenario = Scenario.Everyday) }; makeSummary() }
+
+    /** A live Check-in's Summary comes from Finish Check-in. A failure offers the retry, which reuses the Check-in. */
+    private suspend fun makeLiveSummary() {
+        val s = state.value
+        val r = s.ratings
+        val ratingsLine = if (s.consents[SignalId.Ratings] != true) null
+        else "My ratings on the screen: mood " + (r.mood ?: "skipped") + ", energy " + (r.energy ?: "skipped") + ", sleep quality " + (r.sleepQuality ?: "skipped") + ", each from 1 to 5."
+        val saved = attempt { live.finish(ratingsLine) }
+        if (saved == null) { state.update { it.copy(finish = FinishState.Failed) }; return }
+        val snap = live.snapshot.value
+        val rating = { value: Int? -> value?.takeIf { it in 1..5 } }
+        val today = Clock.System.now().toLocalDateTime(TimeZone.currentSystemDefault()).date
+        val summary = Summary(
+            id = saved.checkInId,
+            date = today.day.toString() + " " + today.month.name.lowercase().replaceFirstChar { it.uppercase() },
+            title = saved.suggestion ?: "A moment to check in",
+            text = (saved.themes + saved.sleepLine).filter { it.isNotBlank() }.joinToString(". ").ifEmpty { "You made space for a Check-in." },
+            ratings = Ratings(rating(saved.mood), rating(saved.energy), rating(saved.sleepQuality)),
+            suggestion = snap.offer.takeIf { snap.accepted },
+            previousOutcome = null,
+            voiceObservation = saved.voiceCues.firstOrNull()?.label,
+        )
+        state.update { it.copy(history = listOf(summary) + it.history.filterNot { h -> h.id == summary.id }, finish = FinishState.Idle) }
+        replaceAll(Route.Today, Route.Summary(summary.id))
+    }
 
     fun book(plan: BookingPlan) { state.update { it.copy(booking = plan, sheet = null, notice = "Added to your demo calendar.") } }
 

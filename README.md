@@ -162,14 +162,15 @@ Before the first real Gemini call:
 
 A Check-in is a Gemini Live session the phone opens itself (ADR 0002):
 
-1. The app calls `startCheckIn {patientId}`. The function mints a single-use token locked to `gemini-3.8-live`, the Companion's instruction (with the Intake highlights) and its tools.
+1. The app builds the Brief (`CheckInBrief`) and calls `startCheckIn {patientId, brief, mode}`. The function mints a single-use token locked to `gemini-3.8-live`, the Brief plus the fixed safety rules, and the Companion's tools.
 2. The app opens the Live WebSocket with the token (`KtorLiveClient`), streams the microphone at 16 kHz and plays the Companion's speech at 24 kHz. Typing uses the same connection.
 3. The Companion's tool calls run on the phone (`CompanionTools`): it reads the Patient's background, recent daily Signals against their Baseline, recent Summaries and the last Suggestion from Firestore, records the Suggestion it offers, and can show a music or Google Maps search card. Each call shows on screen as a short status line and, where there is something to show, a card.
-4. A lost connection offers a retry and keeps what was said. Without a signed-in Patient the app plays the scripted demo instead.
+4. When the Patient ends the Check-in the app calls `finishCheckIn` with the transcript draft and shows the Summary it returns.
+5. A lost connection offers a retry and keeps what was said. Without a signed-in Patient the app plays the scripted demo instead.
 
 To give the Companion history to draw on, seed the Demo Patients and set `demo.patientId` in `secrets.properties` (Android) or `DemoPatientId` in `Secrets.plist` (iOS) to `demo-steady`, `demo-declining` or `demo-sparse`. Locally, put `GEMINI_API_KEY` in `firebase/functions/.secret.local` and restart the emulators.
 
-Not built yet: Finish Check-in (the Summary, ratings and flag from the transcript), weather, place results and walking routes from the Maps agent tools, and calendar booking. The place card only opens a Google Maps search.
+Not built yet: Decisions and the flag from the transcript, weather, place results and walking routes from the Maps agent tools, and calendar booking. The place card only opens a Google Maps search.
 
 ## Run the walking skeleton locally
 

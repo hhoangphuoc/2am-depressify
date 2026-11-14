@@ -44,6 +44,10 @@ class FakePatientStore(val consents: FakeConsentStore = FakeConsentStore()) : Pa
         records[patientId] = patient
     }
 
+    override suspend fun markSeen(patientId: String, atMillis: Long) {
+        records[patientId] = records.getValue(patientId).copy(lastSeenAtMillis = atMillis)
+    }
+
     override suspend fun setSharingConsent(patientId: String, choice: SharingConsent, atMillis: Long) {
         if (failSharingWrites && !commitThenFail) throw IllegalStateException("UNAVAILABLE")
         records[patientId] = records.getValue(patientId).copy(sharingConsent = choice, sharingChangedAtMillis = atMillis)
@@ -72,10 +76,20 @@ class FakeCheckInGateway : CheckInGateway {
     val flags: MutableList<Flag> = mutableListOf()
     var failWrites: Boolean = false
     var failStart: Boolean = false
+    var failFinish: Boolean = false
+    var brief: String? = null
+    val finished: MutableList<Pair<String, CheckInDraft>> = mutableListOf()
 
-    override suspend fun startCheckIn(patientId: String): LiveStart {
+    override suspend fun startCheckIn(patientId: String, brief: String, typed: Boolean): LiveStart {
         if (failStart) throw IllegalStateException("UNAVAILABLE")
-        return LiveStart("token-1", "gemini-3.8-live")
+        this.brief = brief
+        return LiveStart("check-in-1", "token-1", "models/gemini-3.8-live", "wss://live.example")
+    }
+
+    override suspend fun finishCheckIn(patientId: String, checkInId: String, draft: CheckInDraft): Summary {
+        if (failFinish) throw IllegalStateException("UNAVAILABLE")
+        finished += checkInId to draft
+        return Summary(checkInId, 1000, mood = 3, energy = null, sleepQuality = null, sleepLine = "Slept less than usual", themes = listOf("A tired week"), voiceCues = emptyList(), suggestion = "One calm song tonight", previousOutcome = null, quotes = emptyList(), sharedWithClinician = true)
     }
 
     override suspend fun recentDays(patientId: String, count: Int): List<DailyDoc> = days.take(count)

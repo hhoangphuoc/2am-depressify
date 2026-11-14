@@ -292,9 +292,9 @@ The Calendar spike needs a Google account to grant consent on the phone, so it w
 2. **Data access.** Add the scope `https://www.googleapis.com/auth/calendar.events.owned`.
 3. **Enable the API.** Enable `calendar-json.googleapis.com`. This is not done yet.
 4. **OAuth clients.** Create:
-   - An **Android** client for package `app.depressify` with the debug keystore's SHA-1 (`./gradlew :androidApp:signingReport`).
+   - An **Android** client for package `app.depressify.patient` with the debug keystore's SHA-1 (`./gradlew :androidApp:signingReport`).
    - A **Web** client, whose ID the app passes as the server client ID.
-   - An **iOS** client for bundle `app.depressify`, if iOS is tried.
+   - An **iOS** client for bundle `app.depressify.patient`, if iOS is tried.
 5. **On the S24+:** request the scope with `Identity.getAuthorizationClient(activity).authorize(...)`, then use the access token to call these three endpoints:
    - `POST https://www.googleapis.com/calendar/v3/freeBusy` for today on `primary`.
    - `GET https://www.googleapis.com/calendar/v3/calendars/primary/events?timeMin=…&timeMax=…&singleEvents=true&orderBy=startTime`.
