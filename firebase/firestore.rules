@@ -10,7 +10,8 @@ rules_version = '2';
 //              read-only to them; flags are append-only (only the Clinician clears one); on the
 //              record they write only the fields the phone owns, and may raise but never lower
 //              their own flag level.
-//   Clinician  reads everything for the Patients whose clinicianEmail is their sign-in email.
+//   Clinician  reads everything for the Patients whose clinicianEmail is their sign-in email,
+//              while that Patient's sharing Consent is granted.
 //              Writes Visits, the TMS end date and display name, the cleared time on a flag,
 //              and resets the Patient's flag level and reasons after follow-up. Nothing else.
 //   Demo       any signed-in user acts as the Patient on a record marked synthetic.
@@ -62,11 +63,14 @@ service cloud.firestore {
     }
 
     // The one place that decides whether the Clinician may see this Patient. Every Clinician
-    // read and write goes through it. Issue #29 adds the sharing Consent gate here, for example
-    // `&& patient.sharingConsent == 'granted'` (the dashboard's list query then needs the same
-    // filter, or Firestore rejects the query).
+    // read and write of the record and its collections goes through it.
+    //
+    // Sharing Consent (issue #29): the Clinician sees the Patient only while the Patient has
+    // granted sharing. Undecided and declined both mean no access, and withdrawing takes effect
+    // on the next read, including open listeners. The dashboard's list query filters on
+    // `sharingConsent == 'granted'` too, or Firestore rejects the query.
     function clinicianCanRead(patient) {
-      return isClinicianOf(patient);
+      return isClinicianOf(patient) && patient.sharingConsent == 'granted';
     }
 
     function clinicianCanWrite(patient) {
@@ -123,7 +127,17 @@ service cloud.firestore {
           'healthSource', 'sharingConsent', 'sharingChangedAtMillis', 'flagLevel', 'flagReasons'])
         && after.healthSource in ['device', 'synthetic']
         && after.sharingConsent in ['undecided', 'granted', 'declined']
+        && (!changedKeys().hasAny(['sharingConsent']) || sharingDecided())
         && (!changedKeys().hasAny(['flagLevel', 'flagReasons']) || flagRaisedOnly());
+    }
+
+    // A change of sharing Consent is a decision: granted or declined, written with the new time
+    // it was made. Nothing moves a Patient back to undecided.
+    function sharingDecided() {
+      let after = request.resource.data;
+      return after.sharingConsent in ['granted', 'declined']
+        && changedKeys().hasAll(['sharingConsent', 'sharingChangedAtMillis'])
+        && after.sharingChangedAtMillis is int;
     }
 
     // The phone raises flags (its daily rules and the crisis tool) and sets the level to the

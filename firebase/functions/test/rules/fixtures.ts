@@ -27,7 +27,7 @@ export const CLINICIAN = "clinician@example.com";
 export const OTHER_CLINICIAN = "other-clinician@example.com";
 
 /** Patient ids. A Patient's id is their anonymous auth uid. */
-export const ALICE = "alice"; // linked to CLINICIAN, amber with one open flag
+export const ALICE = "alice"; // linked to CLINICIAN, sharing granted, amber with one open flag
 export const BOB = "bob"; // linked to OTHER_CLINICIAN
 export const DEMO = "demo-declining"; // a synthetic Demo Patient linked to CLINICIAN
 export const STRANGER = "stranger"; // a signed-in user with no record and no email
@@ -121,7 +121,17 @@ export const CLINICIAN_READ_ONLY: Subcollection[] = ["daily", "consents", "check
 
 export const samplePath = (patientId: string, sub: Subcollection) => `patients/${patientId}/${sub}/${SAMPLES[sub].id}`;
 
-export const alice: PatientDoc = { ...newPatientDoc("Alice", CLINICIAN), flagLevel: "amber", flagReasons: [AMBER_REASON] };
+/** When Alice granted sharing. */
+export const SHARED_AT = 1_699_000_000_000;
+
+// Alice has granted sharing, so her Clinician can read her (issue #29). A new record is undecided.
+export const alice: PatientDoc = {
+  ...newPatientDoc("Alice", CLINICIAN),
+  flagLevel: "amber",
+  flagReasons: [AMBER_REASON],
+  sharingConsent: "granted",
+  sharingChangedAtMillis: SHARED_AT,
+};
 export const bob: PatientDoc = newPatientDoc("Bob", OTHER_CLINICIAN);
 export const demo: PatientDoc = { ...newPatientDoc("Demo declining", CLINICIAN), synthetic: true, healthSource: "synthetic" };
 

@@ -14,7 +14,8 @@ import {
   where,
   writeBatch,
 } from "firebase/firestore";
-import { afterAll, beforeAll, beforeEach, describe, it } from "vitest";
+import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
+import { clinicianListFilters } from "../../../hosting/js/lib/sharing.js";
 import { newPatientDoc } from "../../src/types";
 import {
   ALICE,
@@ -27,6 +28,7 @@ import {
   OTHER_CLINICIAN,
   PATIENT_WRITABLE,
   SAMPLES,
+  SHARED_AT,
   STRANGER,
   SUBCOLLECTIONS,
   asClinician,
@@ -55,6 +57,10 @@ beforeEach(async () => {
 
 /** Each read path for one Patient: the record and one document in every collection. */
 const readPaths = (patientId: string) => [`patients/${patientId}`, ...SUBCOLLECTIONS.map((s) => samplePath(patientId, s))];
+
+/** The dashboard's Patient list query, built from the dashboard's own filters. */
+const dashboardList = (db: ReturnType<typeof signedOut>, email: string) =>
+  query(collection(db, "patients"), ...clinicianListFilters(email).map(([field, op, value]) => where(field, op, value)));
 
 /** Create, update and delete on one collection of one Patient. */
 async function writes(db: ReturnType<typeof signedOut>, patientId: string, sub: Subcollection) {
@@ -177,7 +183,7 @@ describe("A Patient cannot read another Patient", () => {
 describe("The Clinician reads everything for their Patients, writes Visits, the TMS end date and the display name, and cannot write daily records", () => {
   it("clinicianReadsOwnPatient: the dashboard's list query, the record and every collection", async () => {
     const db = asClinician(env, CLINICIAN);
-    await assertSucceeds(getDocs(query(collection(db, "patients"), where("clinicianEmail", "==", CLINICIAN))));
+    await assertSucceeds(getDocs(dashboardList(db, CLINICIAN)));
     for (const path of readPaths(ALICE)) await assertSucceeds(getDoc(doc(db, path)));
     for (const sub of SUBCOLLECTIONS) await assertSucceeds(getDocs(collection(db, `patients/${ALICE}/${sub}`)));
   });
@@ -217,7 +223,7 @@ describe("The Clinician reads everything for their Patients, writes Visits, the 
     const ref = doc(asClinician(env, CLINICIAN), `patients/${ALICE}`);
     await assertFails(updateDoc(ref, { clinicianEmail: OTHER_CLINICIAN }));
     await assertFails(updateDoc(ref, { synthetic: true }));
-    await assertFails(updateDoc(ref, { sharingConsent: "granted" }));
+    await assertFails(updateDoc(ref, { sharingConsent: "declined", sharingChangedAtMillis: SHARED_AT + 1 }));
     await assertFails(updateDoc(ref, { quietHoursStart: 20 }));
     await assertFails(updateDoc(ref, { lastSeenAtMillis: 1 }));
     await assertFails(updateDoc(ref, { intakeHighlights: "Written straight from the dashboard." }));
@@ -239,6 +245,117 @@ describe("The Clinician reads everything for their Patients, writes Visits, the 
     await assertFails(setDoc(doc(db, `patients/${ALICE}/visits/v2`), visit));
     await assertFails(updateDoc(doc(db, `patients/${ALICE}`), { tmsEndDate: "2026-10-02" }));
     await assertFails(updateDoc(doc(db, samplePath(ALICE, "flags")), { clearedAtMillis: 1_700_000_500_000 }));
+  });
+});
+
+describe("Without sharing Consent the Clinician cannot read that Patient's record or collections (issue #29)", () => {
+  /** The Patient records their choice the way the app does: the record and `consents/sharing` together. */
+  async function choose(patientId: string, choice: "granted" | "declined", atMillis: number) {
+    const db = asPatient(env, patientId);
+    const batch = writeBatch(db);
+    batch.update(doc(db, `patients/${patientId}`), { sharingConsent: choice, sharingChangedAtMillis: atMillis });
+    batch.set(doc(db, `patients/${patientId}/consents/sharing`), {
+      subject: "sharing",
+      granted: choice === "granted",
+      changedAtMillis: atMillis,
+    });
+    await assertSucceeds(batch.commit());
+  }
+
+  /** Every Clinician read of the Patient, and the Clinician's writes, fail. */
+  async function clinicianLocksOut(patientId: string) {
+    const db = asClinician(env, CLINICIAN);
+    for (const path of readPaths(patientId)) await assertFails(getDoc(doc(db, path)));
+    for (const sub of SUBCOLLECTIONS) await assertFails(getDocs(collection(db, `patients/${patientId}/${sub}`)));
+    await assertFails(setDoc(doc(db, `patients/${patientId}/visits/v2`), visit));
+    await assertFails(updateDoc(doc(db, `patients/${patientId}/visits/v1`), { score: 3 }));
+    await assertFails(deleteDoc(doc(db, `patients/${patientId}/visits/v1`)));
+    await assertFails(updateDoc(doc(db, `patients/${patientId}`), { tmsEndDate: "2026-10-02" }));
+    await assertFails(updateDoc(doc(db, `patients/${patientId}`), { flagLevel: "green", flagReasons: [] }));
+    await assertFails(updateDoc(doc(db, samplePath(patientId, "flags")), { clearedAtMillis: 1_700_000_500_000 }));
+  }
+
+  /** Every Clinician read of the Patient succeeds. */
+  async function clinicianReads(patientId: string) {
+    const db = asClinician(env, CLINICIAN);
+    for (const path of readPaths(patientId)) await assertSucceeds(getDoc(doc(db, path)));
+    for (const sub of SUBCOLLECTIONS) await assertSucceeds(getDocs(collection(db, `patients/${patientId}/${sub}`)));
+  }
+
+  async function listedIds() {
+    const snap = await assertSucceeds(getDocs(dashboardList(asClinician(env, CLINICIAN), CLINICIAN)));
+    return snap.docs.map((d) => d.id).sort();
+  }
+
+  it("undecided: a new Patient is hidden from the Clinician until they choose", async () => {
+    const carol = asPatient(env, "carol");
+    await assertSucceeds(setDoc(doc(carol, "patients/carol"), newPatientDoc("Live patient", CLINICIAN)));
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      for (const sub of SUBCOLLECTIONS) await setDoc(doc(ctx.firestore(), samplePath("carol", sub)), SAMPLES[sub].data);
+    });
+
+    await clinicianLocksOut("carol");
+    expect(await listedIds()).toEqual([ALICE]);
+  });
+
+  it("declined: the Clinician reads nothing and writes nothing, and the Patient is off the list", async () => {
+    await choose(ALICE, "declined", SHARED_AT + 1);
+
+    await clinicianLocksOut(ALICE);
+    expect(await listedIds()).toEqual([]);
+  });
+
+  it("granted: the Clinician reads the record and every collection, and the Patient is on the list", async () => {
+    const carol = asPatient(env, "carol");
+    await assertSucceeds(setDoc(doc(carol, "patients/carol"), newPatientDoc("Live patient", CLINICIAN)));
+    await choose("carol", "granted", SHARED_AT + 1);
+
+    await clinicianReads("carol");
+    expect(await listedIds()).toEqual([ALICE, "carol"]);
+  });
+
+  it("withdrawn, then granted again: access stops at once and returns only when the Patient shares again", async () => {
+    await clinicianReads(ALICE);
+
+    await choose(ALICE, "declined", SHARED_AT + 1);
+    await clinicianLocksOut(ALICE);
+
+    await choose(ALICE, "granted", SHARED_AT + 2);
+    await clinicianReads(ALICE);
+    await assertSucceeds(setDoc(doc(asClinician(env, CLINICIAN), `patients/${ALICE}/visits/v2`), visit));
+  });
+
+  it("the list query without the sharing filter is rejected, so the dashboard cannot over-ask", async () => {
+    const db = asClinician(env, CLINICIAN);
+    await assertFails(getDocs(query(collection(db, "patients"), where("clinicianEmail", "==", CLINICIAN))));
+    await assertFails(
+      getDocs(query(collection(db, "patients"), where("clinicianEmail", "==", CLINICIAN), where("sharingConsent", "==", "declined"))),
+    );
+  });
+
+  it("a change of sharing is a decision with its time; nothing moves a Patient back to undecided", async () => {
+    const ref = doc(asPatient(env, ALICE), `patients/${ALICE}`);
+    await assertFails(updateDoc(ref, { sharingConsent: "undecided", sharingChangedAtMillis: SHARED_AT + 1 }));
+    await assertFails(updateDoc(ref, { sharingConsent: "declined" }));
+    await assertFails(updateDoc(ref, { sharingConsent: "declined", sharingChangedAtMillis: "now" }));
+    await assertSucceeds(updateDoc(ref, { sharingConsent: "declined", sharingChangedAtMillis: SHARED_AT + 1 }));
+  });
+
+  it("only the Patient changes sharing: not the Clinician, another Patient or a signed-out user", async () => {
+    const change = { sharingConsent: "granted", sharingChangedAtMillis: SHARED_AT + 2 };
+    await choose(ALICE, "declined", SHARED_AT + 1);
+    for (const db of [asClinician(env, CLINICIAN), asPatient(env, BOB), signedOut(env)]) {
+      await assertFails(updateDoc(doc(db, `patients/${ALICE}`), change));
+      await assertFails(setDoc(doc(db, `patients/${ALICE}/consents/sharing`), { subject: "sharing", granted: true, changedAtMillis: 1 }));
+    }
+  });
+
+  it("the Patient keeps full use of their own records while not sharing", async () => {
+    await choose(ALICE, "declined", SHARED_AT + 1);
+    const db = asPatient(env, ALICE);
+    for (const path of readPaths(ALICE)) await assertSucceeds(getDoc(doc(db, path)));
+    for (const sub of PATIENT_WRITABLE) for (const write of await writes(db, ALICE, sub)) await assertSucceeds(write());
+    await assertSucceeds(setDoc(doc(db, `patients/${ALICE}/flags/f2`), crisisFlag));
   });
 });
 
