@@ -1,5 +1,6 @@
-// The Signals section's block (slot `signals-body`; see the slot contract in views/patient.js): a
-// Phase selector and one trend per Signal, all nine, against the Patient's own Baseline for the
+// The Signals section's block (slot `signals-body`; see the slot contract in views/patient.js), laid
+// out as the design's `SignalTrends` (design/clinician/src/Charts.jsx): a Phase selector and one
+// trend card per Signal, all nine, in two columns, against the Patient's own Baseline for the
 // selected Phase. The arithmetic is in js/lib/signals.js; the drawing is in views/signal-chart.js.
 //
 // Each trend states its unit, date range, number of valid days and whether the data is synthetic or
@@ -28,12 +29,11 @@ import {
 import { comparisonText, drawSignalChart, signalTable } from "./signal-chart.js";
 
 const COPY = {
-  heading: "Signal trends",
-  about:
-    "Each Signal is compared only with this Patient's own Baseline: the median of the 14 days before each day, " +
-    "with at least 5 days that have a value. The shaded band is one usual spread either side. A day without a " +
-    "value is a gap, never zero.",
-  legend: "In each chart: the solid line is the daily value, the dashed line is the Baseline, the shaded band is the usual spread, and a tick on the floor marks a day with no value.",
+  heading: "Signals",
+  about: "Compared with this Patient's own previous 14 days · at least 5 valid days",
+  legend:
+    "In each chart the solid line is the daily value, the dashed line is the Baseline (the median of the 14 days before " +
+    "each day) and the shaded band is one usual spread either side. Hatched columns are days with no value: a gap, never zero.",
   location: "Made on the phone from location samples, which never leave it. Only this daily total is shared.",
   select: "Phase shown",
   all: "All days",
@@ -51,7 +51,9 @@ const COPY = {
   latest: (date, value) => `Latest, ${date}: ${value}.`,
   baseline: (value) => `Baseline ${value}.`,
   noDirection: "This Signal has no better or worse direction; it is shown for context.",
-  table: "Show as a table",
+  table: (/** @type {string} */ label) => `View ${label.toLowerCase()} data table`,
+  baselineLine: (/** @type {string} */ value, /** @type {number} */ n) => `Dashed line: Baseline ${value} · ${n} valid ${n === 1 ? "day" : "days"} in the 14 before`,
+  missing: "Missing",
 };
 
 let counter = 0;
@@ -77,15 +79,19 @@ function phaseOptionText(phase, fallbackStart, today) {
  */
 export function mountSignals(container, { db, patientId }) {
   const id = `signals-${++counter}`;
-  const block = el("section", { class: "panel signals", "aria-labelledby": `${id}-heading` });
-  const controls = el("div", { class: "signal-controls" });
+  const block = el("section", { class: "content-section signals", "aria-labelledby": `${id}-heading` });
+  const controls = el("div", { class: "signal-controls field" });
   const selectLabel = el("label", { for: `${id}-phase` }, COPY.select);
   const select = /** @type {HTMLSelectElement} */ (el("select", { id: `${id}-phase`, "aria-describedby": `${id}-range` }));
-  const range = el("p", { class: "muted", id: `${id}-range` });
+  const range = el("p", { class: "small muted", id: `${id}-range` });
   controls.append(selectLabel, select, range);
   const status = el("p", { class: "muted", role: "status" });
   const grid = el("div", { class: "signal-grid" });
-  block.append(el("h4", { id: `${id}-heading` }, COPY.heading), el("p", { class: "muted" }, COPY.about), el("p", { class: "muted hint" }, COPY.legend), controls, status, grid);
+  const headingText = el("div");
+  headingText.append(el("h2", { id: `${id}-heading` }, COPY.heading), el("p", { class: "muted" }, COPY.about));
+  const heading = el("div", { class: "section-heading" });
+  heading.append(headingText, controls);
+  block.append(heading, el("p", { class: "small muted signal-legend" }, COPY.legend), status, grid);
   container.replaceChildren(block);
 
   /** @type {object | null} */
@@ -184,28 +190,31 @@ export function mountSignals(container, { db, patientId }) {
   function card(key, window, today, source) {
     const info = SIGNAL_INFO[/** @type {keyof typeof SIGNAL_INFO} */ (key)];
     const cardId = `${id}-${key}`;
-    const article = el("article", { class: "signal-card", "aria-labelledby": `${cardId}-heading` });
-    article.append(el("h5", { id: `${cardId}-heading` }, info.label), el("p", { class: "signal-unit" }, `Unit: ${info.unit}`));
-    if (info.fromLocation) article.append(el("p", { class: "muted hint" }, COPY.location));
+    const article = el("article", { class: "signal", "aria-labelledby": `${cardId}-heading` });
+    const head = el("div", { class: "chart-heading" });
+    const latestValue = el("span", {});
+    head.append(el("h3", { id: `${cardId}-heading` }, info.label), latestValue);
+    article.append(head, el("p", { class: "small muted" }, `${info.unit} · ${source}`));
+    if (info.fromLocation) article.append(el("p", { class: "small muted" }, COPY.location));
 
     const state = signalState({ consent: consents?.[key], docs: daily ?? [], key, today });
-    if (state === "no_consent") {
-      article.append(el("p", { class: "notice" }, COPY.noConsent));
-      return article;
-    }
-    if (state === "no_data") {
-      article.append(el("p", { class: "notice" }, COPY.noData(source)));
+    if (state === "no_consent" || state === "no_data") {
+      const empty = el("div", { class: "signal-empty" }, state === "no_consent" ? COPY.noConsent : COPY.noData(source));
+      empty.append(el("p", { class: "muted" }, "Missing data is not zero."));
+      article.append(empty);
       return article;
     }
 
     const series = signalSeries(daily ?? [], key, window);
     const summary = signalSummary(series, key);
+    const latest = summary.latest;
+    latestValue.textContent = latest ? formatValue(key, latest.value) : COPY.missing;
     article.append(
       el(
         "p",
-        { class: "signal-meta" },
+        { class: "small muted" },
         `${shortDate(window.start, today)} to ${shortDate(window.end, today)} · ${summary.validDays} of ${summary.days} ` +
-          `${summary.days === 1 ? "day" : "days"} with a value · ${source}`,
+          `${summary.days === 1 ? "day" : "days"} with a value`,
       ),
     );
     if (state === "stale" && window.end === today) {
@@ -213,37 +222,41 @@ export function mountSignals(container, { db, patientId }) {
       article.append(el("p", { class: "notice stale-notice" }, COPY.stale(shortDate(last, today), daysBetween(last, today))));
     }
 
-    const latest = summary.latest;
+    /** @type {string} */
+    let baselineText = "";
     if (summary.status === "no_values") {
       article.append(el("p", { class: "notice" }, COPY.noValues));
     } else if (latest) {
       const lines = [COPY.latest(shortDate(latest.date, today), formatValue(key, latest.value))];
       if (summary.status === "compared") {
-        if (latest.baseline) lines.push(COPY.baseline(formatValue(key, latest.baseline.centre)));
+        if (latest.baseline) {
+          lines.push(COPY.baseline(formatValue(key, latest.baseline.centre)));
+          baselineText = COPY.baselineLine(formatValue(key, latest.baseline.centre), latest.baselineDays);
+        }
         const comparison = el("p", { class: "signal-comparison" }, lines.join(" "));
         comparison.append(el("strong", {}, ` ${capitalise(comparisonText(key, /** @type {number} */ (summary.comparison)))}.`));
         article.append(comparison);
       } else {
         article.append(el("p", { class: "signal-comparison" }, lines.join(" ")));
-        const why =
+        baselineText =
           summary.reason === "range"
             ? COPY.insufficientRange(summary.validDays)
             : latest.baselineDays >= 5
               ? COPY.noStored(shortDate(latest.date, today))
               : COPY.insufficientBaseline(shortDate(latest.date, today), latest.baselineDays);
-        article.append(el("p", { class: "notice" }, why));
       }
     }
-    if (!hasDirection(key)) article.append(el("p", { class: "muted hint" }, COPY.noDirection));
+    if (!hasDirection(key)) article.append(el("p", { class: "small muted" }, COPY.noDirection));
 
     const chart = el("div", { class: "chart signal-chart-wrap" });
     article.append(chart);
     charts.push({ key, chart, series });
+    if (baselineText) article.append(el("p", { class: "baseline-label" }, baselineText));
 
-    const details = /** @type {HTMLDetailsElement} */ (el("details", { class: "timeline-data" }));
+    const details = /** @type {HTMLDetailsElement} */ (el("details", { class: "data-disclosure" }));
     details.open = openTables.has(key);
     details.addEventListener("toggle", () => (details.open ? openTables.add(key) : openTables.delete(key)));
-    details.append(el("summary", {}, COPY.table));
+    details.append(el("summary", {}, COPY.table(info.label)));
     const wrap = el("div", { class: "table-scroll", tabindex: "0", role: "region", "aria-labelledby": `${cardId}-caption` });
     wrap.append(signalTable(series, { key, today, captionId: `${cardId}-caption` }));
     details.append(wrap);
@@ -253,6 +266,8 @@ export function mountSignals(container, { db, patientId }) {
 
   function drawCharts() {
     if (!view) return;
+    // A hidden tab has no width; it is drawn when shown.
+    if (!grid.clientWidth) return;
     drawnWidth = grid.clientWidth;
     for (const { key, chart, series } of charts) {
       chart.replaceChildren(drawSignalChart(/** @type {any} */ (series), { key, today: view.today, width: chart.clientWidth || 320 }));

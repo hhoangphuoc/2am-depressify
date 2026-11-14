@@ -3,7 +3,7 @@
 //
 //   value     a solid line joined only between neighbouring days that both have a value; each value
 //             is also a dot, so a lone day still shows. A day without a value is a gap, never 0,
-//             and gets a short tick on the floor of the plot.
+//             and its column is hatched (as in the design's Signal trends).
 //   Baseline  the median of the 14 days before each day, dashed, with the usual spread (one spread
 //             either side) shaded. It is broken wherever there is no Baseline (fewer than 5 days).
 import { shortDate } from "../lib/dates.js";
@@ -48,8 +48,8 @@ export function comparisonText(key, comparison) {
 export function drawSignalChart(series, { key, today, width }) {
   const info = SIGNAL_INFO[/** @type {keyof typeof SIGNAL_INFO} */ (key)];
   const W = Math.max(260, Math.round(width));
-  const H = 150;
-  const pad = { left: 44, right: 10, top: 10, bottom: 24 };
+  const H = 176;
+  const pad = { left: 43, right: 13, top: 15, bottom: 35 };
   const plotW = W - pad.left - pad.right;
   const plotH = H - pad.top - pad.bottom;
   const n = Math.max(1, series.length);
@@ -90,11 +90,23 @@ export function drawSignalChart(series, { key, today, width }) {
     ),
   );
 
-  // Frame and value grid.
-  root.append(svg("rect", { class: "plot", x: pad.left, y: pad.top, width: plotW, height: plotH }));
+  // Hatched columns for the days without a value, behind everything else.
+  const hatchId = `${titleId}-hatch`;
+  const defs = svg("defs");
+  const pattern = svg("pattern", { id: hatchId, width: 4, height: 4, patternUnits: "userSpaceOnUse", patternTransform: "rotate(45)" });
+  pattern.append(svg("line", { class: "hatch-line", x1: 0, y1: 0, x2: 0, y2: 4 }));
+  defs.append(pattern);
+  root.append(defs);
+  series.forEach((p, i) => {
+    if (p.value !== null) return;
+    root.append(svg("rect", { class: "gap-mark", x: x(i) - plotW / n / 2, y: pad.top, width: plotW / n, height: plotH, fill: `url(#${hatchId})` }));
+  });
+
+  // Value grid. Durations stored in minutes read in hours, as the cards and the design show them.
+  const inHours = key === "sleepMinutes" || key === "timeAtHomeMinutes" || key === "calendarBusyMinutes";
   for (const v of [lo + room, (lo + hi) / 2, hi - room]) {
     root.append(svg("line", { class: "grid-value", x1: pad.left, x2: pad.left + plotW, y1: y(v), y2: y(v) }));
-    root.append(svg("text", { class: "axis-label", x: pad.left - 6, y: y(v) + 4, "text-anchor": "end" }, axisNumber(v)));
+    root.append(svg("text", { class: "axis-label", x: pad.left - 8, y: y(v) + 4, "text-anchor": "end" }, inHours ? `${(v / 60).toFixed(1)}h` : axisNumber(v)));
   }
 
   // The usual spread and the Baseline, in runs of days that have one.
@@ -129,8 +141,7 @@ export function drawSignalChart(series, { key, today, width }) {
   });
   if (path) root.append(svg("path", { class: "value-line", d: path }));
   series.forEach((p, i) => {
-    if (p.value === null) root.append(svg("line", { class: "gap-mark", x1: x(i), x2: x(i), y1: pad.top + plotH - 6, y2: pad.top + plotH }));
-    else root.append(svg("circle", { class: "value-point", cx: x(i), cy: y(p.value), r: n > 60 ? 2 : 3 }));
+    if (p.value !== null) root.append(svg("circle", { class: "value-point", cx: x(i), cy: y(p.value), r: n > 60 ? 1.8 : 2.4 }));
   });
 
   // Dates: the first and last day, and the middle when there is room.
@@ -142,7 +153,7 @@ export function drawSignalChart(series, { key, today, width }) {
     root.append(
       svg(
         "text",
-        { class: "axis-label", x: anchor === "start" ? pad.left : anchor === "end" ? pad.left + plotW : x(/** @type {number} */ (i)), y: H - 6, "text-anchor": /** @type {string} */ (anchor) },
+        { class: "axis-label", x: anchor === "start" ? pad.left : anchor === "end" ? pad.left + plotW : x(/** @type {number} */ (i)), y: H - 13, "text-anchor": /** @type {string} */ (anchor) },
         shortDate(date, today),
       ),
     );

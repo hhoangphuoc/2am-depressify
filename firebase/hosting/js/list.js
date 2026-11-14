@@ -1,231 +1,198 @@
-// The live Patient list. app.js owns the Patients query and passes each snapshot to update(); this
-// module also listens to each listed Patient's flags (for the newest-flag order, the red banner and
-// new-flag alerts), renders the banner and the rows, applies search and the level filter, and
-// refreshes the relative times every minute. Formatting, sorting, the banner and filtering are pure
-// helpers in lib/list-row.js, lib/sort.js, lib/banner.js and lib/list-filter.js.
+// The live Patient list, laid out as the design's roster (design/clinician/src/App.jsx): connection
+// freshness, one red banner per Patient with an open red flag, search, filter buttons with counts,
+// the table (avatar, name and first reason, Attention level word, 14-day sleep sparkline, last
+// Check-in, phone last seen) and the count line.
 //
-// The banner is built from every listed Patient before any filter applies, so search and the level
-// filter never hide it, and it stays until the flag is cleared.
-//
-// A row's level and reasons come from that Patient's visible open flags once they load (the rows
-// fall back to the Patient record until then), so a reason is never shown without its flag.
-import { onSnapshot } from "https://www.gstatic.com/firebasejs/13.3.0/firebase-firestore.js";
-import { newRedFlags } from "./lib/banner.js";
-import { COLLECTIONS } from "./lib/contract.js";
-import { listViewModel } from "./lib/list-filter.js";
-import { patientListRows } from "./lib/list-row.js";
+// The data comes from the design data layer: `subscribeRoster` (js/lib/design-live.js) runs the
+// Patients query with the sharing filter the rules require, listens to each listed Patient's visible
+// flags, latest daily records and latest Check-in, and reports red flags that are new since the last
+// update; `rosterView` (js/lib/design-model.js) orders, counts, filters and builds the banner. The
+// banner is built from every listed Patient before any filter applies, so search and the filters
+// never hide it, and it stays until the flag is cleared.
+import { rosterView } from "./lib/design-model.js";
+import { FILTER_LABELS, connectionText, rosterCountText, sparkline } from "./lib/design-view.js";
 import { patientHref } from "./lib/route.js";
-import { newestOpenFlagAt } from "./lib/sort.js";
-import { patientQuery } from "./queries.js";
+import { drawSparkline } from "./views/sparkline.js";
+import { blankState as blank, flagChip } from "./views/ui.js";
 
 const COPY = {
-  failed: "Could not load the Patient list. Reload the page to try again.",
+  loading: "Loading Patients…",
   review: "Review Patient",
-  more: (/** @type {number} */ n) => `and ${n} more red ${n === 1 ? "flag" : "flags"}`,
-  workQueue: "Attention is a work queue for follow-up, not a judgement about the Patient. Each red flag stays here until it is cleared after follow-up.",
+  needsAttention: (/** @type {string} */ name) => `${name} needs attention`,
+  more: (/** @type {number} */ n) => `And ${n} more red ${n === 1 ? "flag" : "flags"}.`,
+  workQueue: "Each red flag stays here until it is cleared after follow-up. Search and filters never hide it.",
+  open: "Open",
+  noSleep: "No sleep data",
+  checkIn: (/** @type {string} */ c, /** @type {string} */ p) => `Check-in ${c} · Phone ${p}`,
+  reasons: (/** @type {number} */ n) => `${n} open reasons`,
+  empty: ["No Patients linked yet", "Patients appear here once they choose to share their progress with you."],
+  noMatch: "No matching Patients",
+  clear: "Clear search and filters",
+  denied: ["You don't have access to these Patients", "No Patient data is shown. Check that you signed in with the Clinician account, or sign out."],
+  expired: ["Your sign-in has ended", "Sign in again to continue. No Patient data is shown."],
+  error: ["Could not load the Patient list", "Check the connection, then reload the page to try again."],
+  reload: "Reload",
 };
-const REFRESH_MILLIS = 60_000;
+
+/**
+ * @param {string} tag
+ * @param {Record<string, string | undefined>} [attrs]
+ * @param {(Node | string | null | undefined | false)[]} children
+ */
+function el(tag, attrs = {}, ...children) {
+  const node = document.createElement(tag);
+  for (const [key, value] of Object.entries(attrs)) if (value !== undefined) node.setAttribute(key, value);
+  node.append(.../** @type {(Node | string)[]} */ (children.filter((c) => c !== null && c !== undefined && c !== false)));
+  return node;
+}
 
 /**
  * @typedef {object} ListElements
  * @property {HTMLElement} body
- * @property {HTMLElement} table
+ * @property {HTMLElement} tableWrap
  * @property {HTMLElement} status
+ * @property {HTMLElement} state
  * @property {HTMLElement} banner
  * @property {HTMLElement} controls
  * @property {HTMLInputElement} search
- * @property {HTMLSelectElement} level
- * @property {HTMLButtonElement} clearFilters
+ * @property {HTMLElement} filters
+ * @property {HTMLElement} freshness
+ * @property {HTMLElement} offline
+ * @property {HTMLElement} navCount
  */
 
 /**
- * @param {import("firebase/firestore").Firestore} db
+ * @param {ReturnType<typeof import("./data/design-data.js").designData>} data
  * @param {ListElements} elements
- * @param {{ onNewRed?: (flags: { patientId: string, displayName: string, reason: string }[]) => void }} [options]
+ * @param {{ clinicianEmail: string, timeZone: string, onNewRed?: (flags: { patientId: string, displayName: string, reason: string }[]) => void }} options
+ * @returns {() => void} stops listening
  */
-export function createPatientList(db, elements, { onNewRed = () => {} } = {}) {
-  const { body, table, status, banner, controls, search, level, clearFilters } = elements;
-  const loadedAtMillis = Date.now();
-  /** @type {{ id: string, data: object }[] | null} null until the first snapshot: still loading */
-  let docs = null;
-  /** Patients in the first snapshot; flags of Patients who join later are checked against load time. */
-  /** @type {Set<string> | null} */
-  let firstIds = null;
-  /** @type {Record<string, number | null>} */
-  const latestFlagAtById = {};
-  /** @type {Record<string, import("./lib/banner.js").ListedFlag[]>} */
-  const flagsById = {};
-  /** @type {Map<string, () => void>} */
-  const flagListeners = new Map();
-  const timer = setInterval(render, REFRESH_MILLIS);
+export function createPatientList(data, elements, { clinicianEmail, timeZone, onNewRed = () => {} }) {
+  const { body, tableWrap, status, state, banner, controls, search, filters, freshness, offline, navCount } = elements;
+  /** @type {import("./lib/design-live.js").RosterState} */
+  let roster = { status: "loading", fromCache: false, patients: [], newRed: [], updatedAtMillis: Date.now() };
+  /** @type {"all" | "red" | "amber" | "unknown" | "green" | "hidden"} */
+  let filter = "all";
+  search.value = "";
 
-  function displayNameOf(id) {
-    const found = docs?.find((d) => d.id === id);
-    return /** @type {any} */ (found?.data)?.displayName || "Unnamed patient";
-  }
-
-  function watchFlags(id) {
-    // Only the flags the Clinician can see (raised while the Patient was sharing).
-    return onSnapshot(
-      patientQuery(db, id, COLLECTIONS.flags),
-      (snapshot) => {
-        const current = snapshot.docs.map((d) => ({ ...d.data(), id: d.id, patientId: id }));
-        const fresh = newRedFlags(flagsById[id] ?? null, current, {
-          loadedAtMillis,
-          joinedLate: !(firstIds?.has(id) ?? false),
-        });
-        flagsById[id] = current;
-        latestFlagAtById[id] = newestOpenFlagAt(current);
-        render();
-        if (fresh.length) {
-          onNewRed(fresh.map((f) => ({ patientId: id, displayName: displayNameOf(id), reason: f.reason })));
-        }
-      },
-      () => {
-        // Access ended (for example, sharing withdrawn): order without it rather than fail the list.
-        latestFlagAtById[id] = null;
-        delete flagsById[id];
-        render();
-      },
-    );
-  }
-
-  function syncFlagListeners(ids) {
-    for (const [id, stop] of flagListeners) {
-      if (ids.has(id)) continue;
-      stop();
-      flagListeners.delete(id);
-      delete latestFlagAtById[id];
-      delete flagsById[id];
-    }
-    for (const id of ids) if (!flagListeners.has(id)) flagListeners.set(id, watchFlags(id));
-  }
-
-  function cell(text, className) {
-    const td = document.createElement("td");
-    td.textContent = text;
-    if (className) td.className = className;
-    return td;
-  }
-
-  /** @param {import("./lib/banner.js").BannerModel | null} model */
   function renderBanner(model) {
     banner.hidden = model === null;
     if (model === null) {
       banner.replaceChildren();
       return;
     }
-    const heading = document.createElement("h2");
-    heading.id = "banner-heading";
-    heading.textContent = model.heading;
-    const about = document.createElement("p");
-    about.className = "banner-about";
-    about.textContent = COPY.workQueue;
-    const list = document.createElement("ul");
-    list.className = "banner-items";
-    for (const item of model.items) {
-      const li = document.createElement("li");
-      const who = document.createElement("strong");
-      who.textContent = item.displayName;
-      const reason = document.createElement("span");
-      reason.textContent = item.reason;
-      const text = document.createElement("p");
-      text.append(who, " ", reason);
-      if (item.more) {
-        const more = document.createElement("span");
-        more.className = "banner-more";
-        more.textContent = ` ${COPY.more(item.more)}`;
-        text.append(more);
-      }
-      const link = document.createElement("a");
-      link.className = "button-link";
-      link.href = item.href;
-      const hidden = document.createElement("span");
-      hidden.className = "visually-hidden";
-      hidden.textContent = `: ${item.displayName}`;
-      link.append(COPY.review, hidden);
-      li.append(text, link);
-      list.append(li);
-    }
-    banner.replaceChildren(heading, about, list);
+    const sections = model.items.map((item, i) => {
+      const headingId = `banner-${i}`;
+      const reason = el("p", {}, item.reason, item.more ? el("span", { class: "banner-more" }, ` ${COPY.more(item.more)}`) : null);
+      const link = el("a", { class: "button-link primary", href: item.href }, COPY.review, el("span", { class: "visually-hidden" }, `: ${item.displayName}`));
+      return el("section", { class: "red-banner", "aria-labelledby": headingId }, el("div", {}, el("strong", { id: headingId }, COPY.needsAttention(item.displayName)), reason), link);
+    });
+    banner.replaceChildren(...sections, el("p", { class: "banner-note small muted" }, COPY.workQueue));
   }
 
-  function render() {
-    if (docs === null) return;
-    const all = patientListRows(docs, latestFlagAtById, { nowMillis: Date.now() }, flagsById);
-    const view = listViewModel({ rows: all, flagsByPatient: flagsById, search: search.value, level: level.value });
-    renderBanner(view.banner);
-    controls.hidden = all.length === 0;
-    body.replaceChildren(
-      ...view.rows.map((row) => {
-        const tr = document.createElement("tr");
-        tr.dataset.level = row.flagLevel;
-        const name = document.createElement("th");
-        name.scope = "row";
-        const link = document.createElement("a");
-        link.href = patientHref(row.id);
-        link.textContent = row.displayName;
-        name.append(link);
-        const levelCell = document.createElement("td");
-        const chip = document.createElement("span");
-        chip.className = `level level-${row.flagLevel}`;
-        chip.textContent = row.levelWord;
-        levelCell.append(chip);
-        const reasons = document.createElement("td");
-        const list = document.createElement("ul");
-        list.className = "reasons";
-        list.append(
-          ...row.reasons.map((reason) => {
-            const li = document.createElement("li");
-            li.textContent = reason;
-            return li;
-          }),
+  function renderFilters(view) {
+    const focused = filters.contains(document.activeElement) ? document.activeElement?.getAttribute("data-filter") : null;
+    filters.replaceChildren(
+      ...view.filters.map((/** @type {string} */ value) => {
+        const button = el(
+          "button",
+          { type: "button", "data-filter": value, "aria-pressed": String(filter === value) },
+          FILTER_LABELS[/** @type {keyof typeof FILTER_LABELS} */ (value)] ?? value,
+          el("span", {}, String(view.counts[value] ?? 0)),
         );
-        reasons.append(list);
-        tr.append(name, levelCell, reasons, cell(row.latestCheckIn), cell(row.freshness, row.stale ? "stale" : ""));
-        return tr;
+        button.addEventListener("click", () => {
+          filter = /** @type {any} */ (value);
+          render();
+        });
+        return button;
       }),
     );
-    table.hidden = view.rows.length === 0;
-    status.textContent = view.message.text;
-    clearFilters.hidden = view.message.kind !== "noMatch";
+    if (focused) /** @type {HTMLElement | null} */ (filters.querySelector(`[data-filter="${focused}"]`))?.focus();
   }
 
-  function onClearFilters() {
+  /** @param {ReturnType<typeof import("./lib/design-model.js").designPatient>} p */
+  function row(p) {
+    const active = p.sharing === "active";
+    const href = patientHref(p.id);
+    const subtitle = el("small", {}, active ? p.note ?? "" : p.note ?? "");
+    const mobile = active ? el("small", { class: "patient-mobile-meta" }, COPY.checkIn(p.checkIn ?? "—", p.lastPhone ?? "—")) : null;
+    const name = el("th", { scope: "row" }, el("a", { class: "patient-name", href }, el("span", { class: "avatar", "aria-hidden": "true" }, p.initials), el("span", {}, el("strong", {}, p.name), subtitle, mobile)));
+    const level = el("td", {}, flagChip(p.level, p.levelWord), p.activeFlags.length > 1 ? el("small", { class: "flag-count" }, COPY.reasons(p.activeFlags.length)) : null);
+    const model = active ? sparkline(p.daily) : null;
+    const sleep = el("td", { class: "desktop-column" }, model ? drawSparkline(model) : active ? COPY.noSleep : "Hidden");
+    const checkIn = el("td", { class: "desktop-column" }, active ? p.checkIn ?? "—" : "Hidden");
+    const phone = el("td", { class: `desktop-column${p.freshness?.stale ? " stale" : ""}` }, active ? p.lastPhone ?? "—" : "Hidden");
+    const open = el("td", {}, el("a", { class: "text-button open-patient", href, "aria-label": `Open ${p.name}` }, COPY.open));
+    return el("tr", { "data-level": p.level }, name, level, sleep, checkIn, phone, open);
+  }
+
+  function clearFilters() {
     search.value = "";
-    level.value = "all";
+    filter = "all";
     render();
     search.focus();
   }
 
-  search.addEventListener("input", render);
-  level.addEventListener("change", render);
-  clearFilters.addEventListener("click", onClearFilters);
+  function render() {
+    const fresh = connectionText(roster, timeZone);
+    freshness.textContent = fresh.text;
+    offline.hidden = !(roster.status === "ok" && roster.fromCache);
 
-  return {
-    /** @param {{ id: string, data: object }[]} next the Patients query's documents */
-    update(next) {
-      docs = next;
-      firstIds ??= new Set(next.map((d) => d.id));
-      syncFlagListeners(new Set(next.map((d) => d.id)));
+    if (roster.status !== "ok") {
+      renderBanner(null);
+      controls.hidden = true;
+      tableWrap.hidden = true;
+      status.textContent = "";
+      navCount.textContent = "";
+      if (roster.status === "loading") {
+        state.replaceChildren(el("div", { class: "loading-view", role: "status", "aria-busy": "true" }, el("p", {}, COPY.loading), el("div", { class: "skeleton" }), el("div", { class: "skeleton" }), el("div", { class: "skeleton" })));
+      } else {
+        const [title, text] = COPY[/** @type {"denied" | "expired" | "error"} */ (roster.status)] ?? COPY.error;
+        const reload = el("button", { type: "button" }, COPY.reload);
+        reload.addEventListener("click", () => window.location.reload());
+        state.replaceChildren(blank(title, text, roster.status === "error" ? reload : null));
+      }
+      return;
+    }
+
+    const view = rosterView(roster, { search: search.value, filter });
+    navCount.textContent = String(view.counts.all);
+    renderBanner(view.banner);
+    controls.hidden = view.all.length === 0;
+    if (!view.filters.includes(filter)) filter = "all";
+    renderFilters(view);
+
+    if (view.all.length === 0) {
+      state.replaceChildren(blank(COPY.empty[0], COPY.empty[1]));
+    } else if (view.patients.length === 0) {
+      const action = el("button", { type: "button" }, COPY.clear);
+      action.addEventListener("click", clearFilters);
+      state.replaceChildren(blank(COPY.noMatch, view.message.text, action));
+    } else {
+      state.replaceChildren();
+    }
+    tableWrap.hidden = view.patients.length === 0;
+    body.replaceChildren(...view.patients.map(row));
+    status.textContent = view.all.length ? rosterCountText(view.patients.length, view.all.length) : "";
+  }
+
+  search.addEventListener("input", render);
+  render();
+
+  const stop = data.subscribeRoster(
+    { clinicianEmail, clock: () => ({ nowMillis: Date.now(), timeZone }) },
+    (next) => {
+      roster = next;
+      if (next.newRed.length) onNewRed(next.newRed);
       render();
     },
-    fail() {
-      docs = null;
-      syncFlagListeners(new Set());
-      table.hidden = true;
-      controls.hidden = true;
-      clearFilters.hidden = true;
-      renderBanner(null);
-      status.textContent = COPY.failed;
-    },
-    stop() {
-      clearInterval(timer);
-      syncFlagListeners(new Set());
-      search.removeEventListener("input", render);
-      level.removeEventListener("change", render);
-      clearFilters.removeEventListener("click", onClearFilters);
-      renderBanner(null);
-    },
+  );
+
+  return () => {
+    stop();
+    search.removeEventListener("input", render);
+    renderBanner(null);
+    body.replaceChildren();
+    state.replaceChildren();
   };
 }

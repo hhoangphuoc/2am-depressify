@@ -1,18 +1,19 @@
-// Drawing the Phase timeline: a hand-made SVG (no chart library) and the same data as a table.
-//
-// One date axis, in days since the end of TMS (or, without a TMS end date, since the Sunday before
-// the first calendar week shown). Lanes, top to bottom, each on its own scale and labelled:
+// Drawing the Phase timeline as the design's chart lanes (`Chart` in design/clinician/src/Charts.jsx):
+// one hand-made SVG per lane (no chart library), all on the same date axis, each on its own scale:
 //   Mood rating  the weekly mean on 1 to 5, joined only between weeks that have a rating
 //   PHQ-9 score  0 to 27, one marker per Visit with a score, never joined
 //   PHQ-2 score  0 to 6, the same
-// Phases are shaded bands behind the lanes; each Visit is a dashed line across all lanes. The SVG is
-// an image with a text summary; the table below it is the keyboard- and screen-reader-readable copy.
+// Each Visit is a dashed vertical line in every lane. The Phase strip above the lanes is HTML (views/
+// overview.js). Each SVG is an image with a text summary; the table below the lanes is the keyboard-
+// and screen-reader-readable copy.
+//
+// The axis: day 0 is the origin (the TMS end date, or the Sunday before the first calendar week
+// shown), and day d covers the date origin + d, so a date's centre is at d - 0.5.
 import { addDays, daysBetween, mondayOf, shortDate } from "../lib/dates.js";
 import { pointsByKind } from "../lib/timeline.js";
 import { QUESTIONNAIRE_RANGES, questionnaireLabel } from "../lib/visit.js";
 
 const NS = "http://www.w3.org/2000/svg";
-const KIND_ORDER = /** @type {const} */ (["phq9", "phq2"]);
 
 /** @param {string} tag @param {Record<string, string | number>} [attrs] @param {string} [text] */
 function svg(tag, attrs = {}, text) {
@@ -42,142 +43,85 @@ export function axisOrigin({ tmsEndDate, weeks, visits, today }) {
   return addDays(mondayOf(earliest), -1);
 }
 
+/** The lanes' geometry, in pixels: the same left and right padding as the Phase strip's margins. */
+export const LANE = Object.freeze({ left: 43, right: 13, top: 15, bottom: 141, height: 176, labelY: 163 });
+
+/** @param {number} n */
+const tickText = (n) => (Number.isInteger(n) ? String(n) : n.toFixed(1));
+
 /**
+ * One lane of the timeline.
+ * @param {"mood" | "phq2" | "phq9"} kind
  * @param {object} data
+ * @param {string} data.origin
+ * @param {number} data.span days on the axis
  * @param {import("../lib/timeline.js").WeekMood[]} data.weeks
  * @param {import("../lib/timeline.js").QuestionnairePoint[]} data.points
- * @param {import("../lib/timeline.js").Phase[]} data.phases
- * @param {{ date: string }[]} data.visits valid, not in the future
- * @param {string | null} data.tmsEndDate
+ * @param {{ date: string, questionnaire?: string | null, score?: number | null }[]} data.visits valid, not in the future
  * @param {string} data.today
+ * @param {{ at: number, label: string }[]} data.ticks from laneTicks()
  * @param {number} width pixels available
  * @returns {SVGSVGElement}
  */
-export function drawTimeline({ weeks, points, phases, visits, tmsEndDate, today }, width) {
-  const origin = axisOrigin({ tmsEndDate, weeks, visits, today });
-  const span = Math.max(7, Math.ceil(daysBetween(origin, today) / 7) * 7);
-  const series = pointsByKind(points);
-  const kinds = KIND_ORDER.filter((k) => series[k]?.length);
-
-  const W = Math.max(300, Math.round(width));
-  const pad = { left: 36, right: 12 };
-  const plotW = W - pad.left - pad.right;
-  const TOP = 24; // Phase labels
-  const LANE_TITLE = 20;
-  const MOOD_H = 120;
-  const Q_H = 56;
-  const AXIS = 44;
-  const lanes = [];
-  let y = TOP;
-  lanes.push({ key: "mood", title: "Mood rating (weekly mean, 1 to 5)", top: y + LANE_TITLE, height: MOOD_H });
-  y += LANE_TITLE + MOOD_H + 12;
-  for (const kind of kinds) {
-    const range = QUESTIONNAIRE_RANGES[kind];
-    lanes.push({ key: kind, title: `${questionnaireLabel(kind)} score (${range.min} to ${range.max})`, top: y + LANE_TITLE, height: Q_H });
-    y += LANE_TITLE + Q_H + 12;
-  }
-  if (!kinds.length) {
-    lanes.push({ key: "none", title: "Questionnaire scores", top: y + LANE_TITLE, height: 24 });
-    y += LANE_TITLE + 24 + 12;
-  }
-  const plotBottom = y - 12;
-  const H = y + AXIS;
-
-  const x = (/** @type {number} */ day) => pad.left + (day / span) * plotW;
-  const dayOf = (/** @type {string} */ date) => daysBetween(origin, date); // day d covers (d - 1, d]
+export function drawLane(kind, { origin, span, weeks, points, visits, today, ticks }, width) {
+  const W = Math.max(260, Math.round(width));
+  const { left, top, bottom, height, labelY } = LANE;
+  const right = W - LANE.right;
+  const [min, max] = kind === "mood" ? [1, 5] : [QUESTIONNAIRE_RANGES[kind].min, QUESTIONNAIRE_RANGES[kind].max];
+  const x = (/** @type {number} */ day) => left + (day / span) * (right - left);
+  const y = (/** @type {number} */ v) => bottom - ((v - min) / (max - min)) * (bottom - top);
+  const dayOf = (/** @type {string} */ date) => daysBetween(origin, date);
   const centre = (/** @type {string} */ date) => x(dayOf(date) - 0.5);
 
-  const root = /** @type {SVGSVGElement} */ (svg("svg", { class: "timeline-chart", width: W, height: H, viewBox: `0 0 ${W} ${H}`, role: "img" }));
-  const titleId = `timeline-title-${Math.random().toString(36).slice(2, 8)}`;
-  const rated = weeks.filter((w) => w.mean !== null).length;
-  const summary =
-    `Phase timeline: ${phases.length} ${phases.length === 1 ? "Phase" : "Phases"}, ${visits.length} ` +
-    `${visits.length === 1 ? "Visit" : "Visits"}, Mood ratings in ${rated} of ${weeks.length} weeks, ` +
-    `${points.length} Questionnaire ${points.length === 1 ? "score" : "scores"}. The table below lists the same data.`;
+  const root = /** @type {SVGSVGElement} */ (svg("svg", { class: `lane-chart lane-${kind}`, width: W, height, viewBox: `0 0 ${W} ${height}`, role: "img" }));
+  const titleId = `lane-title-${kind}-${Math.random().toString(36).slice(2, 8)}`;
   root.setAttribute("aria-labelledby", titleId);
-  root.append(svg("title", { id: titleId }, summary));
-
-  // Phase bands and labels.
-  phases.forEach((phase, i) => {
-    const from = phase.start ? dayOf(phase.start) - 1 : 0;
-    const to = Math.min(span, dayOf(phase.end));
-    const x0 = x(Math.max(0, from));
-    const x1 = x(to);
-    root.append(svg("rect", { class: `phase-band ${i % 2 ? "phase-band-even" : "phase-band-odd"}`, x: x0, y: TOP - 20, width: Math.max(0, x1 - x0), height: plotBottom - TOP + 20 }));
-    if (x1 - x0 >= 56) root.append(svg("text", { class: "phase-label", x: (x0 + x1) / 2, y: TOP - 6, "text-anchor": "middle" }, `Phase ${phase.number}`));
-  });
-
-  // Week boundaries and the axis labels.
-  const weekCount = span / 7;
-  const step = plotW / weekCount >= 40 ? 1 : plotW / weekCount >= 20 ? 2 : 4;
-  for (let k = 0; k <= weekCount; k++) {
-    root.append(svg("line", { class: "grid-week", x1: x(k * 7), x2: x(k * 7), y1: TOP, y2: plotBottom }));
-  }
-  for (let k = 0; k < weekCount; k += step) {
-    const label = tmsEndDate ? String(k + 1) : shortDate(addDays(origin, k * 7 + 1), today);
-    root.append(svg("text", { class: "axis-label", x: x(k * 7 + 3.5), y: plotBottom + 16, "text-anchor": "middle" }, label));
-  }
+  const series = kind === "mood" ? [] : pointsByKind(points)[kind] ?? [];
+  const what =
+    kind === "mood"
+      ? `Mood rating, weekly mean, ${min} to ${max}: a rating in ${weeks.filter((w) => w.mean !== null).length} of ${weeks.length} weeks`
+      : `${questionnaireLabel(kind)} score, ${min} to ${max}: ${series.length} ${series.length === 1 ? "score" : "scores"} recorded at Visits`;
   root.append(
     svg(
-      "text",
-      { class: "axis-title", x: pad.left + plotW / 2, y: plotBottom + 36, "text-anchor": "middle" },
-      tmsEndDate ? "Weeks since the end of TMS" : "Calendar weeks, from Monday (no TMS end date)",
+      "title",
+      { id: titleId },
+      `${what}, ${shortDate(addDays(origin, 1), today)} to ${shortDate(today, today)}. Gaps are weeks without a rating. Dashed vertical lines are Visits. The table below lists the same data.`,
     ),
   );
 
-  for (const lane of lanes) {
-    root.append(svg("text", { class: "lane-title", x: pad.left, y: lane.top - 6 }, lane.title));
-    root.append(svg("rect", { class: "lane", x: pad.left, y: lane.top, width: plotW, height: lane.height }));
-    if (lane.key === "mood") drawMood(lane);
-    else if (lane.key === "none") root.append(svg("text", { class: "lane-empty", x: pad.left + 8, y: lane.top + 16 }, "None recorded yet."));
-    else drawScores(lane, /** @type {"phq2" | "phq9"} */ (lane.key));
+  for (const v of [min, (min + max) / 2, max]) {
+    root.append(svg("line", { class: "grid-value", x1: left, x2: right, y1: y(v), y2: y(v) }));
+    root.append(svg("text", { class: "axis-label", x: left - 8, y: y(v) + 4, "text-anchor": "end" }, tickText(v)));
+  }
+  for (const visit of visits) {
+    const vx = centre(visit.date);
+    if (vx < left || vx > right) continue;
+    root.append(svg("line", { class: "visit-line", x1: vx, x2: vx, y1: top, y2: bottom }));
   }
 
-  /** @param {{ top: number, height: number }} lane */
-  function drawMood(lane) {
-    const yOf = (/** @type {number} */ v) => lane.top + lane.height - ((v - 1) / 4) * lane.height;
-    for (let v = 1; v <= 5; v++) {
-      root.append(svg("line", { class: "grid-value", x1: pad.left, x2: pad.left + plotW, y1: yOf(v), y2: yOf(v) }));
-      root.append(svg("text", { class: "axis-label", x: pad.left - 8, y: yOf(v) + 4, "text-anchor": "end" }, String(v)));
-    }
-    const xy = weeks.map((w) => (w.mean === null ? null : [x(dayOf(w.start) - 1 + 3.5), yOf(w.mean)]));
+  if (kind === "mood") {
+    const xy = weeks.map((w) => (w.mean === null ? null : [x(dayOf(w.start) - 1 + 3.5), y(w.mean)]));
     // Join only neighbouring weeks that both have a rating: a week with none is a gap.
     let path = "";
     xy.forEach((p, i) => {
       if (!p) return;
       path += `${i > 0 && xy[i - 1] ? "L" : "M"}${p[0].toFixed(1)},${p[1].toFixed(1)}`;
     });
-    if (path) root.append(svg("path", { class: "mood-line", d: path }));
-    xy.forEach((p) => p && root.append(svg("circle", { class: "mood-point", cx: p[0], cy: p[1], r: 4 })));
-  }
-
-  /** @param {{ top: number, height: number }} lane @param {"phq2" | "phq9"} kind */
-  function drawScores(lane, kind) {
-    const { min, max } = QUESTIONNAIRE_RANGES[kind];
-    const yOf = (/** @type {number} */ v) => lane.top + lane.height - ((v - min) / (max - min)) * lane.height;
-    for (const v of [min, max]) {
-      root.append(svg("line", { class: "grid-value", x1: pad.left, x2: pad.left + plotW, y1: yOf(v), y2: yOf(v) }));
-      root.append(svg("text", { class: "axis-label", x: pad.left - 8, y: yOf(v) + 4, "text-anchor": "end" }, String(v)));
-    }
-    for (const point of series[kind] ?? []) {
+    if (path) root.append(svg("path", { class: "value-line", d: path }));
+    xy.forEach((p) => p && root.append(svg("circle", { class: "value-point", cx: p[0], cy: p[1], r: 3.5 })));
+  } else {
+    for (const point of series) {
       const px = centre(point.date);
-      const py = yOf(point.score);
-      root.append(
-        kind === "phq9"
-          ? svg("circle", { class: "q-point q-phq9", cx: px, cy: py, r: 5 })
-          : svg("rect", { class: "q-point q-phq2", x: px - 5, y: py - 5, width: 10, height: 10, transform: `rotate(45 ${px} ${py})` }),
-      );
-      const above = py - lane.top > 14;
-      root.append(svg("text", { class: "q-label", x: px + 8, y: above ? py - 4 : py + 14 }, String(point.score)));
+      const py = y(point.score);
+      root.append(svg("circle", { class: "value-point", cx: px, cy: py, r: 3.5 }));
+      root.append(svg("text", { class: "point-label", x: px + 7, y: py - top > 14 ? py - 6 : py + 14 }, String(point.score)));
     }
   }
 
-  // Visits last, so they sit on top.
-  for (const visit of visits) {
-    const vx = centre(visit.date);
-    if (vx < pad.left || vx > pad.left + plotW) continue;
-    root.append(svg("line", { class: "visit-line", x1: vx, x2: vx, y1: TOP - 20, y2: plotBottom }));
-  }
+  ticks.forEach((tick, i) => {
+    const anchor = i === ticks.length - 1 && x(tick.at) > right - 24 ? "end" : x(tick.at) < left + 24 ? "start" : "middle";
+    root.append(svg("text", { class: "axis-label", x: anchor === "end" ? right : x(tick.at), y: labelY, "text-anchor": anchor }, tick.label));
+  });
   return root;
 }
 
