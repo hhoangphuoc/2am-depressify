@@ -22,6 +22,7 @@ import { connectFunctionsEmulator, getFunctions, httpsCallable } from "firebase/
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { adminCheckInStore, finishCheckInHandler, startCheckInHandler } from "../../src/checkInFunctions";
 import { genaiTextClient } from "../../src/gemini";
+import { MAX_CHECK_IN_STARTS_PER_HOUR, PATIENT_LIMITS } from "../../src/limits";
 import { fetchLiveTokenClient } from "../../src/live";
 import { REGION } from "../../src/region";
 import { newPatientDoc, type PatientDoc, type Summary } from "../../src/types";
@@ -61,7 +62,10 @@ const docData = async (path: string) => (await adminDb.doc(path).get()).data();
 const count = async (path: string) => (await adminDb.collection(path).get()).size;
 
 afterAll(async () => {
-  for (const id of createdPatients) await adminDb.recursiveDelete(adminDb.collection("patients").doc(id));
+  for (const id of createdPatients) {
+    await adminDb.recursiveDelete(adminDb.collection("patients").doc(id));
+    await adminDb.collection(PATIENT_LIMITS).doc(id).delete();
+  }
   await deleteAdminApp(adminApp);
 });
 
@@ -140,6 +144,17 @@ describe("Check-in handlers with the Admin SDK on the Firestore emulator", () =>
     ).rejects.toMatchObject({ code: "not-found" });
     expect((await adminDb.doc(`patients/${uid}/summaries/never-started`).get()).exists).toBe(false);
     expect((await adminDb.doc(`patients/${uid}/checkIns/never-started`).get()).exists).toBe(false);
+  });
+
+  it("the store records each start, refuses the one past the hourly cap, and no client reads the record", async () => {
+    const id = `cap-${uid}`;
+    createdPatients.push(id);
+    const start = (n: number) => store.reserveStart(id, { checkInId: `c${n}`, uid, startedAtMillis: 1_000 + n });
+    for (let i = 0; i < MAX_CHECK_IN_STARTS_PER_HOUR; i++) expect(await start(i)).toBe(true);
+    expect(await start(MAX_CHECK_IN_STARTS_PER_HOUR)).toBe(false);
+    expect(await store.getStart(id, "c3")).toEqual({ checkInId: "c3", uid, startedAtMillis: 1_003 });
+    expect(await store.getStart(id, `c${MAX_CHECK_IN_STARTS_PER_HOUR}`)).toBeUndefined();
+    await expect(getDoc(doc(phoneDb, `${PATIENT_LIMITS}/${uid}`))).rejects.toMatchObject({ code: "permission-denied" });
   });
 });
 

@@ -438,7 +438,9 @@ function later(existing: number | null | undefined, nowMillis: number): number {
  * The documents one finish writes, given what is stored now. A retry of the same Check-in
  * overwrites the Summary's content but keeps its stamp and `createdAtMillis`; the Check-in keeps
  * its stamp and an end time already set; a crisis marker, once set, stays set. A new Summary is
- * stamped with `sharingStamp` as the Patient shares now.
+ * shared only when the Check-in was started while sharing and the Patient still shares now: a
+ * conversation held while not sharing, or one the Patient stopped sharing during, never reaches
+ * the Clinician.
  */
 export function finishWrites(current: FinishCurrent, checkInId: string, content: FinishContent, nowMillis: number): FinishWrites {
   const existing = current.summary;
@@ -461,7 +463,10 @@ export function finishWrites(current: FinishCurrent, checkInId: string, content:
     suggestion: content.suggestion,
     previousOutcome: content.previousOutcome,
     quotes: [...content.quotes],
-    sharedWithClinician: typeof existing?.sharedWithClinician === "boolean" ? existing.sharedWithClinician : sharingStamp(current.patient),
+    sharedWithClinician:
+      typeof existing?.sharedWithClinician === "boolean"
+        ? existing.sharedWithClinician
+        : current.checkIn.sharedWithClinician === true && sharingStamp(current.patient),
   };
   const endedAtMillis = typeof current.checkIn.endedAtMillis === "number" ? current.checkIn.endedAtMillis : nowMillis;
   return {

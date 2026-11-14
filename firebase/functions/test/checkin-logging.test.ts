@@ -168,7 +168,7 @@ describe("no log line and no client error contains the transcript, the Brief or 
       "startCheckIn 401",
       "startCheckIn 400",
       "finishCheckIn 200",
-      "finishCheckIn 200", // model failure: minimal Summary
+      "finishCheckIn 503", // model failure: nothing saved, the phone retries
       "finishCheckIn 200", // malformed output: minimal Summary
       "finishCheckIn 503", // write failure
       "finishCheckIn 403",
@@ -179,7 +179,6 @@ describe("no log line and no client error contains the transcript, the Brief or 
     ]);
     const ok = JSON.parse(responses[4]!.text).result;
     expect(ok.summary.themes).toEqual(["Dog walks", "Choir"]);
-    expect(JSON.parse(responses[5]!.text).result.minimal).toBe(true);
     expect(JSON.parse(responses[6]!.text).result.minimal).toBe(true);
 
     const logs = captured.slice(start).join("\n");
@@ -198,9 +197,9 @@ describe("no log line and no client error contains the transcript, the Brief or 
     }
 
     // Nothing written holds the transcript: only the Summary (which may quote the Patient's own
-    // words, as the spec allows), the Check-in's fields and the Patient's times.
+    // words, as the spec allows), the Check-in's fields, the Patient's times and the recorded starts.
     const paths = new Set(store.writes.map((w) => w.path.replace(/\/[^/]+$/, "/*")));
-    expect([...paths].sort()).toEqual([`patients/${PATIENT_ID}/checkIns/*`, `patients/${PATIENT_ID}/summaries/*`, "patients/*"].sort());
+    expect([...paths].sort()).toEqual([`patients/${PATIENT_ID}/checkIns/*`, `patients/${PATIENT_ID}/summaries/*`, "patients/*", "patientLimits/*"].sort());
     const written = JSON.stringify(store.writes);
     expect(written).not.toContain("How was the walk with Pepper");
     expect(written).not.toContain("sang in the choir");

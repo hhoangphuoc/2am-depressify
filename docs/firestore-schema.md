@@ -42,6 +42,7 @@ patients/{patientId}                 PatientDoc      patientId = the Patient's a
   digests/{isoWeek}                  Digest          isoWeek = e.g. 2026-W46
 mail/{mailId}                        MailDoc         written by functions only; read by Trigger Email
 clinicians/{email}                   (allowlist)     the Clinicians a new Patient may link to; Admin SDK only
+patientLimits/{patientId}            PatientLimits   hourly caps and who started each recent Check-in; functions only
 ```
 
 ### `patients/{patientId}`: PatientDoc
@@ -114,7 +115,7 @@ Start Check-in (#14, `startCheckIn`) creates the Check-in with the Admin SDK whe
 
 ### `summaries/{checkInId}`: Summary
 
-The Patient reads exactly what the Clinician reads. Written only by Finish Check-in (`finishCheckIn`), in one transaction with the Check-in's fields and the Patient's `lastCheckInAtMillis` and `lastSeenAtMillis`. Without usable model output (a silent Check-in, a failed or malformed model reply) it is the minimal Summary: empty `themes`, `sleepLine` and `quotes`, `null` ratings, Voice cues and the Suggestion still from the draft. The transcript itself is never written.
+The Patient reads exactly what the Clinician reads. Written only by Finish Check-in (`finishCheckIn`), in one transaction with the Check-in's fields and the Patient's `lastCheckInAtMillis` and `lastSeenAtMillis`. A model timeout, lost connection, rate limit or server error writes nothing and answers `unavailable`, so the phone retries while it still holds the draft. Without usable model output otherwise (a silent Check-in, a request the model refuses, a malformed reply) it is the minimal Summary: empty `themes`, `sleepLine` and `quotes`, `null` ratings, Voice cues and the Suggestion still from the draft. The transcript itself is never written.
 
 | Field | Type | Notes |
 |---|---|---|
@@ -127,7 +128,7 @@ The Patient reads exactly what the Clinician reads. Written only by Finish Check
 | `suggestion` | string or null | The Suggestion made: the draft's accepted one, else its open proposal (`null` if every one was declined); when the draft has none, the line the text model heard agreed. |
 | `previousOutcome` | string or null | What the Patient said about the previous Suggestion. |
 | `quotes` | string[] | At most three, each at most 200 characters, and only the Patient's own words: a quote the model returns that is not in a Patient turn of the draft is dropped. |
-| `sharedWithClinician` | boolean | The sharing stamp, from `sharingStamp` when Finish Check-in writes it. A retried finish keeps the stamp the Summary already has. |
+| `sharedWithClinician` | boolean | The sharing stamp: `true` only when the Check-in is stamped `true` and the Patient still shares when Finish Check-in writes it. A Check-in started while not sharing, or one the Patient stopped sharing during, gives an unshared Summary. A retried finish keeps the stamp the Summary already has. |
 
 ### `suggestions/{suggestionId}`: Suggestion
 
@@ -209,6 +210,8 @@ The extension adds a `delivery` map (state, attempts, error) to the document as 
 
 **Document id:** `red-flag-` followed by the SHA-256 hex of `<patientId>/<flagId>`. The function writes it with `create()`. Triggers are delivered at least once and this one is retried on failure, so a second delivery finds the document and sends nothing. There is at most one email per flag.
 
+**Hourly cap.** A phone writes its own flags, with its own reason, so one Patient record causes at most 5 emails an hour (`MAX_RED_FLAG_EMAILS_PER_HOUR`, counted in [`patientLimits`](#patientlimitspatientid-functions-only) in the same transaction that creates the email). A flag past the cap is still recorded and shown on the dashboard; only its email is skipped.
+
 **When an email is written** (`alertDecision` in `firebase/functions/src/alerts.ts`, a pure function):
 
 - The flag is `red`, has `clearedAtMillis: null` and is stamped `sharedWithClinician: true`. Amber and green never email.
@@ -216,7 +219,7 @@ The extension adds a `delivery` map (state, attempts, error) to the document as 
 - The Patient is not a Demo Patient (`synthetic: false`). The seed deletes and recreates the Demo Patients' invented red flags on every run, and each run would otherwise email the Clinician.
 - `clinicianEmail` is an address.
 
-Each run logs one line: the Patient and flag ids, the flag's kind (a `FlagKind`, or `other`) and the outcome (`sent`, `duplicate`, or `skipped` with the check that stopped it). It never logs the reason, the display name, the address or the email.
+Each run logs one line: the Patient and flag ids, the flag's kind (a `FlagKind`, or `other`) and the outcome (`sent`, `duplicate`, `capped`, or `skipped` with the check that stopped it). It never logs the reason, the display name, the address or the email.
 
 **`DASHBOARD_URL`** is a non-secret function parameter for the link. Empty, which is the default, means the project's Hosting site, `https://<project-id>.web.app`.
 
@@ -227,6 +230,15 @@ The Clinicians a new Patient may link to, one document per email. The document i
 | Field | Type | Notes |
 |---|---|---|
 | `email` | string | The same as the document id. |
+
+### `patientLimits/{patientId}`: functions only
+
+What the functions count per Patient record (`firebase/functions/src/limits.ts`). No client reads or writes it, so a client cannot reset a cap, and it is not part of the data contract in `core`. The seed does not delete it.
+
+| Field | Type | Notes |
+|---|---|---|
+| `checkInStarts` | list of `{checkInId, uid, startedAtMillis}` | One entry per Check-in Start Check-in created in the last hour (older entries are dropped on the next start). Start Check-in refuses the 11th start in an hour with `resource-exhausted`, before minting a token. Finish Check-in reads `uid`: a caller who is not the Patient (the Demo Patient shortcut) may finish only a Check-in they started. |
+| `redFlagEmailsAtMillis` | list of integers | When `redFlagAlert` wrote each email in the last hour. The 6th in an hour is skipped (`capped`). |
 
 ## Queries
 
