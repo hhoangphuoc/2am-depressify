@@ -124,6 +124,11 @@ describe("allow-clinician", () => {
     assert.equal(parseAllowCommand(["--help"], {}).help, true);
   });
 
+  test("takes --uid, the console account the admin vouches for, and none by default", () => {
+    assert.equal(parseAllowCommand(["--email", "a@example.com", "--uid", "abc123"], {}).uid, "abc123");
+    assert.equal(parseAllowCommand(["--email", "a@example.com"], {}).uid, null);
+  });
+
   test("uses the Auth emulator whenever it uses the Firestore emulator, and neither for a real project", () => {
     assert.equal(parseAllowCommand(["--email", "a@example.com"], {}).authEmulatorHost, DEFAULT_AUTH_EMULATOR_HOST);
     assert.equal(

@@ -83,7 +83,7 @@ The Clinician's email is configuration, never code: the rules check the `clinici
 | Rules: a new Patient record, and the demo shortcut, need a verified account; the Clinician needs the `role: "clinician"` claim and a verified email; existing records stay their owners' (anonymous included) | **Built**, rules tests 74 (6 new) |
 | `assertActsAsPatient` (Start and Finish Check-in): verified account, else `failed-precondition` "Verify your account to start a Check-in." | **Built**, `test/accounts.test.ts` and the Functions emulator |
 | `assertClinicianOf` (Intake, Digest): claim and verified email | **Built** |
-| `npm run allow-clinician`: also sets the claim and marks the email verified; says so when the account does not exist yet | **Built**, Auth emulator tests |
+| `npm run allow-clinician`: also sets the claim and marks the email verified; says so when the account does not exist yet; refuses an unverified account unless `--uid` names it | **Built**, Auth emulator tests |
 | Dashboard: an account without the claim or a verified email is signed out with "This account isn't set up as a Clinician yet…" | **Built**, `node --test` and the walking skeleton |
 | App: sign-up, verification gate, Google, password reset, `PatientSession` | **Not built** (app team); contract in the [README](../README.md#patient-sign-in) |
 

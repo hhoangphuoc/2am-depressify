@@ -50,7 +50,7 @@ The repository is public, so the Clinician's email is configuration, never code.
 |---|---|---|
 | Android app | `demo.clinicianEmail` in `secrets.properties` (becomes `BuildConfig.CLINICIAN_EMAIL`) | `clinician@example.com` for the `demo-twoam` emulator project; with a real `firebase.projectId` the build fails |
 | iOS app | `ClinicianEmail` (string) in a gitignored `iosApp/Depressify/Secrets.plist` | `clinician@example.com` with the emulators; with `GoogleService-Info.plist` the app stops at launch |
-| Allowlist and Clinician role | `npm run allow-clinician -- --email <clinician-email> [--project <project-id>]` in `firebase/seed`. Also gives the Clinician's sign-in account the `role: "clinician"` claim and a verified email ([ADR 0010](docs/adr/0010-patients-sign-in-with-their-own-account.md)) | a new Patient cannot create their record, and the Clinician's account reads nothing |
+| Allowlist and Clinician role | `npm run allow-clinician -- --email <clinician-email> [--uid <uid>] [--project <project-id>]` in `firebase/seed`. Also gives the Clinician's sign-in account the `role: "clinician"` claim and a verified email ([ADR 0010](docs/adr/0010-patients-sign-in-with-their-own-account.md)); an account not yet verified needs `--uid` | a new Patient cannot create their record, and the Clinician's account reads nothing |
 | Seed | `--clinician <clinician-email>` or `CLINICIAN_EMAIL` (the option wins); the seed also allows that email | `clinician@example.com` in the emulator; a real project (`--project`) refuses to seed |
 
 Emails are stored trimmed and in lower case, as Firebase Auth puts them in the sign-in token. A minimal `Secrets.plist`:
@@ -158,11 +158,11 @@ The Firestore database and every function are in `europe-north1` (Finland), exce
    ```sh
    firebase deploy --only firestore:rules,firestore:indexes --project prod
    ```
-4. **Allow the Clinician.** This adds the email to the allowlist and gives the Clinician's account (added in step 2) the `role: "clinician"` claim and a verified email; without an account it says so and writes only the allowlist, so run it again after adding the user. The Clinician signs out and in again, or reloads the dashboard, to pick up the claim. The seed commands use the Admin SDK with Application Default Credentials and take the project ID, not the alias:
+4. **Allow the Clinician.** This adds the email to the allowlist and gives the Clinician's account (added in step 2) the `role: "clinician"` claim and a verified email; without an account it says so and writes only the allowlist, so run it again after adding the user. An account added in the console starts unverified, and anyone could have signed up with that address first, so pass its User UID from Authentication → Users with `--uid`; a verified account (the Clinician opened the verification link, or signs in with Google) needs none. The Clinician signs out and in again, or reloads the dashboard, to pick up the claim. The seed commands use the Admin SDK with Application Default Credentials and take the project ID, not the alias:
    ```sh
    gcloud auth application-default login
    cd seed && npm install
-   npm run allow-clinician -- --email <clinician-email> --project <your-project-id>
+   npm run allow-clinician -- --email <clinician-email> --uid <user-uid> --project <your-project-id>
    ```
 5. **Seed the Demo Patients** (optional; they are readable by any verified account, by design of the demo):
    ```sh
@@ -220,12 +220,12 @@ firebase emulators:start --project demo-twoam
 
 This starts Auth (9099), Firestore (8080), Functions (5001), Hosting (5002) and the Emulator UI (4000). Then:
 
-1. Create the Clinician in the Auth emulator and allow them. `<clinician-email>` is the app's configured email: `clinician@example.com` unless `demo.clinicianEmail` is set.
+1. Create the Clinician in the Auth emulator and allow them, with the `localId` from the sign-up reply as `<uid>`. `<clinician-email>` is the app's configured email: `clinician@example.com` unless `demo.clinicianEmail` is set.
    ```sh
    curl -s -X POST 'http://127.0.0.1:9099/identitytoolkit.googleapis.com/v1/accounts:signUp?key=demo-api-key' \
      -H 'Content-Type: application/json' \
      -d '{"email":"<clinician-email>","password":"demo-password-1","returnSecureToken":true}'
-   cd seed && npm install && npm run allow-clinician -- --email <clinician-email>
+   cd seed && npm install && npm run allow-clinician -- --email <clinician-email> --uid <uid>
    ```
    `allow-clinician` also gives the account the `role: "clinician"` claim and marks its email verified, which the dashboard and the rules require ([ADR 0010](docs/adr/0010-patients-sign-in-with-their-own-account.md)); create the account first. (`npm run seed` adds its Clinician to the allowlist too, but sets no claim.)
 2. Open http://localhost:5002 and sign in as that Clinician. The Patient list is empty.

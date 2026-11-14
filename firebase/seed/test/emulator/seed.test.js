@@ -222,9 +222,9 @@ test("the seed allows its Clinician, so the app can link a new Patient to them",
  * Runs allow-clinician inside the emulators.
  * @param {string[]} args
  */
-const allow = (args) => {
+const allow = (args, expectedStatus = 0) => {
   const run = spawnSync(process.execPath, ["allow-clinician.js", ...args], { cwd: seedDir, env: process.env, encoding: "utf8" });
-  assert.equal(run.status, 0, run.stderr);
+  assert.equal(run.status, expectedStatus, run.stderr);
   return { stdout: run.stdout, stderr: run.stderr };
 };
 
@@ -261,7 +261,8 @@ test("allow-clinician gives the Clinician's account the claim and a verified ema
   const { uid } = await auth.createUser({ ...account, emailVerified: false });
   await auth.setCustomUserClaims(uid, { team: "north" });
 
-  const { stdout } = allow(["--email", "Claimed-Clinician@Example.com"]);
+  // The admin added this account in the console, so it is unverified; --uid says it is theirs.
+  const { stdout } = allow(["--email", "Claimed-Clinician@Example.com", "--uid", uid]);
   assert.match(stdout, /Allowed claimed-clinician@example\.com in clinicians/);
   assert.match(stdout, new RegExp(`Gave the account ${uid} the Clinician role and marked its email verified`));
   assert.match(stdout, /signs out and in again/);
@@ -298,4 +299,29 @@ test("allow-clinician without a sign-in account says so clearly and still writes
   assert.match(stderr, /No sign-in account has the email no-account-yet@example\.com yet, so it has no Clinician role/);
   assert.match(stderr, /run this command again/);
   assert.deepEqual((await db.doc(`clinicians/${email}`).get()).data(), { email });
+});
+
+test("allow-clinician refuses an unverified account it was not given the uid of, so nobody can sign up first as the Clinician", async () => {
+  const auth = getAuth(app);
+  const email = "squatted-clinician@example.com";
+  await auth.getUserByEmail(email).then((u) => auth.deleteUser(u.uid), () => undefined);
+  // Someone else signs up with the Clinician's address and never verifies it.
+  const { uid } = await auth.createUser({ email, password: "not-the-clinician-1", emailVerified: false });
+
+  const { stderr } = allow(["--email", email], 1);
+  assert.match(stderr, /has not verified its email/);
+  assert.match(stderr, /--uid/);
+  const untouched = await auth.getUser(uid);
+  assert.equal(untouched.customClaims?.role, undefined);
+  assert.equal(untouched.emailVerified, false);
+  assert.equal((await db.doc(`clinicians/${email}`).get()).exists, false);
+
+  // A wrong uid is refused too.
+  allow(["--email", email, "--uid", "someone-else"], 1);
+  assert.equal((await auth.getUser(uid)).customClaims?.role, undefined);
+
+  // Once the email is verified (the inbox's owner opened the link, or signed in with Google), no uid is needed.
+  await auth.updateUser(uid, { emailVerified: true });
+  allow(["--email", email]);
+  assert.equal((await auth.getUser(uid)).customClaims?.role, "clinician");
 });

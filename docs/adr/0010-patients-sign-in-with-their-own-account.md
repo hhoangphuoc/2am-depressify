@@ -23,7 +23,7 @@ This replaces "the Patient signs in anonymously for the demo" in the [system des
   - The demo shortcut (acting as a Patient marked `synthetic`) needs a verified account too, so an anonymous or unverified account reaches no data.
   - The Clinician needs a verified account with `role == "clinician"` and `token.email == patient.clinicianEmail`, while sharing is granted. A new Patient may still link only to a Clinician in the `clinicians` allowlist.
 - **Functions:** `assertClinicianOf` (Intake, Digest) checks the same claim and verified email. `assertActsAsPatient` (Start and Finish Check-in) needs a verified account and answers an anonymous or unverified caller with `failed-precondition`, "Verify your account to start a Check-in."
-- **Admin:** `npm run allow-clinician -- --email <email>` writes the allowlist entry, sets the claim on the Auth account with that email and marks the email verified (the Admin vouches for it). The Clinician picks up the claim at their next sign-in or token refresh; the dashboard refreshes the token on every load.
+- **Admin:** `npm run allow-clinician -- --email <email>` writes the allowlist entry, sets the claim on the Auth account with that email and marks the email verified. With open sign-up, anyone could register a Clinician's address before the Clinician does, so an account whose email is not yet verified is refused unless the Admin names it with `--uid` (the account they added in the console, which they vouch for). The Clinician picks up the claim at their next sign-in or token refresh.
 
 ## Transition
 

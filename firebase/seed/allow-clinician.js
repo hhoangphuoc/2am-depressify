@@ -5,6 +5,7 @@
 //
 //   npm run allow-clinician -- --email <email>                       # emulator
 //   npm run allow-clinician -- --email <email> --project <project-id> # a real project (Application Default Credentials)
+//   ... --uid <uid>   # needed when the account's email is not verified yet: the account you added
 //
 // The Clinician signs out and in again (or reloads the dashboard) to pick up the claim.
 import { deleteApp, initializeApp } from "firebase-admin/app";
@@ -30,9 +31,9 @@ async function main() {
   const where = command.emulatorHost ? `the emulators at ${command.emulatorHost} and ${command.authEmulatorHost}` : "the REAL project";
   const app = initializeApp({ projectId: command.projectId });
   try {
+    const account = await grantClinicianRole(getAuth(app), command.email, command.uid);
     await allowClinician(getFirestore(app), command.email);
     console.log(`Allowed ${command.email} in clinicians of ${command.projectId} (${where}).`);
-    const account = await grantClinicianRole(getAuth(app), command.email);
     if (account) {
       console.log(
         `Gave the account ${account.uid} the Clinician role and marked its email verified. ` +
@@ -41,7 +42,7 @@ async function main() {
     } else {
       console.warn(
         `No sign-in account has the email ${command.email} yet, so it has no Clinician role. ` +
-          `Add the user (Authentication → Users → Add user), then run this command again.`,
+          `Add the user (Authentication → Users → Add user), then run this command again with --uid <its User UID>.`,
       );
     }
   } finally {
