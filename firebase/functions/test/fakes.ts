@@ -2,9 +2,12 @@
 import type { TextModelClient, TextRequest } from "../src/gemini";
 import type { CallerAuth } from "../src/clinician";
 import type { AlertStore } from "../src/alertFunctions";
+import { finishWrites, type FinishContent } from "../src/checkIn";
+import type { CheckInStore } from "../src/checkInFunctions";
+import type { LiveTokenClient, LiveTokenRequest } from "../src/live";
 import type { DigestStore } from "../src/digestFunctions";
 import type { PatientStore } from "../src/intakeFunctions";
-import { newPatientDoc, type DailyDoc, type Digest, type MailDoc, type PatientDoc, type Summary } from "../src/types";
+import { newPatientDoc, type CheckIn, type DailyDoc, type Digest, type MailDoc, type PatientDoc, type Summary, type Suggestion } from "../src/types";
 
 export const CLINICIAN_EMAIL = "clinician@example.com";
 export const OTHER_CLINICIAN_EMAIL = "other-clinician@example.com";
@@ -127,5 +130,93 @@ export class FakeAlertStore implements AlertStore {
     if (this.mail.has(id)) return false;
     this.mail.set(id, mail);
     return true;
+  }
+}
+
+/** Mints fake tokens and records every request; `fail` makes it throw like a failed HTTP call. */
+export class FakeLiveTokens implements LiveTokenClient {
+  readonly requests: LiveTokenRequest[] = [];
+  fail: number | null = null;
+  private count = 0;
+
+  async createToken(request: LiveTokenRequest) {
+    this.requests.push(request);
+    if (this.fail !== null) {
+      const error = new Error(`Token request failed: ${request.bidiGenerateContentSetup.systemInstruction.parts[0].text}`) as Error & { status: number };
+      error.status = this.fail;
+      throw error;
+    }
+    this.count += 1;
+    return `auth_tokens/fake-token-${this.count}`;
+  }
+}
+
+/** Patient records with their Check-ins, Summaries, Consents and Suggestions, in memory. */
+export class FakeCheckInStore implements CheckInStore {
+  readonly patients = new Map<string, Partial<PatientDoc>>();
+  readonly checkIns = new Map<string, Partial<CheckIn>>();
+  readonly summaries = new Map<string, Summary>();
+  readonly consents = new Map<string, boolean>();
+  readonly suggestions = new Map<string, Partial<Suggestion>>();
+  /** Every document write, in order, as `path` and the data written. */
+  readonly writes: { path: string; data: unknown }[] = [];
+  failReads = false;
+  failWrites = false;
+
+  constructor(patients: Record<string, Partial<PatientDoc>> = { [PATIENT_ID]: { ...newPatientDoc("Live patient", CLINICIAN_EMAIL), sharingConsent: "granted" } }) {
+    for (const [id, doc] of Object.entries(patients)) this.patients.set(id, { ...doc });
+  }
+
+  private key(patientId: string, id: string) {
+    return `${patientId}/${id}`;
+  }
+
+  async getPatient(patientId: string) {
+    if (this.failReads) throw new Error("read failed");
+    const doc = this.patients.get(patientId);
+    return doc ? structuredClone(doc) : undefined;
+  }
+
+  async getCheckIn(patientId: string, checkInId: string) {
+    if (this.failReads) throw new Error("read failed");
+    const doc = this.checkIns.get(this.key(patientId, checkInId));
+    return doc ? structuredClone(doc) : undefined;
+  }
+
+  async getConsent(patientId: string, subject: "ratings" | "voice_cues") {
+    if (this.failReads) throw new Error("read failed");
+    return this.consents.get(this.key(patientId, subject)) ?? null;
+  }
+
+  async getSuggestion(patientId: string, suggestionId: string) {
+    if (this.failReads) throw new Error("read failed");
+    const doc = this.suggestions.get(this.key(patientId, suggestionId));
+    return doc ? structuredClone(doc) : undefined;
+  }
+
+  async createCheckIn(patientId: string, checkIn: CheckIn) {
+    if (this.failWrites) throw new Error("write failed");
+    const key = this.key(patientId, checkIn.id);
+    if (this.checkIns.has(key)) throw new Error("already exists");
+    this.checkIns.set(key, structuredClone(checkIn));
+    this.writes.push({ path: `patients/${patientId}/checkIns/${checkIn.id}`, data: structuredClone(checkIn) });
+  }
+
+  async writeFinish(patientId: string, checkInId: string, content: FinishContent, nowMillis: number) {
+    if (this.failWrites) throw new Error("write failed");
+    const key = this.key(patientId, checkInId);
+    const patient = this.patients.get(patientId);
+    const checkIn = this.checkIns.get(key);
+    if (!patient || !checkIn) throw new Error("missing");
+    const writes = finishWrites({ patient, checkIn, summary: this.summaries.get(key) }, checkInId, content, nowMillis);
+    this.summaries.set(key, structuredClone(writes.summary));
+    this.checkIns.set(key, { ...checkIn, ...structuredClone(writes.checkIn) });
+    this.patients.set(patientId, { ...patient, ...writes.patient });
+    this.writes.push(
+      { path: `patients/${patientId}/summaries/${checkInId}`, data: structuredClone(writes.summary) },
+      { path: `patients/${patientId}/checkIns/${checkInId}`, data: structuredClone(writes.checkIn) },
+      { path: `patients/${patientId}`, data: { ...writes.patient } },
+    );
+    return structuredClone(writes.summary);
   }
 }

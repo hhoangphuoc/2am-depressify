@@ -3,10 +3,12 @@ import { getFirestore } from "firebase-admin/firestore";
 import { setGlobalOptions } from "firebase-functions/v2";
 import { onRequest } from "firebase-functions/v2/https";
 import { adminAlertStore, createAlertFunctions, dashboardUrlFromParams } from "./alertFunctions";
+import { adminCheckInStore, createCheckInFunctions } from "./checkInFunctions";
 import { GEMINI_API_KEY, genaiTextClient } from "./gemini";
 import { adminDigestStore, createDigestFunctions } from "./digestFunctions";
 import { healthStatus } from "./health";
 import { adminPatientStore, createIntakeFunctions } from "./intakeFunctions";
+import { fetchLiveTokenClient } from "./live";
 import { REGION } from "./region";
 
 // All functions run in the Firestore database's region (src/region.ts).
@@ -49,4 +51,15 @@ export const { weeklyDigest, generateDigest } = createDigestFunctions({
 export const { redFlagAlert } = createAlertFunctions({
   store: () => adminAlertStore(adminDb()),
   dashboardUrl: dashboardUrlFromParams,
+});
+
+/**
+ * Check-in (the Patient, or anyone signed in on a Demo Patient): `startCheckIn` mints the
+ * single-use Live token and creates the Check-in; `finishCheckIn` writes the Summary and the
+ * Check-in's ratings and Voice cues, and drops the transcript.
+ */
+export const { startCheckIn, finishCheckIn } = createCheckInFunctions({
+  store: () => adminCheckInStore(adminDb()),
+  textModel: () => genaiTextClient(GEMINI_API_KEY.value()),
+  liveTokens: () => fetchLiveTokenClient(GEMINI_API_KEY.value()),
 });

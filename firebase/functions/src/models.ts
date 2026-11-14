@@ -3,3 +3,6 @@
 
 /** The general-purpose text model for Intake highlights, Summaries and Digests. */
 export const TEXT_MODEL = "gemini-4-hydrogen";
+
+/** The Gemini Live model a Check-in talks to. Start Check-in locks every token to it. */
+export const LIVE_MODEL = "gemini-3.8-live";
