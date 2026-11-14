@@ -10,7 +10,8 @@ export const CLINICIAN_ROLE = "clinician";
 /**
  * Gives the Auth account with this email the claim `role: "clinician"` (keeping any other claims)
  * and marks its email verified. Running it again changes nothing. The Clinician picks the claim
- * up at their next sign-in or ID token refresh (the dashboard refreshes on every load).
+ * up at their next sign-in or ID token refresh (the dashboard refreshes a token without the claim
+ * on every load).
  *
  * A verified email proves the account belongs to whoever reads that inbox (or its Google account).
  * An unverified one proves nothing, since sign-up is open: anyone could have registered the

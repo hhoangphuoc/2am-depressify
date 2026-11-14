@@ -37,6 +37,25 @@ export function clinicianAccessMessage(claims) {
   return claims?.role === "clinician" && claims?.email_verified === true ? null : NOT_CLINICIAN_MESSAGE;
 }
 
+const ACCESS_CHECK_FAILED_MESSAGE = "Could not check this account. Sign in again.";
+
+/**
+ * Why this signed-in user may not use the dashboard, or null. Reads the cached ID token first, so a
+ * Clinician gets in on a reload without the network; only a token without the claim is refreshed,
+ * so a claim the admin has just set counts. A lost connection lets the user stay: the security
+ * rules, not this check, decide what the account reads.
+ * @param {{ getIdTokenResult(forceRefresh?: boolean): Promise<{ claims: Record<string, unknown> }> }} user
+ * @returns {Promise<string | null>}
+ */
+export async function clinicianAccessProblem(user) {
+  try {
+    const cached = clinicianAccessMessage((await user.getIdTokenResult()).claims);
+    return cached && clinicianAccessMessage((await user.getIdTokenResult(true)).claims);
+  } catch (error) {
+    return /** @type {{ code?: string }} */ (error)?.code === "auth/network-request-failed" ? null : ACCESS_CHECK_FAILED_MESSAGE;
+  }
+}
+
 /**
  * The emulator host to use for a page served from `hostname`, or null to use the real project.
  * @param {string} hostname
