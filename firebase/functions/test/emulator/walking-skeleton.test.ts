@@ -1,21 +1,17 @@
 // End-to-end walking skeleton against the Auth and Firestore emulators, with the real Firebase JS
-// SDK standing in for both clients: an anonymous Patient creates their record the way the app does,
-// chooses to share, and the Clinician's live list (the dashboard's query) receives it without
-// reloading. Withdrawing sharing removes the Patient from the list and from an open Patient view.
+// SDK standing in for both clients: a Patient signs up with their own account, verifies it, creates
+// their record the way the app should (ADR 0010), chooses to share, and the Clinician's live list
+// (the dashboard's query) receives it without reloading. Withdrawing sharing removes the Patient
+// from the list and from an open Patient view.
 import { deleteApp as deleteAdminApp, initializeApp as initializeAdminApp } from "firebase-admin/app";
 import { getFirestore as getAdminFirestore } from "firebase-admin/firestore";
 import { deleteApp, initializeApp, type FirebaseApp } from "firebase/app";
-import {
-  connectAuthEmulator,
-  createUserWithEmailAndPassword,
-  getAuth,
-  signInAnonymously,
-  signInWithEmailAndPassword,
-} from "firebase/auth";
+import { connectAuthEmulator, getAuth, signInAnonymously, signInWithEmailAndPassword, type User } from "firebase/auth";
 import {
   collection,
   connectFirestoreEmulator,
   doc,
+  getDocs,
   getFirestore,
   onSnapshot,
   query,
@@ -25,10 +21,11 @@ import {
   type Firestore,
 } from "firebase/firestore";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { signInErrorMessage } from "../../../hosting/js/lib/auth.js";
+import { clinicianAccessMessage, signInErrorMessage } from "../../../hosting/js/lib/auth.js";
 import { toPatientRows } from "../../../hosting/js/lib/patients.js";
 import { clinicianListFilters, sharingStateFromError, sharingStateFromSnapshot } from "../../../hosting/js/lib/sharing.js";
 import { newPatientDoc } from "../../src/types";
+import { signInAccount, signInClinician, signInVerified } from "./accounts";
 
 const PROJECT_ID = "demo-twoam";
 const HOST = "127.0.0.1";
@@ -51,14 +48,16 @@ beforeAll(async () => {
   await fetch(`http://${HOST}:9099/emulator/v1/projects/${PROJECT_ID}/accounts`, { method: "DELETE" });
   await fetch(`http://${HOST}:8080/emulator/v1/projects/${PROJECT_ID}/databases/(default)/documents`, { method: "DELETE" });
   const setup = client("setup");
-  await createUserWithEmailAndPassword(setup.auth, CLINICIAN.email, CLINICIAN.password);
+  // As `npm run allow-clinician` leaves the account: verified, with the Clinician claim.
+  await signInClinician(adminApp, setup.auth, CLINICIAN);
   // The Clinician is on the allowlist, as `npm run allow-clinician` (or the seed) puts them there.
   await getAdminFirestore(adminApp).doc(`clinicians/${CLINICIAN.email}`).set({ email: CLINICIAN.email });
 });
 
-/** The dashboard's Patient list query. */
-const patientList = (db: Firestore) =>
-  query(collection(db, "patients"), ...clinicianListFilters(CLINICIAN.email).map(([field, op, value]) => where(field, op, value)));
+/** The dashboard's Patient list query, for a Clinician's email. */
+const patientListFor = (db: Firestore, email: string) =>
+  query(collection(db, "patients"), ...clinicianListFilters(email).map(([field, op, value]) => where(field, op, value)));
+const patientList = (db: Firestore) => patientListFor(db, CLINICIAN.email);
 
 /** The Patient app's sharing choice: the record and `consents/sharing` in one write. */
 async function chooseSharing(db: Firestore, patientId: string, choice: "granted" | "declined") {
@@ -104,10 +103,16 @@ describe("walking skeleton", () => {
     const snapshots: string[][] = [];
     const appeared = listUntil(dashboard.db, (names) => names.includes("Live patient"), snapshots);
 
-    // The Patient app: anonymous sign-in, then its own record linked to the allowlisted Clinician. The
+    // The Patient app: sign-up, and before the email is verified no record can be made. Once it is
+    // verified (and the token refreshed), its own record linked to the allowlisted Clinician. The
     // record starts undecided, so the Clinician does not see it yet.
     const phone = client("phone");
-    const { user } = await signInAnonymously(phone.auth);
+    const account = { email: "live-patient@example.com", password: "demo-password-5" };
+    const unverified = await signInAccount(phone.auth, account);
+    await expect(setDoc(doc(phone.db, "patients", unverified.uid), newPatientDoc("Live patient", CLINICIAN.email))).rejects.toMatchObject({
+      code: "permission-denied",
+    });
+    const user = await signInVerified(adminApp, phone.auth, account);
     await setDoc(doc(phone.db, "patients", user.uid), newPatientDoc("Live patient", CLINICIAN.email));
     await chooseSharing(phone.db, user.uid, "granted");
 
@@ -120,7 +125,7 @@ describe("walking skeleton", () => {
     const dashboard = client("dashboard-withdraw");
     await signInWithEmailAndPassword(dashboard.auth, CLINICIAN.email, CLINICIAN.password);
     const phone = client("phone-withdraw");
-    const { user } = await signInAnonymously(phone.auth);
+    const user = await signInVerified(adminApp, phone.auth, { email: "withdrawing-patient@example.com", password: "demo-password-6" });
     await setDoc(doc(phone.db, "patients", user.uid), newPatientDoc("Withdrawing patient", CLINICIAN.email));
     await chooseSharing(phone.db, user.uid, "granted");
 
@@ -167,5 +172,34 @@ describe("walking skeleton", () => {
     expect(wrongPassword).not.toBe("signed-in");
     expect(unknownAccount).not.toBe("signed-in");
     expect(signInErrorMessage(wrongPassword as { code: string })).toBe(signInErrorMessage(unknownAccount as { code: string }));
+  });
+
+  it("an anonymous user cannot create a Patient record; one made before ADR 0010 stays theirs", async () => {
+    const phone = client("phone-anonymous");
+    const { user } = await signInAnonymously(phone.auth);
+    const record = newPatientDoc("Anonymous patient", CLINICIAN.email);
+    await expect(setDoc(doc(phone.db, "patients", user.uid), record)).rejects.toMatchObject({ code: "permission-denied" });
+    // The same record written as the old rules allowed (here with the Admin SDK): the owner still saves the sharing choice.
+    await getAdminFirestore(adminApp).doc(`patients/${user.uid}`).set(record);
+    await chooseSharing(phone.db, user.uid, "granted");
+  });
+
+  it("an account without the Clinician claim is turned away by the dashboard and sees nothing; allow-clinician lets it in", async () => {
+    const dashboard = client("dashboard-not-yet");
+    const account = { email: "not-yet-clinician@example.com", password: "demo-password-7" };
+    const claims = async (user: User) => (await user.getIdTokenResult(true)).claims;
+    let user = await signInAccount(dashboard.auth, account);
+    expect(clinicianAccessMessage(await claims(user))).toMatch(/isn't set up as a Clinician yet/);
+    await expect(getDocs(patientListFor(dashboard.db, account.email))).rejects.toMatchObject({ code: "permission-denied" });
+
+    // Verified alone is not enough: a Patient's account is verified too.
+    user = await signInVerified(adminApp, dashboard.auth, account);
+    expect(clinicianAccessMessage(await claims(user))).toMatch(/isn't set up as a Clinician yet/);
+    await expect(getDocs(patientListFor(dashboard.db, account.email))).rejects.toMatchObject({ code: "permission-denied" });
+
+    // What allow-clinician sets; the dashboard reads a fresh token, so it counts without a new sign-in.
+    user = await signInClinician(adminApp, dashboard.auth, account);
+    expect(clinicianAccessMessage(await claims(user))).toBeNull();
+    await getDocs(patientListFor(dashboard.db, account.email));
   });
 });

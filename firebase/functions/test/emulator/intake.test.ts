@@ -10,12 +10,13 @@
 import { deleteApp as deleteAdminApp, initializeApp as initializeAdminApp } from "firebase-admin/app";
 import { getFirestore as getAdminFirestore } from "firebase-admin/firestore";
 import { deleteApp, initializeApp, type FirebaseApp } from "firebase/app";
-import { connectAuthEmulator, createUserWithEmailAndPassword, getAuth, signInAnonymously } from "firebase/auth";
+import { connectAuthEmulator, getAuth, signInAnonymously } from "firebase/auth";
 import { connectFunctionsEmulator, getFunctions, httpsCallable } from "firebase/functions";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { extractIntakeHandler, saveIntakeHandler, adminPatientStore } from "../../src/intakeFunctions";
 import { newPatientDoc, type PatientDoc } from "../../src/types";
-import { FakeTextModel, failingTextModel } from "../fakes";
+import { FakeTextModel, clinicianToken, failingTextModel } from "../fakes";
+import { signInClinician } from "./accounts";
 import { REGION } from "../../src/region";
 
 const PROJECT_ID = "demo-twoam";
@@ -29,7 +30,7 @@ const HIGHLIGHTS = "- Plays chess on Sundays with a brother.";
 const adminApp = initializeAdminApp({ projectId: PROJECT_ID }, "intake-admin");
 const adminDb = getAdminFirestore(adminApp);
 const patients = adminPatientStore(adminDb);
-const clinicianAuth = { uid: "clinician-uid", token: { email: CLINICIAN.email } };
+const clinicianAuth = { uid: "clinician-uid", token: clinicianToken(CLINICIAN.email) };
 
 /** A Patient record with every field set to something other than its default. */
 const ORIGINAL: PatientDoc = {
@@ -77,7 +78,7 @@ describe("Intake handlers with the Admin SDK on the Firestore emulator", () => {
     ).rejects.toMatchObject({ code: "unavailable" });
     await expect(
       saveIntakeHandler(
-        { data: { patientId: PATIENT_ID, highlights: HIGHLIGHTS }, auth: { uid: "x", token: { email: OTHER.email } } },
+        { data: { patientId: PATIENT_ID, highlights: HIGHLIGHTS }, auth: { uid: "x", token: clinicianToken(OTHER.email) } },
         { patients },
       ),
     ).rejects.toMatchObject({ code: "permission-denied" });
@@ -124,12 +125,7 @@ describe.skipIf(!withFunctions)("Intake callables through the Functions emulator
 
   async function signedIn(name: string, account: { email: string; password: string }) {
     const c = client(name);
-    try {
-      await createUserWithEmailAndPassword(c.auth, account.email, account.password);
-    } catch {
-      const { signInWithEmailAndPassword } = await import("firebase/auth");
-      await signInWithEmailAndPassword(c.auth, account.email, account.password);
-    }
+    await signInClinician(adminApp, c.auth, account);
     return c;
   }
 

@@ -60,6 +60,10 @@ function fakeFirestore() {
       if (fs.failWith) throw Object.assign(new Error("x"), { code: fs.failWith });
       writes.push({ op: "update", path: ref.path, data });
     },
+    async setDoc(ref, data) {
+      if (fs.failWith) throw Object.assign(new Error("x"), { code: fs.failWith });
+      writes.push({ op: "set", path: ref.path, data });
+    },
     failWith: null,
   };
   const active = (path) => listeners.filter((l) => l.active && l.target.path === path);
@@ -68,19 +72,55 @@ function fakeFirestore() {
     listeners,
     writes,
     active,
-    /** Pushes a collection snapshot to every active listener on `path`. */
-    push(path, docs, { fromCache = false } = {}) {
+    /**
+     * Pushes a collection snapshot to every active listener on `path`. `changes` (optional) is what
+     * the SDK's docChanges() returns; an empty list is a metadata-only snapshot.
+     */
+    push(path, docs, { fromCache = false, changes } = {}) {
       const found = active(path);
       assert.ok(found.length, `nobody listens to ${path}`);
       for (const l of found) {
-        l.next({ metadata: { fromCache }, docs: docs.map(({ id, data }) => ({ id, data: () => structuredClone(data) })) });
+        const snapshot = { metadata: { fromCache }, docs: docs.map(({ id, data }) => ({ id, data: () => structuredClone(data) })) };
+        if (changes) snapshot.docChanges = () => changes;
+        l.next(snapshot);
       }
     },
     pushDoc(path, data, { fromCache = false } = {}) {
       for (const l of active(path)) l.next({ metadata: { fromCache }, exists: () => data !== undefined, data: () => (data === undefined ? undefined : structuredClone(data)) });
     },
     fail(path, code) {
-      for (const l of active(path)) l.error(Object.assign(new Error(code), { code }));
+      for (const l of active(path)) {
+        // The SDK ends a listener after its error.
+        l.active = false;
+        l.error(Object.assign(new Error(code), { code }));
+      }
+    },
+  };
+}
+
+/** Timers the test moves by hand. */
+function fakeTimers() {
+  let now = 0;
+  let nextId = 1;
+  /** @type {Map<number, { at: number, fn: Function }>} */
+  const pending = new Map();
+  return {
+    setTimeout: (fn, ms) => {
+      const id = nextId++;
+      pending.set(id, { at: now + ms, fn });
+      return id;
+    },
+    clearTimeout: (id) => pending.delete(id),
+    pending: () => [...pending.values()].map((t) => t.at - now),
+    /** Moves the time on by `ms` and runs what is due. */
+    tick(ms) {
+      now += ms;
+      for (const [id, t] of [...pending]) {
+        if (t.at <= now) {
+          pending.delete(id);
+          t.fn();
+        }
+      }
     },
   };
 }
@@ -116,6 +156,7 @@ describe("subscribeRoster", () => {
       }
       const daily = db.active(`patients/${p.id}/daily`)[0].target.constraints;
       assert.deepEqual(daily.slice(1), [{ type: "orderBy", field: "date", direction: "desc" }, { type: "limit", n: ROSTER_DAILY_DAYS }]);
+      assert.equal(db.active(`patients/${p.id}/consents/sleepMinutes`).length, 1, `${p.id} sleep Consent`);
     }
   });
 
@@ -125,6 +166,7 @@ describe("subscribeRoster", () => {
     for (const p of demo) {
       db.push(`patients/${p.id}/flags`, entries(p.flags));
       db.push(`patients/${p.id}/daily`, entries(p.daily).reverse().slice(0, ROSTER_DAILY_DAYS));
+      db.pushDoc(`patients/${p.id}/consents/sleepMinutes`, { subject: "sleepMinutes", granted: true, changedAtMillis: NOW });
     }
     const last = states.at(-1);
     assert.equal(last.status, "ok");
@@ -134,7 +176,7 @@ describe("subscribeRoster", () => {
       ["demo-steady", "green"],
     ]);
     assert.equal(last.patients[0].daily.length, ROSTER_DAILY_DAYS);
-    assert.ok(Number.isFinite(last.patients[0].daily.at(-1).steps));
+    assert.ok(Number.isFinite(last.patients[0].daily.at(-1).sleep));
     assert.deepEqual(last.newRed, [], "the first load is never news");
     assert.equal(rosterView(last).banner.items[0].patientId, "demo-declining");
   });
@@ -186,15 +228,154 @@ describe("subscribeRoster", () => {
     stop();
     assert.equal(db.listeners.filter((l) => l.active).length, 0);
   });
+
+  test("the sleep sparkline follows Signal Consent: unknown or withheld puts no sleep value in the rows", () => {
+    const { db, states, patients } = start();
+    patients();
+    const path = "patients/demo-steady";
+    db.push(`${path}/daily`, entries(byKey.steady.daily).reverse().slice(0, ROSTER_DAILY_DAYS));
+    const steady = () => states.at(-1).patients.find((p) => p.id === "demo-steady");
+    assert.equal(steady().sleepConsent, "unknown", "not loaded yet");
+    assert.ok(steady().daily.every((r) => r.sleep === null), "unknown Consent shows nothing");
+    db.pushDoc(`${path}/consents/sleepMinutes`, undefined);
+    assert.equal(steady().sleepConsent, "withheld", "no Consent document");
+    assert.ok(steady().daily.every((r) => r.sleep === null));
+    db.pushDoc(`${path}/consents/sleepMinutes`, { subject: "sleepMinutes", granted: true });
+    assert.ok(steady().daily.some((r) => typeof r.sleep === "number"));
+    db.pushDoc(`${path}/consents/sleepMinutes`, { subject: "sleepMinutes", granted: false });
+    assert.equal(steady().sleepConsent, "withheld");
+    assert.ok(steady().daily.every((r) => r.sleep === null), "withdrawn Consent hides the values again");
+    for (const p of states.at(-1).patients) for (const r of p.daily) assert.deepEqual(Object.keys(r).sort(), ["date", "sleep"], "no other Signal in a roster row");
+    db.fail(`${path}/consents/sleepMinutes`, "unavailable");
+    assert.ok(steady().daily.every((r) => r.sleep === null), "a failed Consent read shows nothing");
+  });
+
+  test("only the Patient whose data changed is rebuilt; metadata-only snapshots are skipped", () => {
+    const { db, states, patients } = start();
+    patients();
+    for (const p of demo) db.push(`patients/${p.id}/flags`, entries(p.flags));
+    const before = states.at(-1);
+    const objectOf = (state, id) => state.patients.find((p) => p.id === id);
+    db.push("patients/demo-sparse/checkIns", entries(byKey.sparse.checkIns).slice(-1));
+    const after = states.at(-1);
+    assert.notEqual(objectOf(after, "demo-sparse"), objectOf(before, "demo-sparse"), "the changed Patient is rebuilt");
+    assert.equal(objectOf(after, "demo-steady"), objectOf(before, "demo-steady"), "the others are reused");
+    assert.equal(objectOf(after, "demo-declining"), objectOf(before, "demo-declining"));
+
+    // A metadata-only snapshot (no document changed, fromCache the same) emits nothing.
+    const count = states.length;
+    db.push("patients/demo-steady/flags", entries(byKey.steady.flags), { changes: [] });
+    db.push("patients", demo.map((p) => ({ id: p.id, data: p.patient })), { changes: [] });
+    assert.equal(states.length, count);
+    // One that changes fromCache is reported.
+    db.push("patients/demo-steady/flags", entries(byKey.steady.flags), { changes: [], fromCache: true });
+    assert.equal(states.length, count + 1);
+    assert.equal(states.at(-1).fromCache, true);
+    // A list snapshot that changes one record rebuilds only that Patient.
+    const prior = states.at(-1);
+    db.push("patients", demo.map((p) => ({ id: p.id, data: p.id === "demo-steady" ? { ...p.patient, lastSeenAtMillis: NOW - 1000 } : p.patient })));
+    assert.notEqual(objectOf(states.at(-1), "demo-steady"), objectOf(prior, "demo-steady"));
+    assert.equal(objectOf(states.at(-1), "demo-sparse"), objectOf(prior, "demo-sparse"));
+  });
 });
 
 describe("subscribePatient", () => {
-  function start(sections = "all") {
+  function start(sections = "all", options = {}) {
     const db = fakeFirestore();
     const states = [];
-    const stop = subscribePatient(db.fs, {}, "demo-declining", { clock, sections }, (s) => states.push(s));
-    return { db, states, stop };
+    const timers = fakeTimers();
+    const stop = subscribePatient(db.fs, {}, "demo-declining", { clock, sections, timers, ...options }, (s) => states.push(s));
+    return { db, states, stop, timers };
   }
+
+  test("a flags query that fails for another reason than withdrawal never shows green", () => {
+    for (const storedLevel of ["red", "amber"]) {
+      const { db, states } = start("attention");
+      const record = { ...byKey.declining.patient, flagLevel: storedLevel, flagReasons: ["Sleep is well below the usual."] };
+      db.pushDoc("patients/demo-declining", record);
+      db.push("patients/demo-declining/checkIns", []);
+      db.fail("patients/demo-declining/flags", "unavailable");
+      const last = states.at(-1);
+      assert.equal(last.status, "ok");
+      assert.equal(last.errors.flags, "error");
+      assert.equal(last.loaded.flags, false, "the section stays unloaded, not empty");
+      assert.equal(last.docs.flags, null);
+      assert.equal(last.patient.level, storedLevel, "the record's stored level stands in");
+      assert.notEqual(last.patient.levelWord, "Green · No current flag");
+      assert.equal(last.patient.flagsError, true);
+      assert.equal(last.patient.flagsLoaded, false);
+      assert.deepEqual(last.patient.activeFlags.map((f) => f.reason), ["Sleep is well below the usual."]);
+    }
+  });
+
+  test("a flags query refused after loading also falls back to the record, as withdrawal", () => {
+    const { db, states } = start("attention");
+    db.pushDoc("patients/demo-declining", byKey.declining.patient);
+    db.push("patients/demo-declining/flags", entries(byKey.declining.flags));
+    db.fail("patients/demo-declining/flags", "permission-denied");
+    const last = states.at(-1);
+    assert.equal(last.errors.flags, "denied");
+    assert.equal(last.loaded.flags, false);
+    assert.equal(last.patient.flagsError, false, "withdrawal is not a load error; the page shows it");
+    assert.equal(last.patient.level, "red");
+  });
+
+  test("hands over the raw documents per collection for the page's blocks", () => {
+    const { db, states } = start(["attention", "intakeVisits"]);
+    db.pushDoc("patients/demo-declining", byKey.declining.patient);
+    db.push("patients/demo-declining/visits", entries(byKey.declining.visits));
+    const last = states.at(-1);
+    assert.deepEqual(Object.keys(last.docs).sort(), ["checkIns", "flags", "visits"]);
+    assert.equal(last.docs.visits.length, byKey.declining.visits.length);
+    assert.equal(last.docs.visits[0].id, byKey.declining.visits[0].id);
+    assert.equal(last.docs.flags, null, "not loaded yet");
+  });
+
+  test("a metadata-only snapshot is skipped", () => {
+    const { db, states } = start("intakeVisits");
+    db.pushDoc("patients/demo-declining", byKey.declining.patient);
+    db.push("patients/demo-declining/visits", entries(byKey.declining.visits));
+    const count = states.length;
+    db.push("patients/demo-declining/visits", entries(byKey.declining.visits), { changes: [] });
+    assert.equal(states.length, count);
+    db.push("patients/demo-declining/visits", entries(byKey.declining.visits), { changes: [], fromCache: true });
+    assert.equal(states.length, count + 1);
+  });
+
+  test("after a refused record read, it checks again with backoff, so a Patient who shares again comes back", () => {
+    const { db, states, timers, stop } = start();
+    db.fail("patients/demo-declining", "permission-denied");
+    assert.equal(states.at(-1).status, "withdrawn");
+    assert.deepEqual(timers.pending(), [5_000]);
+    timers.tick(5_000);
+    assert.equal(db.active("patients/demo-declining").length, 1, "listening to the record again");
+    db.fail("patients/demo-declining", "permission-denied");
+    assert.deepEqual(timers.pending(), [15_000]);
+    timers.tick(15_000);
+    db.fail("patients/demo-declining", "permission-denied");
+    assert.deepEqual(timers.pending(), [60_000]);
+    timers.tick(60_000);
+    db.fail("patients/demo-declining", "permission-denied");
+    assert.deepEqual(timers.pending(), [60_000], "capped");
+    timers.tick(60_000);
+    // Sharing again: the record reads, the sections start, and the backoff starts over.
+    db.pushDoc("patients/demo-declining", byKey.declining.patient);
+    assert.equal(states.at(-1).status, "ok");
+    assert.equal(db.active("patients/demo-declining/flags").length, 1);
+    db.fail("patients/demo-declining", "permission-denied");
+    assert.equal(states.at(-1).status, "withdrawn");
+    assert.deepEqual(timers.pending(), [5_000]);
+    stop();
+    assert.deepEqual(timers.pending(), [], "stop() cancels the next check");
+    assert.equal(db.listeners.filter((l) => l.active).length, 0);
+  });
+
+  test("any other record error is an error, with no retry", () => {
+    const { db, states, timers } = start();
+    db.fail("patients/demo-declining", "unavailable");
+    assert.equal(states.at(-1).status, "error");
+    assert.deepEqual(timers.pending(), []);
+  });
 
   test("loading, then the design's patient object once the record and collections answer", () => {
     const { db, states } = start();
@@ -289,6 +470,21 @@ describe("writes and calls", () => {
     assert.match((await setTmsEndDate(db.fs, {}, "p1", "2026-10-01", context)).message, /Try again/);
   });
 
+  test("recordVisit edits an existing Visit in place, and an invalid form names the field", async () => {
+    const db = fakeFirestore();
+    const edited = await recordVisit(db.fs, {}, "p1", { date: "2026-10-23", type: "PHQ-2", score: "2" }, { ...context, editingId: "v" });
+    assert.equal(edited.ok, true);
+    assert.equal(edited.id, "v");
+    assert.deepEqual(db.writes, [{ op: "set", path: "patients/p1/visits/v", data: { date: "2026-10-23", questionnaire: "phq2", score: 2 } }]);
+    const onTms = await recordVisit(db.fs, {}, "p1", { date: "2026-10-02", type: "none" }, context);
+    assert.equal(onTms.ok, false);
+    assert.equal(onTms.message, "The Visit must be after the TMS end date.");
+    assert.ok(onTms.errors.date);
+    const badScore = await recordVisit(db.fs, {}, "p1", { date: TODAY, type: "PHQ-2", score: "9" }, context);
+    assert.ok(badScore.errors.score);
+    assert.equal(db.writes.length, 1);
+  });
+
   test("setTmsEndDate checks the date and updates only tmsEndDate", async () => {
     const db = fakeFirestore();
     assert.equal((await setTmsEndDate(db.fs, {}, "p1", "2026-10-30", context)).ok, false, "after the first Visit");
@@ -299,6 +495,45 @@ describe("writes and calls", () => {
   test("clearAttention with nothing open writes nothing", async () => {
     const result = await clearAttention(fakeFirestore().fs, {}, { patientId: "p1", raw: { patient: {}, flags: [] }, nowMillis: NOW });
     assert.equal(result.ok, false);
+  });
+
+  test("clearAttention clears one flag against the review the Clinician confirmed", async () => {
+    const flags = [
+      { id: "a", level: "red", reason: "A.", raisedAtMillis: NOW - 2, clearedAtMillis: null },
+      { id: "b", level: "amber", reason: "B.", raisedAtMillis: NOW - 1, clearedAtMillis: null },
+    ];
+    const patient = { flagLevel: "red", flagReasons: ["A.", "B."] };
+    const reviewed = { flagLevel: "red", flagReasons: ["A.", "B."], openFlagIds: ["a", "b"] };
+    const txWrites = [];
+    const fs = {
+      ...fakeFirestore().fs,
+      getDocs: async () => ({ docs: flags.map((f) => ({ id: f.id, data: () => f })) }),
+      runTransaction: async (_db, fn) =>
+        fn({
+          get: async (ref) => {
+            const id = ref.path.split("/").at(-1);
+            const data = ref.path === "patients/p1" ? patient : flags.find((f) => f.id === id);
+            return { id, exists: () => data !== undefined, data: () => data };
+          },
+          update: (ref, data) => txWrites.push([ref.path, data]),
+        }),
+    };
+    const done = await clearAttention(fs, {}, { patientId: "p1", raw: { patient, flags }, flagIds: ["a"], reviewed, nowMillis: NOW });
+    assert.equal(done.ok, true, JSON.stringify(done));
+    assert.deepEqual(done.cleared, ["a"]);
+    assert.deepEqual(txWrites[0], ["patients/p1/flags/a", { clearedAtMillis: NOW }]);
+    assert.deepEqual(txWrites.at(-1), ["patients/p1", { flagLevel: "amber", flagReasons: ["B."] }]);
+
+    // Something new since the review: refused for a new review, with nothing written.
+    const changed = await clearAttention(fs, {}, { patientId: "p1", raw: { patient, flags }, flagIds: ["a"], reviewed: { ...reviewed, openFlagIds: ["a"] }, nowMillis: NOW });
+    assert.equal(changed.ok, false);
+    assert.equal(changed.changed, true);
+    // A flag that is no longer open: nothing to clear, not a new review.
+    const notOpen = await clearAttention(fs, {}, { patientId: "p1", raw: { patient, flags }, flagIds: ["zz"], reviewed, nowMillis: NOW });
+    assert.equal(notOpen.ok, false);
+    assert.equal(notOpen.notOpen, true);
+    assert.equal(notOpen.changed, undefined);
+    assert.equal(notOpen.message, "This flag is no longer open, so there is nothing to clear.");
   });
 
   test("Generate now, extract and save map failures to vetted copy", async () => {

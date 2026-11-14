@@ -69,8 +69,9 @@ Raw sensor samples, audio and transcripts are never stored outside the phone ([A
 
 ## Roles and sign-in
 
-- The Patient signs in anonymously for the demo. The Clinician signs in with email and password.
-- The Invite that links a Patient to a Clinician is deferred. In the demo there is one Clinician, and a new Patient is linked to them when the app first opens.
+- The Patient signs in with an account of their own: email and password (verified by email before the Patient record is created) or Google ([ADR 0010](../adr/0010-patients-sign-in-with-their-own-account.md)). Patients who signed in anonymously before keep their records.
+- The Clinician signs in with email and password. The Admin marks the account as the Clinician's with a custom claim (`npm run allow-clinician`); an email alone grants nothing.
+- The Invite that links a Patient to a Clinician is deferred. In the demo there is one Clinician, and a new Patient is linked to them when their record is created.
 - The Clinician adds the Intake on the dashboard. For the demo it is a fictional clinical report; Gemini extracts the highlights the Companion needs.
 - The Clinician records each Visit, with an optional Questionnaire score (PHQ-2 or PHQ-9), and enters the TMS end date.
 
@@ -147,7 +148,7 @@ sequenceDiagram
 | Record Suggestion | Saves what was proposed | Phone | Firestore |
 | Raise crisis | Shows the Crisis notice and sets the flag to red | Phone | See Crisis |
 
-Suggestions appear as cards on the Check-in screen; a place card opens Google Maps. There is no embedded map.
+Suggestions appear as cards on the Check-in screen; a place card opens Google Maps. Outside a Check-in, the Today screen shows Suggestions from the `suggestToday` function with places on an embedded Google map (Android).
 
 **Disclosure.** At a Patient's first Check-in the Companion says it is an AI and not a clinician. The Check-in screen always shows the live transcript and states that place results come from Google Maps, with links, as the Maps terms require.
 
@@ -172,14 +173,14 @@ Each Suggestion has a kind (walk, class, music, calling someone, and so on). Its
 
 ## Attention flag
 
-The flag is green, amber or red, always with written reasons and never a number ([ADR 0009](../adr/0009-attention-flag-has-three-levels-with-reasons.md)). The Clinician clears it after acting. The Patient never sees it.
+The flag is green, amber or red, always with written reasons and never a score ([ADR 0009](../adr/0009-attention-flag-has-three-levels-with-reasons.md)). The Clinician clears it after acting. The Patient never sees it.
 
 The Decisions API answers three yes/no questions about each Check-in: is there a crisis, is there marked hopelessness or decline, and did the Patient try the last Suggestion.
 
 | Level | Raised by | What happens |
 |---|---|---|
 | Amber | Decline or hopelessness in a Check-in; a Mood rating of 2 or lower in three Check-ins in a row; sleep well below Baseline for three nights; sustained drift across several Signals; the safety filter refusing to judge a Check-in | The Patient moves up the dashboard list with the reasons shown |
-| Red | A crisis in a Check-in; no sign of life from the phone for 24 hours; a sharp break such as a sleep collapse | As amber, plus a banner on the dashboard and an email to the Clinician |
+| Red | A crisis in a Check-in; no sign of life from the phone for 24 hours; a sharp break such as a sleep collapse, or a day with no steps and no screen use | As amber, plus a banner on the dashboard and an email to the Clinician |
 
 A phone cannot report its own silence, so a Cloud Function checks each hour for Patients whose phone has been quiet for 24 hours. Thresholds are starting values to tune on the Demo Patients.
 

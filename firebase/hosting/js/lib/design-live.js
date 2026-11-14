@@ -21,7 +21,10 @@ import { highlightsProblem, intakeErrorMessage, reportProblem } from "./intake.j
 import { clinicianListFilters, patientCollectionQuery, sharingStateFromError, sharingStateFromSnapshot } from "./sharing.js";
 import {
   DESIGN_TIME_ZONE,
+  ROSTER_DAILY_DAYS,
+  ROSTER_SIGNAL,
   designPatient,
+  designRosterPatient,
   highlightsList,
   highlightsText,
   orderRoster,
@@ -31,7 +34,7 @@ import {
 } from "./design-model.js";
 
 /** The roster reads this many of each Patient's latest daily records: 14 for the sparkline, 14 for its Baseline. */
-export const ROSTER_DAILY_DAYS = 28;
+export { ROSTER_DAILY_DAYS };
 
 /** The collections each Patient section needs, besides the Patient record. */
 export const SECTION_COLLECTIONS = Object.freeze({
@@ -50,6 +53,7 @@ export const LIVE_COPY = Object.freeze({
   expired: "Your sign-in has ended. Sign in again, then try again.",
   changed: "A new reason arrived while you were reviewing. Review it before clearing.",
   nothingOpen: "There is no open Attention flag to clear.",
+  notOpen: "This flag is no longer open, so there is nothing to clear.",
 });
 
 /**
@@ -63,6 +67,7 @@ export const LIVE_COPY = Object.freeze({
  * @property {Function} onSnapshot
  * @property {Function} [addDoc]
  * @property {Function} [updateDoc]
+ * @property {Function} [setDoc]
  * @property {Function} [getDocs]
  * @property {Function} [runTransaction]
  */
@@ -116,115 +121,213 @@ const cached = (snapshot) => snapshot?.metadata?.fromCache === true;
 // ---------------------------------------------------------------------------------------------
 
 /**
+ * True when a query snapshot repeats what was already applied: no document changed and `fromCache`
+ * is the same (a metadata-only snapshot, which `includeMetadataChanges` also delivers). A snapshot
+ * without `docChanges` (a document, or a stand-in) is never skipped here.
+ * @param {any} snapshot @param {boolean} loaded @param {boolean | undefined} previousFromCache
+ */
+function repeats(snapshot, loaded, previousFromCache) {
+  if (!loaded || typeof snapshot?.docChanges !== "function") return false;
+  return snapshot.docChanges().length === 0 && cached(snapshot) === previousFromCache;
+}
+
+/**
  * @typedef {object} RosterState
  * @property {"loading" | "ok" | "denied" | "expired" | "error"} status
  * @property {boolean} fromCache true while any part is the SDK's saved copy
- * @property {ReturnType<typeof designPatient>[]} patients in the design's order; pass to `rosterView`
+ * @property {ReturnType<typeof designRosterPatient>[]} patients light roster rows
+ *   (`designRosterPatient`) in the design's order; pass to `rosterView`. A Patient whose data did not
+ *   change keeps the same object from one state to the next.
  * @property {{ patientId: string, displayName: string, reason: string }[]} newRed red flags that arrived
  *   since the last update (never on the first load); for the sound and the announcement
  * @property {number} updatedAtMillis
  */
 
 /**
- * The Clinician's Patients, live, as design-model patient objects with the attention level, the
- * last 28 days of Signals (for the sleep sparkline) and the latest Check-in's assessment.
+ * @typedef {object} RosterEntry one listed Patient's sources and its cached roster row
+ * @property {any} record the Patient record's data
+ * @property {string} recordKey the record as JSON, to see whether a list snapshot changed it
+ * @property {any[] | null} flags null until loaded, or after an error (the record stands in)
+ * @property {any[]} daily
+ * @property {any[]} checkIns
+ * @property {{ granted?: unknown } | null | undefined} sleepConsent undefined until loaded
+ * @property {string | undefined} sleepConsentKey
+ * @property {Record<string, boolean>} fromCache
+ * @property {Record<string, boolean>} loaded
+ * @property {(() => void)[]} stops
+ * @property {ReturnType<typeof designRosterPatient> | null} model the cached row; null to rebuild
+ * @property {number} modelAtMillis
+ */
+
+/**
+ * The Clinician's Patients, live, as light roster rows (`designRosterPatient`): the attention level,
+ * the open flags, the last 28 days of sleep (only while the Patient's sleep Consent is granted) and
+ * the latest Check-in's assessment. Only the Patient whose snapshot changed is rebuilt; the rows of
+ * the others are reused, and metadata-only snapshots that do not change `fromCache` are skipped.
  * @param {FirestoreFns} fs
  * @param {unknown} db
- * @param {{ clinicianEmail: string, clock?: ClockFn, withSleep?: boolean, withAssessment?: boolean, keepWithdrawn?: boolean }} options
+ * @param {{ clinicianEmail: string, clock?: ClockFn, withSleep?: boolean, withAssessment?: boolean, keepWithdrawn?: boolean, refreshMillis?: number }} options
  *   `keepWithdrawn`: a Patient who leaves the list in this session (sharing withdrawn) stays as an
- *   anonymous "sharing withdrawn" row with no data, until the page reloads
+ *   anonymous "sharing withdrawn" row with no data, until the page reloads.
+ *   `refreshMillis`: a cached row older than this is rebuilt on the next update, so its relative
+ *   times ("2 hours ago") and dates move on (default one minute).
  * @param {(state: RosterState) => void} onChange
  * @returns {() => void} stops every listener
  */
 export function subscribeRoster(fs, db, options, onChange) {
-  const { clinicianEmail, clock = systemClock, withSleep = true, withAssessment = true, keepWithdrawn = false } = options;
+  const { clinicianEmail, clock = systemClock, withSleep = true, withAssessment = true, keepWithdrawn = false, refreshMillis = 60_000 } = options;
   const loadedAtMillis = clock().nowMillis;
   /** @type {RosterState["status"]} */
   let status = "loading";
-  /** @type {{ id: string, data: any }[] | null} */
-  let docs = null;
+  /** @type {string[]} the listed Patients, in the list's order */
+  let order = [];
+  let listLoaded = false;
   let listFromCache = false;
   /** @type {Set<string> | null} */
   let firstIds = null;
-  /** @type {Map<string, { flags: any[] | null, daily: any[], checkIns: any[], fromCache: Record<string, boolean>, stops: (() => void)[] }>} */
+  /** @type {Map<string, RosterEntry>} */
   const perPatient = new Map();
-  /** @type {Set<string>} */
-  const withdrawn = new Set();
+  /** @type {Map<string, ReturnType<typeof withdrawnPatient>>} */
+  const withdrawn = new Map();
   /** @type {RosterState["newRed"]} */
   let newRed = [];
   let stopped = false;
 
+  /** @param {string} id @param {number} nowMillis @param {string | undefined} timeZone */
+  function rowOf(id, nowMillis, timeZone) {
+    const entry = /** @type {RosterEntry} */ (perPatient.get(id));
+    if (!entry.model || nowMillis - entry.modelAtMillis >= refreshMillis) {
+      entry.model = designRosterPatient(
+        {
+          id,
+          patient: entry.record,
+          flags: entry.flags,
+          daily: entry.daily,
+          checkIns: entry.checkIns,
+          // Without the sleep listeners there is no sparkline: treat it as not granted.
+          sleepConsent: withSleep ? entry.sleepConsent : null,
+        },
+        { nowMillis, timeZone },
+        { maxDays: ROSTER_DAILY_DAYS },
+      );
+      entry.modelAtMillis = nowMillis;
+    }
+    return entry.model;
+  }
+
   function emit() {
     if (stopped) return;
     const { nowMillis, timeZone } = clock();
-    const live = (docs ?? []).map(({ id, data }) => {
-      const p = perPatient.get(id);
-      return designPatient({ id, patient: data, flags: p?.flags ?? null, daily: p?.daily ?? [], checkIns: p?.checkIns ?? [] }, { nowMillis, timeZone }, { maxDays: ROSTER_DAILY_DAYS });
-    });
-    const patients = orderRoster([...live, ...[...withdrawn].map(withdrawnPatient)]);
+    const live = status === "ok" ? order.map((id) => rowOf(id, nowMillis, timeZone)) : [];
+    const patients = orderRoster([...live, ...withdrawn.values()]);
     const fromCache = listFromCache || [...perPatient.values()].some((p) => Object.values(p.fromCache).some(Boolean));
     const changes = newRed;
     newRed = [];
     onChange({ status, fromCache, patients, newRed: changes, updatedAtMillis: nowMillis });
   }
 
-  /** @param {string} id */
-  function watch(id) {
-    /** @type {{ flags: any[] | null, daily: any[], checkIns: any[], fromCache: Record<string, boolean>, stops: (() => void)[] }} */
-    const entry = { flags: null, daily: [], checkIns: [], fromCache: {}, stops: [] };
-    perPatient.set(id, entry);
+  /**
+   * Listens to one collection query of one Patient. Metadata-only snapshots are skipped; on an
+   * error, `failed` decides what the entry keeps.
+   * @param {RosterEntry} entry @param {string} name @param {unknown} target
+   * @param {(snapshot: any) => void} apply @param {() => void} failed
+   */
+  function listenPart(entry, name, target, apply, failed) {
     entry.stops.push(
       listen(
         fs,
-        patientCollectionQuery(fs, db, id, "flags"),
+        target,
         (snapshot) => {
-          const current = docsOf(snapshot);
-          const fresh = newRedFlags(entry.flags, current, { loadedAtMillis, joinedLate: !(firstIds?.has(id) ?? false) });
-          entry.flags = current;
-          entry.fromCache.flags = cached(snapshot);
-          const name = docs?.find((d) => d.id === id)?.data?.displayName || "Unnamed patient";
-          for (const f of fresh) newRed.push({ patientId: id, displayName: name, reason: f.reason });
+          if (repeats(snapshot, entry.loaded[name], entry.fromCache[name])) return;
+          apply(snapshot);
+          entry.loaded[name] = true;
+          entry.fromCache[name] = cached(snapshot);
+          entry.model = null;
           emit();
         },
-        // Access ended (sharing withdrawn): the list drops the Patient; show the record until then.
+        // Access ended (sharing withdrawn), or another error: the list drops a withdrawn Patient;
+        // until then show the record, never data that may no longer be shared.
         () => {
-          entry.flags = null;
+          failed();
+          entry.loaded[name] = false;
+          entry.fromCache[name] = false;
+          entry.model = null;
           emit();
         },
       ),
     );
+  }
+
+  /** @param {string} id @param {any} record */
+  function watch(id, record) {
+    /** @type {RosterEntry} */
+    const entry = { record, recordKey: JSON.stringify(record), flags: null, daily: [], checkIns: [], sleepConsent: undefined, sleepConsentKey: undefined, fromCache: {}, loaded: {}, stops: [], model: null, modelAtMillis: 0 };
+    perPatient.set(id, entry);
+    listenPart(
+      entry,
+      "flags",
+      patientCollectionQuery(fs, db, id, "flags"),
+      (snapshot) => {
+        const current = docsOf(snapshot);
+        const fresh = newRedFlags(entry.flags, current, { loadedAtMillis, joinedLate: !(firstIds?.has(id) ?? false) });
+        entry.flags = current;
+        const name = entry.record?.displayName || "Unnamed patient";
+        for (const f of fresh) newRed.push({ patientId: id, displayName: name, reason: f.reason });
+      },
+      () => {
+        entry.flags = null;
+      },
+    );
     if (withSleep) {
+      listenPart(
+        entry,
+        "daily",
+        patientCollectionQuery(fs, db, id, "daily", fs.orderBy("date", "desc"), fs.limit(ROSTER_DAILY_DAYS)),
+        (snapshot) => {
+          entry.daily = docsOf(snapshot);
+        },
+        () => {
+          entry.daily = [];
+        },
+      );
+      // The sleep Signal's Consent (`consents/{subject}`, not stamped): sleep shows only while it is
+      // granted. No document means not granted; until it answers, the Consent is unknown.
       entry.stops.push(
         listen(
           fs,
-          patientCollectionQuery(fs, db, id, "daily", fs.orderBy("date", "desc"), fs.limit(ROSTER_DAILY_DAYS)),
+          fs.doc(db, "patients", id, "consents", ROSTER_SIGNAL),
           (snapshot) => {
-            entry.daily = docsOf(snapshot);
-            entry.fromCache.daily = cached(snapshot);
+            const consent = snapshot.exists() ? (snapshot.data() ?? null) : null;
+            const key = JSON.stringify(consent);
+            const fromCache = cached(snapshot);
+            if (key === entry.sleepConsentKey && fromCache === entry.fromCache.consent) return;
+            entry.sleepConsent = consent;
+            entry.sleepConsentKey = key;
+            entry.fromCache.consent = fromCache;
+            entry.model = null;
             emit();
           },
           () => {
-            entry.daily = [];
+            entry.sleepConsent = null;
+            entry.sleepConsentKey = undefined;
+            entry.fromCache.consent = false;
+            entry.model = null;
             emit();
           },
         ),
       );
     }
     if (withAssessment) {
-      entry.stops.push(
-        listen(
-          fs,
-          patientCollectionQuery(fs, db, id, "checkIns", fs.orderBy("startedAtMillis", "desc"), fs.limit(1)),
-          (snapshot) => {
-            entry.checkIns = docsOf(snapshot);
-            entry.fromCache.checkIns = cached(snapshot);
-            emit();
-          },
-          () => {
-            entry.checkIns = [];
-            emit();
-          },
-        ),
+      listenPart(
+        entry,
+        "checkIns",
+        patientCollectionQuery(fs, db, id, "checkIns", fs.orderBy("startedAtMillis", "desc"), fs.limit(1)),
+        (snapshot) => {
+          entry.checkIns = docsOf(snapshot);
+        },
+        () => {
+          entry.checkIns = [];
+        },
       );
     }
   }
@@ -243,26 +346,39 @@ export function subscribeRoster(fs, db, options, onChange) {
     fs,
     patientsQuery,
     (snapshot) => {
+      if (repeats(snapshot, listLoaded, listFromCache)) return;
       const next = snapshot.docs.map((/** @type {any} */ d) => ({ id: d.id, data: d.data() }));
       const ids = new Set(next.map((/** @type {{ id: string }} */ d) => d.id));
       for (const id of [...perPatient.keys()]) {
         if (ids.has(id)) continue;
         unwatch(id);
-        if (keepWithdrawn) withdrawn.add(id);
+        if (keepWithdrawn) withdrawn.set(id, withdrawnPatient(id));
       }
-      for (const id of ids) {
+      for (const { id, data } of next) {
         withdrawn.delete(id);
-        if (!perPatient.has(id)) watch(id);
+        const entry = perPatient.get(id);
+        if (!entry) {
+          watch(id, data);
+          continue;
+        }
+        const key = JSON.stringify(data);
+        if (key !== entry.recordKey) {
+          entry.record = data;
+          entry.recordKey = key;
+          entry.model = null;
+        }
       }
-      docs = next;
+      order = next.map((/** @type {{ id: string }} */ d) => d.id);
       firstIds ??= ids;
+      listLoaded = true;
       listFromCache = cached(snapshot);
       status = "ok";
       emit();
     },
     (error) => {
       for (const id of [...perPatient.keys()]) unwatch(id);
-      docs = null;
+      order = [];
+      listLoaded = false;
       status = rosterStatusFromError(error);
       emit();
     },
@@ -280,11 +396,19 @@ export function subscribeRoster(fs, db, options, onChange) {
 // One Patient
 // ---------------------------------------------------------------------------------------------
 
+/** After the rules refuse the record (sharing withdrawn), check again after these delays; the last repeats. */
+export const RECHECK_DELAYS_MILLIS = Object.freeze([5_000, 15_000, 60_000]);
+
 /**
  * @typedef {object} PatientState
  * @property {"loading" | "ok" | "withdrawn" | "error"} status
  * @property {boolean} fromCache
  * @property {Record<string, boolean>} loaded which collections have answered
+ * @property {Record<string, "denied" | "error">} errors collections whose listener failed: "denied"
+ *   is the rules refusing the read (sharing withdrawn; the record's listener shows that), "error"
+ *   anything else. A failed collection stays unloaded (null in `docs`), never empty.
+ * @property {Record<string, object[] | null>} docs each listened collection's documents as stored
+ *   (`{ id, ...data }`), null until loaded or after an error; for blocks that work on documents
  * @property {ReturnType<typeof designPatient> | null} patient the design's object; the withdrawn
  *   placeholder while not sharing; null while loading or on error
  * @property {{ patient: object, flags: object[] | null } | null} raw the record and flags as stored,
@@ -304,51 +428,79 @@ function collectionsFor(sections) {
   return [...out];
 }
 
+/** @typedef {{ setTimeout: (fn: () => void, ms: number) => unknown, clearTimeout: (id: any) => void }} Timers */
+
+/** @type {Timers} */
+const systemTimers = { setTimeout: (fn, ms) => globalThis.setTimeout(fn, ms), clearTimeout: (id) => globalThis.clearTimeout(id) };
+
 /**
  * One Patient, live, as the design's patient object. Listens to the record and to the collections
  * the sections need (`SECTION_COLLECTIONS`); a collection not listened to is empty in the object.
  * While the Patient does not share, the collection listeners are stopped and the state is
- * "withdrawn" with the anonymous placeholder; they start again if the Patient shares again.
+ * "withdrawn" with the anonymous placeholder; they start again if the Patient shares again. A Demo
+ * Patient's record stays readable, so its listener sees that at once. For any other Patient the
+ * rules refuse the record and the SDK ends the listener, so it listens again after
+ * `RECHECK_DELAYS_MILLIS` (5 s, 15 s, then every minute) until the Patient shares or `stop()`.
+ *
+ * A collection listener that fails leaves its collection unloaded and sets `errors[name]`; a failed
+ * flags query never reads as "no flags": the record's stored level and reasons stand in, and
+ * `patient.flagsError` is true unless the failure was a withdrawal.
  * @param {FirestoreFns} fs
  * @param {unknown} db
  * @param {string} patientId
- * @param {{ sections?: string | string[], clock?: ClockFn }} options
+ * @param {{ sections?: string | string[], clock?: ClockFn, timers?: Timers, recheckDelaysMillis?: readonly number[] }} options
  * @param {(state: PatientState) => void} onChange
  * @returns {() => void}
  */
 export function subscribePatient(fs, db, patientId, options, onChange) {
-  const { sections = "all", clock = systemClock } = options ?? {};
+  const { sections = "all", clock = systemClock, timers = systemTimers, recheckDelaysMillis = RECHECK_DELAYS_MILLIS } = options ?? {};
   const collections = collectionsFor(sections);
   /** @type {PatientState["status"]} */
   let status = "loading";
   /** @type {any} */
   let record = null;
+  /** @type {string | undefined} */
+  let recordKey;
   let recordFromCache = false;
   /** @type {Record<string, any[] | undefined>} */
   let data = {};
   /** @type {Record<string, boolean>} */
   let fromCache = {};
+  /** @type {Record<string, "denied" | "error">} */
+  let errors = {};
   /** @type {(() => void)[]} */
   let stops = [];
   let stopped = false;
+  /** @type {(() => void) | null} */
+  let stopRecord = null;
+  /** @type {unknown} */
+  let recheckTimer = null;
+  let rechecks = 0;
 
   function emit() {
     if (stopped) return;
     /** @type {Record<string, boolean>} */
     const loaded = {};
-    for (const c of collections) loaded[c] = data[c] !== undefined;
+    /** @type {Record<string, object[] | null>} */
+    const docs = {};
+    for (const c of collections) {
+      loaded[c] = data[c] !== undefined;
+      docs[c] = data[c] ?? null;
+    }
     const anyCache = recordFromCache || Object.values(fromCache).some(Boolean);
+    const errorsNow = { ...errors };
     if (status !== "ok") {
-      onChange({ status, fromCache: anyCache, loaded, patient: status === "withdrawn" ? withdrawnPatient(patientId) : null, raw: null });
+      onChange({ status, fromCache: anyCache, loaded, errors: errorsNow, docs, patient: status === "withdrawn" ? withdrawnPatient(patientId) : null, raw: null });
       return;
     }
     const patient = designPatient(
       {
         id: patientId,
         patient: record,
-        // Until the flags load (or when a section does not listen to them), the record's level and
-        // reasons stand in.
+        // Until the flags load, after a failed load, or when a section does not listen to them, the
+        // record's level and reasons stand in.
         flags: data.flags ?? null,
+        flagsError: errors.flags === "error",
         daily: data.daily ?? [],
         checkIns: data.checkIns ?? [],
         summaries: data.summaries ?? [],
@@ -359,7 +511,7 @@ export function subscribePatient(fs, db, patientId, options, onChange) {
       },
       clock(),
     );
-    onChange({ status, fromCache: anyCache, loaded, patient, raw: { patient: record, flags: data.flags ?? null } });
+    onChange({ status, fromCache: anyCache, loaded, errors: errorsNow, docs, patient, raw: { patient: record, flags: data.flags ?? null } });
   }
 
   function start() {
@@ -373,13 +525,18 @@ export function subscribePatient(fs, db, patientId, options, onChange) {
           fs,
           target,
           (snapshot) => {
+            if (repeats(snapshot, data[name] !== undefined, fromCache[name])) return;
             data[name] = docsOf(snapshot);
             fromCache[name] = cached(snapshot);
+            delete errors[name];
             emit();
           },
-          // Withdrawal reaches the record's listener too, which shows the withdrawn state.
-          () => {
-            data[name] = [];
+          // Only permission-denied is a withdrawal (the record's listener then shows it). Either
+          // way the collection is unloaded, never empty: no flags must not read as green.
+          (error) => {
+            delete data[name];
+            delete fromCache[name];
+            errors[name] = codeOf(error) === "permission-denied" ? "denied" : "error";
             emit();
           },
         ),
@@ -392,6 +549,7 @@ export function subscribePatient(fs, db, patientId, options, onChange) {
     stops = [];
     data = {};
     fromCache = {};
+    errors = {};
   }
 
   /** @param {import("./sharing.js").SharingViewState} state */
@@ -403,26 +561,54 @@ export function subscribePatient(fs, db, patientId, options, onChange) {
     } else {
       stopCollections();
       record = null;
+      recordKey = undefined;
       status = state.status;
     }
     emit();
   }
 
-  const stopRecord = listen(
-    fs,
-    fs.doc(db, "patients", patientId),
-    (snapshot) => {
-      recordFromCache = cached(snapshot);
-      onRecord(sharingStateFromSnapshot({ exists: snapshot.exists(), data: snapshot.data() }));
-    },
-    // The rules deny the read once the Patient stops sharing: the withdrawn state, not an error.
-    (error) => onRecord(sharingStateFromError(/** @type {any} */ (error))),
-  );
+  function listenRecord() {
+    recheckTimer = null;
+    stopRecord = listen(
+      fs,
+      fs.doc(db, "patients", patientId),
+      (snapshot) => {
+        const exists = snapshot.exists();
+        const value = snapshot.data();
+        const key = JSON.stringify([exists, value]);
+        const fromCacheNow = cached(snapshot);
+        // A metadata-only snapshot of an unchanged record.
+        if (status !== "loading" && key === recordKey && fromCacheNow === recordFromCache) return;
+        recordKey = key;
+        recordFromCache = fromCacheNow;
+        const state = sharingStateFromSnapshot({ exists, data: value });
+        if (state.status === "ok") rechecks = 0;
+        onRecord(state);
+      },
+      // The rules deny the read once the Patient stops sharing: the withdrawn state, not an error.
+      // The SDK has ended this listener, so check again later in case the Patient shares again.
+      (error) => {
+        stopRecord = null;
+        const state = sharingStateFromError(/** @type {any} */ (error));
+        onRecord(state);
+        if (state.status === "withdrawn" && !stopped) {
+          const delay = recheckDelaysMillis[Math.min(rechecks, recheckDelaysMillis.length - 1)];
+          rechecks += 1;
+          recheckTimer = timers.setTimeout(() => {
+            if (!stopped) listenRecord();
+          }, delay);
+        }
+      },
+    );
+  }
 
+  listenRecord();
   emit();
   return () => {
     stopped = true;
-    stopRecord();
+    if (recheckTimer !== null) timers.clearTimeout(recheckTimer);
+    recheckTimer = null;
+    stopRecord?.();
     stopCollections();
   };
 }
@@ -455,21 +641,28 @@ export const subscribeDigest = sectionSubscription("digest");
 // ---------------------------------------------------------------------------------------------
 
 /**
- * @typedef {{ ok: true } & Record<string, unknown> | { ok: false, message: string, code?: string, invalid?: boolean, changed?: boolean }} ActionResult
+ * @typedef {{ ok: true } & Record<string, unknown> | { ok: false, message: string, code?: string, invalid?: boolean, errors?: Record<string, string>, changed?: boolean, notOpen?: boolean }} ActionResult
  */
 
 /**
- * Record a Visit from the design's form (`validateDesignVisit`), as the Clinician. The rules allow
- * the date, the kind and an integer score; nothing else changes, so the flag is untouched.
+ * Record a Visit from the design's form (`validateDesignVisit`), as the Clinician, or edit one
+ * (`context.editingId`). The rules allow the date, the kind and an integer score; nothing else
+ * changes, so the flag is untouched. An invalid form returns `invalid: true` and `errors` by field
+ * (`date`, `questionnaire`, `score`), so the form can focus the field.
  * @param {FirestoreFns} fs @param {unknown} db @param {string} patientId
  * @param {{ date: string, type: string, score?: string | number | null }} form
- * @param {{ today: string, tms?: string | null, visits?: { id?: string, date: string }[] }} context
+ * @param {{ today: string, tms?: string | null, visits?: { id?: string, date: string }[], editingId?: string | null }} context
  * @returns {Promise<ActionResult>}
  */
 export async function recordVisit(fs, db, patientId, form, context) {
   const checked = validateDesignVisit(form, context);
-  if (!checked.ok) return { ok: false, message: checked.message, invalid: true };
+  if (!checked.ok) return { ok: false, message: checked.message, invalid: true, errors: checked.errors ?? {} };
   try {
+    const editingId = context?.editingId ?? null;
+    if (editingId) {
+      await /** @type {Function} */ (fs.setDoc)(fs.doc(db, "patients", patientId, "visits", editingId), checked.visit);
+      return { ok: true, id: editingId, visit: checked.visit };
+    }
     const ref = await /** @type {Function} */ (fs.addDoc)(fs.collection(db, "patients", patientId, "visits"), checked.visit);
     return { ok: true, id: ref.id, visit: checked.visit };
   } catch (error) {
@@ -496,24 +689,28 @@ export async function setTmsEndDate(fs, db, patientId, date, context) {
 
 /**
  * "Clear flag after action": clears the open flags the Clinician reviewed (all of them by default,
- * as the design does) in one transaction (`clearFlags` in clear.js). History is kept. A reason
- * raised during the review refuses the clear with `changed: true`, so the UI shows the new reason
- * for a new review instead of clearing it unseen. No note is stored (see the sync note).
+ * as the design does, or `flagIds`) in one transaction (`clearFlags` in clear.js). History is kept.
+ * A reason raised during the review refuses the clear with `changed: true`, so the UI shows the new
+ * reason for a new review instead of clearing it unseen. A flag that is no longer open refuses with
+ * `notOpen: true`. No note is stored (see the sync note).
  * @param {FirestoreFns} fs @param {unknown} db
- * @param {{ patientId: string, raw: { patient: any, flags: any[] | null }, flagIds?: string[], nowMillis: number }} request
- *   `raw` from the PatientState the Clinician reviewed
+ * @param {{ patientId: string, raw: { patient: any, flags: any[] | null }, flagIds?: string[], reviewed?: import("./clear.js").Review, nowMillis: number }} request
+ *   `raw` from the PatientState the Clinician reviewed; `reviewed` the review the Clinician
+ *   confirmed (`reviewOf`), when it was taken earlier than `raw` (a dialog open during updates)
  * @returns {Promise<ActionResult>}
  */
-export async function clearAttention(fs, db, { patientId, raw, flagIds, nowMillis }) {
+export async function clearAttention(fs, db, { patientId, raw, flagIds, reviewed, nowMillis }) {
   const flags = raw?.flags ?? [];
   const ids = flagIds ?? flags.filter(isOpen).map((f) => f.id);
   if (ids.length === 0) return { ok: false, message: LIVE_COPY.nothingOpen, invalid: true };
   try {
-    const next = await clearFlags(/** @type {any} */ (fs), db, { patientId, flagIds: ids, reviewed: reviewOf(raw.patient, flags), nowMillis });
+    const next = await clearFlags(/** @type {any} */ (fs), db, { patientId, flagIds: ids, reviewed: reviewed ?? reviewOf(raw?.patient ?? {}, flags), nowMillis });
     return { ok: true, cleared: ids, ...next };
   } catch (error) {
-    if (codeOf(error) === "flag/changed" || codeOf(error) === "flag/not-open") return { ok: false, changed: true, message: LIVE_COPY.changed, code: codeOf(error) };
-    return { ok: false, message: clearErrorMessage(/** @type {any} */ (error)), code: codeOf(error) };
+    const code = codeOf(error);
+    if (code === "flag/changed") return { ok: false, changed: true, message: LIVE_COPY.changed, code };
+    if (code === "flag/not-open") return { ok: false, notOpen: true, message: LIVE_COPY.notOpen, code };
+    return { ok: false, message: clearErrorMessage(/** @type {any} */ (error)), code };
   }
 }
 

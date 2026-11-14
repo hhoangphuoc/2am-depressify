@@ -14,9 +14,21 @@ _Avoid_: User, client
 A Patient that exists only for testing and demos, whose Signals and history are synthetic.
 _Avoid_: Test account, fake user, mock
 
+**Live demo Patient**:
+A Patient with a real account on the demo phone, not synthetic, given seeded history so the demo has context. Only the account itself and its Clinician read it.
+_Avoid_: Test account, mock patient
+
 **Clinician**:
 A care professional who follows the progress of the Patients linked to them.
 _Avoid_: Doctor, therapist, admin
+
+**Admin**:
+The team member who runs the Firebase project and marks a Clinician's account as the Clinician's (`npm run allow-clinician`). Not a role in the app, and never the Clinician.
+_Avoid_: Operator, superuser
+
+**Verified account**:
+A person's own sign-in account: not anonymous, and its email verified, by the link in the verification email or by Google. Creating a Patient record and starting a Check-in need one.
+_Avoid_: Real account, registered user
 
 **Companion**:
 The AI the Patient talks with. It supports and suggests; it never diagnoses or advises on treatment.

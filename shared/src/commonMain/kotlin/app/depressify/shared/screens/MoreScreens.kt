@@ -40,15 +40,26 @@ fun HistoryScreen(vm: PatientViewModel, s: PatientState) {
     val c = Theme.colors
     Page(top = { BrandHeader { vm.showSheet(Sheet.Demo) } }, bottom = { TabBar(Route.History, vm::selectTab) }) {
         Txt("Your History", DepressifyType.display, c.ink, heading = true)
+        if (s.historyLoad != HistoryLoad.Demo) {
+            if (s.historyLoad == HistoryLoad.Loading) Txt("Loading your records…", DepressifyType.meta, c.muted)
+            if (s.historyLoad == HistoryLoad.Failed) {
+                Txt("Some records couldn't load. Your saved data is unchanged.", DepressifyType.meta, c.muted)
+                TextLink("Try loading again", vm::loadHistory)
+            }
+            if (s.historyLoad == HistoryLoad.Ready || s.history.isNotEmpty() || s.historyDays.isNotEmpty()) HistoryContextRows(s)
+        }
         if (!s.hasHistory) {
+            if (s.historyLoad == HistoryLoad.Loading || s.historyLoad == HistoryLoad.Failed) return@Page
             Illustration(Modifier.fillMaxWidth().aspectRatio(1.5f))
             Txt("At your own pace.", DepressifyType.title, c.ink)
             Txt("Your first Summary will be here after a Check-in.", DepressifyType.body)
             PrimaryButton("Start Check-in", { vm.beginCheckIn(typed = false) })
             return@Page
         }
-        WeekBar(DemoData.week(s.history))
-        if (s.consents[SignalId.Ratings] == true) TrendCard(s.history)
+        if (s.historyLoad == HistoryLoad.Demo) {
+            WeekBar(DemoData.week(s.history))
+            if (s.consents[SignalId.Ratings] == true) TrendCard(s.history)
+        }
         Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
             Txt("Your path", DepressifyType.title, c.ink, heading = true)
             JournalPath(s.history) { vm.open(Route.Summary(it.id)) }

@@ -20,10 +20,19 @@ export const CLINICIAN_EMAIL = "clinician@example.com";
 export const OTHER_CLINICIAN_EMAIL = "other-clinician@example.com";
 export const PATIENT_ID = "patient-1";
 
-export const clinician: CallerAuth = { uid: "clinician-uid", token: { email: CLINICIAN_EMAIL } };
-export const otherClinician: CallerAuth = { uid: "other-uid", token: { email: OTHER_CLINICIAN_EMAIL } };
-/** An anonymous Patient: signed in, no email. */
-export const anonymousPatient: CallerAuth = { uid: PATIENT_ID, token: {} };
+/** A Clinician's token: verified email and password account with the `role: "clinician"` claim (ADR 0010). */
+export const clinicianToken = (email: string): CallerAuth["token"] => ({
+  email,
+  email_verified: true,
+  role: "clinician",
+  firebase: { sign_in_provider: "password" },
+});
+export const clinician: CallerAuth = { uid: "clinician-uid", token: clinicianToken(CLINICIAN_EMAIL) };
+export const otherClinician: CallerAuth = { uid: "other-uid", token: clinicianToken(OTHER_CLINICIAN_EMAIL) };
+/** A Patient's own account: email and password, the email verified. */
+export const verifiedToken = (email: string): CallerAuth["token"] => ({ email, email_verified: true, firebase: { sign_in_provider: "password" } });
+/** An anonymous Patient, as the app signed in before ADR 0010: signed in, no email. */
+export const anonymousPatient: CallerAuth = { uid: PATIENT_ID, token: { firebase: { sign_in_provider: "anonymous" } } };
 
 export class FakePatientStore implements PatientStore {
   readonly writes: { patientId: string; highlights: string }[] = [];

@@ -32,8 +32,23 @@ const admin = getFirestore(app);
 /** @type {import("@firebase/rules-unit-testing").RulesTestEnvironment} */
 let rules;
 
-/** @param {string} email */
-const firestoreAs = (email) => /** @type {any} */ (rules.authenticatedContext(`uid-${email}`, { email }).firestore());
+/**
+ * A verified, non-anonymous account (ADR 0010), as the rules require of a Clinician and of anyone
+ * using the demo shortcut. A Clinician also carries the custom claim `role: "clinician"`.
+ * @param {string} email
+ * @param {{ clinician?: boolean }} [options]
+ */
+const firestoreAs = (email, { clinician = email === CLINICIAN } = {}) =>
+  /** @type {any} */ (
+    rules
+      .authenticatedContext(`uid-${email}`, {
+        email,
+        email_verified: true,
+        firebase: { sign_in_provider: "password" },
+        ...(clinician ? { role: "clinician" } : {}),
+      })
+      .firestore()
+  );
 const clock = () => ({ nowMillis: Date.now(), timeZone: DEMO_TIME_ZONE });
 
 /**
@@ -87,7 +102,7 @@ test("the roster, as the Clinician under the rules, is the design's patient obje
   const db = firestoreAs(CLINICIAN);
   const roster = await firstState(
     (onChange) => subscribeRoster(FS, db, { clinicianEmail: CLINICIAN, clock }, onChange),
-    (s) => s.status === "ok" && s.patients.length === 3 && s.patients.every((/** @type {any} */ p) => p.flagsLoaded && p.daily.some((/** @type {any} */ r) => r.steps !== null)),
+    (s) => s.status === "ok" && s.patients.length === 3 && s.patients.every((/** @type {any} */ p) => p.flagsLoaded && p.daily.some((/** @type {any} */ r) => r.sleep !== null)),
   );
   assert.deepEqual(roster.patients.map((/** @type {any} */ p) => [p.id, p.level]), [
     ["demo-declining", "red"],
@@ -104,10 +119,35 @@ test("the roster, as the Clinician under the rules, is the design's patient obje
   assert.deepEqual(view.patients.map((p) => p.id), ["demo-sparse"]);
   assert.equal(view.banner?.items[0].patientId, "demo-declining", "filters never hide the red banner");
   assert.deepEqual(view.counts, { all: 3, red: 1, amber: 1, unknown: 0, green: 1, hidden: 0 });
+  assert.ok(roster.patients.every((/** @type {any} */ p) => p.sleepConsent === "granted"));
+  assert.ok(declining.daily.every((/** @type {any} */ r) => Object.keys(r).sort().join() === "date,sleep"), "a roster row carries sleep only");
+});
+
+test("the roster's sleep sparkline follows the Patient's sleep Consent", async () => {
+  const db = firestoreAs(CLINICIAN);
+  await admin.doc("patients/demo-steady/consents/sleepMinutes").update({ granted: false, changedAtMillis: Date.now() });
+  try {
+    const roster = await firstState(
+      (onChange) => subscribeRoster(FS, db, { clinicianEmail: CLINICIAN, clock }, onChange),
+      (s) => s.status === "ok" && s.patients.length === 3 && s.patients.every((/** @type {any} */ p) => p.sleepConsent !== "unknown"),
+    );
+    const steady = roster.patients.find((/** @type {any} */ p) => p.id === "demo-steady");
+    assert.equal(steady.sleepConsent, "withheld");
+    assert.ok(steady.daily.every((/** @type {any} */ r) => r.sleep === null), "no withheld value in the roster row");
+  } finally {
+    await admin.doc("patients/demo-steady/consents/sleepMinutes").update({ granted: true });
+  }
 });
 
 test("signed out, the roster is denied and shows nothing", async () => {
   const db = /** @type {any} */ (rules.unauthenticatedContext().firestore());
+  const roster = await firstState((onChange) => subscribeRoster(FS, db, { clinicianEmail: CLINICIAN, clock }, onChange), (s) => s.status !== "loading");
+  assert.equal(roster.status, "denied");
+  assert.deepEqual(roster.patients, []);
+});
+
+test("the Clinician's email without the role claim is denied too (ADR 0010)", async () => {
+  const db = firestoreAs(CLINICIAN, { clinician: false });
   const roster = await firstState((onChange) => subscribeRoster(FS, db, { clinicianEmail: CLINICIAN, clock }, onChange), (s) => s.status !== "loading");
   assert.equal(roster.status, "denied");
   assert.deepEqual(roster.patients, []);
@@ -171,11 +211,14 @@ test("recording a Visit and the TMS end date as the Clinician; the flag is uncha
 
   const tms = await setTmsEndDate(FS, db, "demo-sparse", /** @type {string} */ (before.patient?.tms), context);
   assert.equal(tms.ok, true);
-  // Another signed-in account that is not this Patient's Clinician cannot write a Visit to a live Patient.
+  // Another verified account that is not this Patient's Clinician cannot write a Visit to a live
+  // Patient: neither a Patient account nor another Clinician.
   await admin.doc("patients/demo-sparse").update({ synthetic: false });
-  const refused = await recordVisit(FS, firestoreAs("someone@example.com"), "demo-sparse", { date: today, type: "none" }, context);
-  assert.equal(refused.ok, false);
-  assert.equal(refused.code, "permission-denied");
+  for (const other of [firestoreAs("someone@example.com"), firestoreAs("other.clinician@example.com", { clinician: true })]) {
+    const refused = await recordVisit(FS, other, "demo-sparse", { date: today, type: "none" }, context);
+    assert.equal(refused.ok, false);
+    assert.equal(refused.code, "permission-denied");
+  }
   await admin.doc("patients/demo-sparse").update({ synthetic: true });
 });
 

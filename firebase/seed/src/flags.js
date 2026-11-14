@@ -7,11 +7,14 @@
 /** @typedef {import("../../functions/src/types.ts").FlagLevel} FlagLevel */
 /** @typedef {import("../../functions/src/types.ts").FlagKind} FlagKind */
 
+import { SIGNAL_KEYS, composite, oriented } from "./baseline.js";
+
 export const THRESHOLDS = Object.freeze({
   sleepCollapseMinutes: 180,
   sleepCollapseOriented: -2.5,
   poorSleepOriented: -1.0,
   driftComposite: -1.0,
+  driftMinSignals: 2,
   runDays: 3,
   lowMoodAtMost: 2,
 });
@@ -43,6 +46,17 @@ export const REASONS = Object.freeze({
 function lastRunAtOrBelow(series, threshold) {
   const run = series.slice(-THRESHOLDS.runDays);
   return run.length === THRESHOLDS.runDays && run.every((v) => v !== null && v <= threshold);
+}
+
+/**
+ * The composite, counted for drift only when several Signals make it up; one Signal alone is that
+ * Signal's own rule.
+ * @param {Partial<Record<string, number | null>>} vsBaseline
+ * @returns {number | null}
+ */
+export function driftComposite(vsBaseline) {
+  const signals = SIGNAL_KEYS.filter((key) => oriented(key, vsBaseline[key] ?? null) !== null).length;
+  return signals >= THRESHOLDS.driftMinSignals ? composite(vsBaseline) : null;
 }
 
 /**

@@ -68,8 +68,9 @@ The design's `createPatients()` builds one object per Patient. Each design field
 | "Updated 14:19" (dashboard data freshness) | Firestore snapshot metadata (`fromCache`); the subscription reports it | available-with-adapter |
 | Red banner, count, "stays until cleared", not hidden by filters | `bannerModel` (`js/lib/banner.js`), built before any filter | available |
 | Sound for red flags (explicit opt-in, test chime, blocked playback) | `js/alerts.js`, `newRedFlags` (`js/lib/banner.js`), `sound-pref.js`. The subscription reports `newRed` per snapshot. | available |
-| 14-day sleep sparkline + Baseline per row | Each listed Patient's last 28 daily records. The query needs the composite index `daily (sharedWithClinician, date DESC)`. | **missing-backend (index), added here** |
+| 14-day sleep sparkline + Baseline per row | Each listed Patient's last 28 daily records. The query needs the composite index `daily (sharedWithClinician, date DESC)`. Sleep shows only while the Patient's sleep Signal Consent (`consents/sleepMinutes`) is granted: the roster listens to that document, and a withheld, missing or not-yet-loaded Consent puts no sleep value in the row (`sleepConsent`: `granted`, `withheld`, `unknown`). | **missing-backend (index), added here** |
 | "Unassessed" level in the roster | The latest Check-in's `assessment` (#62). The query needs the composite index `checkIns (sharedWithClinician, startedAtMillis DESC)`. | index **added here**; field from #62 |
+| Roster rows | `designRosterPatient`: a light row per Patient (level, open flags and reasons, sleep rows `{date, sleep}`, latest Check-in, freshness), not the full `designPatient`. `subscribeRoster` rebuilds only the Patient whose snapshot changed (and any row older than a minute, so relative times move on), and skips metadata-only snapshots that do not change `fromCache`. | available-with-adapter |
 | Withdrawn Patient row ("Patient sharing withdrawn", level `hidden`) | The rules drop a withdrawn Patient from the list query at once; the backend cannot list them. The roster subscription can remember, for this session only, ids that left the list, and show a placeholder with no name or data (`keepWithdrawn`). | available-with-adapter (session-only); see [Conflicts](#conflicts-for-the-user-to-decide) for deletion |
 
 ## Overview
@@ -126,9 +127,9 @@ The design's `createPatients()` builds one object per Patient. Each design field
 | Errors and retry without losing the text | `intakeErrorMessage`, reducer keeps text | available |
 | Intake saved date | Not stored | missing-backend, proposed (see above) |
 | Record a Visit: date ≤ today, PHQ-2 0–6 / PHQ-9 0–27 integers, or no score | `validateVisit` (`js/lib/visit.js`); rules check shape | available |
-| Design-only Visit checks: not before the TMS end date; one Visit per date | Not enforced by rules; `validateDesignVisit` in the adapter | available-with-adapter (UI rule) |
+| Design-only Visit checks: strictly after the TMS end date; one Visit per date | Not enforced by rules; `validateDesignVisit` in the adapter. Phase 1 starts the day after TMS ends (`phases()`), so a Visit on the TMS end date would be in no Phase and dropped from the timeline: the form refuses it ("The Visit must be after the TMS end date."). | available-with-adapter (UI rule) |
 | Saving a Visit leaves flags unchanged | Visits never feed the flag | available |
-| TMS end date: add/edit, not after the first Visit | `validateTmsEndDate`; "not after the first Visit" is design-only, in `validateDesignTms` | available-with-adapter |
+| TMS end date: add/edit, strictly before the first Visit | `validateTmsEndDate`; "before the first Visit" is design-only, in `validateDesignTms` ("TMS must end before the first recorded Visit.") | available-with-adapter |
 
 ## Weekly Digest
 
@@ -176,6 +177,8 @@ The design's `createPatients()` builds one object per Patient. Each design field
 | Item | Backend | Status |
 |---|---|---|
 | Hide everything at once, even in an open tab | Rules (`clinicianCanRead` needs `granted`). Listeners get `permission-denied`, which maps to `sharingStateFromError`. On a Demo Patient, `sharingStateFromSnapshot` gives the same result. | available |
+| Come back when the Patient shares again, in an open tab | The SDK ends a listener the rules refused, so `subscribePatient` listens to the record again after 5 s, 15 s, then every minute (`RECHECK_DELAYS_MILLIS`), until the Patient shares or the page stops it. A Demo Patient's record stays readable and needs no recheck. | available-with-adapter |
+| A failed collection read is not a withdrawal | Only `permission-denied` is a withdrawal. Any failed collection stays unloaded (`docs[name]` null, `errors[name]` `"denied"` or `"error"`), never empty. A failed flags read keeps the record's stored level and reasons and sets `patient.flagsError`, so the Attention band never shows green because the flags could not load. | available-with-adapter |
 | No new flags or alerts while withdrawn | `isSharingActive` in `redFlagAlert`, `silenceCheck`, the Digest | available |
 | Re-consent shares future records only | The sharing stamp | available |
 | **Delete the associated data** (the design's `withdrawSharing`) | The user's decision: future-only sharing; the off period is hidden, not deleted. Deleting derived records is an open decision. | **conflicts-with-a-decision**, see below |
@@ -242,6 +245,7 @@ None of these is implemented. Each needs a decision first.
 | The adapter `js/lib/design-model.js` (pure) | `firebase/hosting/js/lib/design-model.js`, `test/design-model.test.mjs` |
 | The live helpers `js/lib/design-live.js` (Firestore functions injected) and the browser binding `js/data/design-data.js` | `firebase/hosting/js/lib/design-live.js`, `firebase/hosting/js/data/design-data.js`, `test/design-live.test.mjs`, `seed/test/emulator/design-live.test.js` (under the rules) |
 | JSDoc param types on `digestStatus` and `isBusy`, so the seed's strict type check accepts the new imports | `hosting/js/lib/digest.js`, `hosting/js/lib/intake.js` (no behaviour change) |
+| Review fixes: section error states and the record recheck in `subscribePatient`; the light roster row with sleep Consent and per-Patient caching in `subscribeRoster`; a Visit strictly after the TMS end date; `recordVisit` edits (`editingId`) and returns field `errors`; `clearAttention` takes the confirmed `reviewed` and reports `notOpen` | `design-model.js`, `design-live.js`, their tests, the emulator test |
 
 No rules change: Digests stay function-written, and the indexes do not change access.
 
@@ -253,11 +257,11 @@ No rules change: Digests stay function-written, and the indexes do not change ac
   - Text conflicts are expected in `Models.kt`, `types.ts`, `contract.js`, `contract.json`, the contract test and firestore-schema.md, since both add fields. Resolve by keeping both, then regenerate `contract.json` with `./gradlew :core:jvmTest`.
   - Flag ids `<kind>-<checkInId>` would let the adapter attach the Summary's quote to the flag (`quote`).
 - **#65 (Outcomes):** the adapter prefers `Suggestion.outcomeCheckInId` to find a Summary's previous Outcome. Same contract-file conflicts as #62.
-- **#67 (accounts, Clinician claim):**
+- **#67 (accounts, Clinician claim), merged:**
   - It changes the rules for who is a Clinician. The adapter does not check claims; the app's sign-in does (`clinicianAccessMessage`).
-  - Emulator tests here sign in with an email token. After #67 they need the `role: "clinician"` claim and `email_verified: true` (same change #67 makes to the existing seed attention test).
+  - The emulator test signs in with `role: "clinician"` and `email_verified: true`, and checks that the Clinician's email without the claim is denied.
 - **#68, #69 (core rules):** no overlap.
-- **#70 (live Patient seed):** not on `main`, so the fixtures use the three Demo Patients. The live profile (`synthetic: false`, `healthSource: "synthetic"`, cleared amber history) would exercise `alertsEnabled` and the Cleared history entries. Add it as a fixture when #70 lands.
+- **#70 (live Patient seed), merged:** the fixtures still use the three Demo Patients. The live profile (`synthetic: false`, `healthSource: "synthetic"`, cleared amber history) would exercise `alertsEnabled` and the Cleared history entries. Add it as a fixture when #70 lands.
 
 ## Using it from the UI
 
@@ -274,6 +278,10 @@ The adapter's objects use the field names of `createPatients()`, so the prototyp
 - **Levels.**
   - `level` is `unknown` only with #62's `assessment` field, and `hidden` only for a withdrawn Patient.
   - The roster's withdrawn rows exist only with `keepWithdrawn: true`.
+- **Roster rows are light** (`designRosterPatient`): no Summaries, Signals, timeline or what helps, and `daily` rows are `{ date, sleep }` only. Open the Patient (`subscribePatient`) for the rest.
+- **Consents.** With Consents not loaded, every Signal is hidden; an unknown Consent is never treated as granted.
+- **Errors per collection.** `state.errors[name]` is `"denied"` or `"error"`, and that collection is `null` in `state.docs`. With `patient.flagsError`, show the stored level with a "could not load the flags" notice.
+- **Raw documents.** `state.docs` has each listened collection's documents as stored, for a page that feeds blocks from one subscription.
 - **Wording.** The HRV label is "HRV": the statistic is not stored. `note` is the first open reason, not free text.
 - **Extra fields** the prototype can use:
   - `signals[]`: state, Baseline, source label;
@@ -293,5 +301,6 @@ const stop = subscribeRoster(fs, db, { clinicianEmail: user.email, keepWithdrawn
 });
 const stopOne = subscribePatient(fs, db, patientId, {}, (state) => {
   // state.status: "loading" | "ok" | "withdrawn" | "error"; state.patient has the design's shape
+  // state.loaded / state.errors / state.docs: per collection
 });
 ```

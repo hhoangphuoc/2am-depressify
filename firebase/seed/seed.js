@@ -35,6 +35,9 @@ async function main() {
   console.log(`Deleted ${result.deleted.length} Demo Patient(s): ${result.deleted.join(", ") || "none"}.`);
   console.log(`Created ${result.created.join(", ")} (${result.documents} documents).`);
   console.log(`Allowed ${result.allowed} in clinicians.`);
+  // The seed writes Firestore only; the Clinician's sign-in account gets its role separately (ADR 0010).
+  const project = command.emulatorHost ? "" : ` --project ${command.projectId}`;
+  console.log(`Once the Clinician's account exists, give it the Clinician role: npm run allow-clinician -- --email ${result.allowed}${project}`);
   await deleteApp(app);
 }
 

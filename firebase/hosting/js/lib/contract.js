@@ -30,6 +30,7 @@
  * @property {boolean} synthetic
  * @property {SharingConsent} sharingConsent
  * @property {number | null} sharingChangedAtMillis
+ * @property {{ label: string, latitude: number, longitude: number } | null} location an example address on Demo Patients only
  */
 
 /**

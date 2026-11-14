@@ -10,7 +10,7 @@ import { createAlerts } from "./alerts.js";
 import { designData } from "./data/design-data.js";
 import { initFirebase } from "./firebase.js";
 import { digestCalls, intakeCalls } from "./functions.js";
-import { emulatorHostFor, signInErrorMessage } from "./lib/auth.js";
+import { clinicianAccessProblem, emulatorHostFor, signInErrorMessage } from "./lib/auth.js";
 import { initialsOf } from "./lib/design-model.js";
 import { workspaceMeta } from "./lib/design-view.js";
 import { parseRoute } from "./lib/route.js";
@@ -142,12 +142,28 @@ async function main() {
   wireSignIn(auth);
   startClock();
   alerts = createAlerts({ toggle: $("sound-toggle"), note: $("sound-note"), announcer: $("attention-announcer") });
-  window.addEventListener("hashchange", () => applyRoute(firebase, data, Boolean(auth.currentUser?.email)));
-  onAuthStateChanged(auth, (user) => {
-    show("starting", false);
+  let signedIn = false; // signed in with a Clinician's account, past the check below
+  window.addEventListener("hashchange", () => applyRoute(firebase, data, signedIn));
+  onAuthStateChanged(auth, async (user) => {
     stopPatients?.();
     stopPatients = null;
-    const signedIn = Boolean(user?.email);
+    signedIn = false;
+    if (user) {
+      // Only a Clinician's account (ADR 0010): the role claim, checked on the cached ID token and
+      // refreshed once if missing (clinicianAccessProblem). Any other account is signed out with
+      // the reason, shown on the sign-in form.
+      const problem = await clinicianAccessProblem(user);
+      if (auth.currentUser !== user) return; // signed out or switched while the token was read
+      if (problem) {
+        const error = $("sign-in-error");
+        error.textContent = problem;
+        error.hidden = false;
+        await signOut(auth); // runs this again, signed out
+        return;
+      }
+    }
+    show("starting", false);
+    signedIn = Boolean(user?.email);
     show("signin-view", !signedIn);
     show("workspace", signedIn);
     if (!signedIn) show("sound-note", false);

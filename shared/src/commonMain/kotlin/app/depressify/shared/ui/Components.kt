@@ -85,7 +85,7 @@ fun Txt(
 
 /** Press feedback: a quick 0.97 scale on touch-down, skipped under Reduce Motion. */
 @Composable
-private fun Modifier.pressScale(source: MutableInteractionSource): Modifier {
+internal fun Modifier.pressScale(source: MutableInteractionSource): Modifier {
     val pressed by source.collectIsPressedAsState()
     val reduce = Theme.reduceMotion
     val scale by animateFloatAsState(if (pressed && !reduce) 0.97f else 1f, tween(160, easing = EaseOut))
