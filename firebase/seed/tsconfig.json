@@ -16,5 +16,5 @@
     "allowImportingTsExtensions": true,
     "types": ["node"]
   },
-  "include": ["seed.js", "allow-clinician.js", "src", "test"]
+  "include": ["seed.js", "allow-clinician.js", "silence-test.js", "src", "test"]
 }

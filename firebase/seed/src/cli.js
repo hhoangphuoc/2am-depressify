@@ -35,6 +35,16 @@ to them. Writing it again changes nothing.
 
 ${TARGET_HELP}`;
 
+export const SILENCE_USAGE = `Usage: npm run silence-test -- --patient <id> [--project id]
+
+The silence test for the demo: sets one live Patient's last sign of life (lastSeenAtMillis) to 25
+hours ago, so the next hourly silence check raises a red "silent" flag and the Clinician is emailed.
+Writes nothing else. Refuses a Demo Patient (synthetic Patients are never silent) and a Patient who
+is not sharing. The Patient id is the phone's auth uid, also in the dashboard's address bar
+(#/patient/<id>). Prints the command that runs the deployed check once now.
+
+${TARGET_HELP}`;
+
 /**
  * Where to write: a project and, unless it is a real project, the emulator host.
  * @typedef {object} Target
@@ -58,6 +68,14 @@ ${TARGET_HELP}`;
  * @property {string} projectId
  * @property {string | null} emulatorHost null for a real project
  * @property {string} email
+ */
+
+/**
+ * @typedef {object} SilenceCommand
+ * @property {boolean} help
+ * @property {string} projectId
+ * @property {string | null} emulatorHost null for a real project
+ * @property {string} patientId
  */
 
 /**
@@ -163,4 +181,30 @@ export function parseAllowCommand(argv, env) {
   if (help) return { help, ...target, email: "" };
   if (values.email === undefined) throw new Error("--email <email> is required: the Clinician to allow");
   return { help, ...target, email: clinicianEmail(values.email, "--email", target) };
+}
+
+/** A single Firestore document id: no "/", not "." or "..", not reserved (`__...__`). */
+const DOCUMENT_ID = /^(?!\.\.?$)(?!__.*__$)[^/]{1,1500}$/;
+
+/**
+ * @param {string[]} argv arguments after the script name
+ * @param {Record<string, string | undefined>} env
+ * @returns {SilenceCommand}
+ */
+export function parseSilenceCommand(argv, env) {
+  const { values } = parseArgs({
+    args: argv,
+    options: {
+      patient: { type: "string" },
+      project: { type: "string" },
+      help: { type: "boolean", short: "h" },
+    },
+    strict: true,
+  });
+  const help = values.help ?? false;
+  const target = resolveTarget(values.project, env);
+  if (help) return { help, ...target, patientId: "" };
+  if (values.patient === undefined) throw new Error("--patient <id> is required: the live Patient to make silent");
+  if (!DOCUMENT_ID.test(values.patient)) throw new Error(`--patient must be a Patient id, got "${values.patient}"`);
+  return { help, ...target, patientId: values.patient };
 }
