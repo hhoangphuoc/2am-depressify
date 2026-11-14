@@ -52,8 +52,11 @@ android {
             "FIREBASE_APPLICATION_ID",
             quoted(secret("firebase.applicationId", "1:000000000000:android:0000000000000000")),
         )
-        buildConfigField("String", "FIREBASE_API_KEY", quoted(secret("firebase.apiKey", "demo-api-key")))
+        // The emulator default is not a real key, but it has a real key's shape: the Functions SDK refuses anything else.
+        buildConfigField("String", "FIREBASE_API_KEY", quoted(secret("firebase.apiKey", "AIzaSy" + "0".repeat(33))))
         buildConfigField("String", "CLINICIAN_EMAIL", quoted(clinicianEmail))
+        // Optional: act as a seeded Demo Patient (for example demo-declining) instead of the phone's own Patient.
+        buildConfigField("String", "DEMO_PATIENT_ID", quoted(secret("demo.patientId", "")))
     }
     buildTypes {
         debug {

@@ -15,13 +15,18 @@ class PatientSession(
     private val patients: PatientStore,
     clinicianEmail: String,
     private val displayName: String = LIVE_PATIENT_DISPLAY_NAME,
+    /** A Demo Patient to act as (demo builds only), or null to be the phone's own Patient. */
+    private val demoPatientId: String? = null,
 ) {
     /** Trimmed and lower case, as the Clinician's sign-in token carries it. */
     private val clinicianEmail = clinicianEmail.trim().lowercase()
 
     /** Returns the Patient and their record. Throws when sign-in, the read or the write fails. */
     suspend fun start(): StartedPatient {
-        val patientId = auth.currentUserId() ?: auth.signInAnonymously()
+        val uid = auth.currentUserId() ?: auth.signInAnonymously()
+        // Any signed-in user may act as a Demo Patient (marked synthetic); the rules allow it.
+        demoPatientId?.let { demoId -> patients.get(demoId)?.let { return StartedPatient(demoId, it) } }
+        val patientId = uid
         val patient = patients.get(patientId)
             ?: PatientDoc(displayName = displayName, clinicianEmail = clinicianEmail).also { patients.create(patientId, it) }
         return StartedPatient(patientId, patient)
@@ -33,5 +38,15 @@ class PatientSession(
     }
 }
 
-/** What the Patient app reaches Firebase through. The app runs on demo data without one. */
-class PatientBackend(val session: PatientSession, val patients: PatientStore, val consents: ConsentStore)
+/**
+ * What the Patient app reaches Firebase and Gemini Live through. The app runs on demo data without
+ * one. [checkIns], [live] and [audio] are null where a Check-in can only be the script (tests).
+ */
+class PatientBackend(
+    val session: PatientSession,
+    val patients: PatientStore,
+    val consents: ConsentStore,
+    val checkIns: CheckInGateway? = null,
+    val live: app.depressify.shared.voice.live.LiveClient? = null,
+    val audio: app.depressify.shared.voice.live.AudioIO? = null,
+)

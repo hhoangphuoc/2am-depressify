@@ -7,12 +7,14 @@ private let emulatorClinicianEmail = "clinician@example.com"
 
 /// The Clinician a new Patient is linked to: `ClinicianEmail` in the gitignored
 /// iosApp/Depressify/Secrets.plist. Never in code: the repository is public.
-private func configuredClinicianEmail() -> String? {
+private func secret(_ key: String) -> String? {
     guard let url = Bundle.main.url(forResource: "Secrets", withExtension: "plist"),
-          let email = NSDictionary(contentsOf: url)?["ClinicianEmail"] as? String,
-          !email.isEmpty else { return nil }
-    return email
+          let value = NSDictionary(contentsOf: url)?[key] as? String,
+          !value.isEmpty else { return nil }
+    return value
 }
+
+private func configuredClinicianEmail() -> String? { secret("ClinicianEmail") }
 
 @main
 struct iOSApp: App {
@@ -24,15 +26,17 @@ struct iOSApp: App {
                 fatalError("Set ClinicianEmail in iosApp/Depressify/Secrets.plist to the Clinician's email (see README).")
             }
             FirebaseApp.configure()
-            MainViewControllerKt.startBackend(emulatorHost: nil, clinicianEmail: clinicianEmail)
+            MainViewControllerKt.startBackend(emulatorHost: nil, clinicianEmail: clinicianEmail, demoPatientId: secret("DemoPatientId"))
         } else {
             let options = FirebaseOptions(googleAppID: "1:000000000000:ios:0000000000000000", gcmSenderID: "000000000000")
-            options.apiKey = "demo-api-key"
+            // Not a real key, but it has a real key's shape: the SDK refuses anything else.
+            options.apiKey = "AIzaSy" + String(repeating: "0", count: 33)
             options.projectID = "demo-twoam"
             FirebaseApp.configure(options: options)
             MainViewControllerKt.startBackend(
                 emulatorHost: "127.0.0.1",
-                clinicianEmail: configuredClinicianEmail() ?? emulatorClinicianEmail
+                clinicianEmail: configuredClinicianEmail() ?? emulatorClinicianEmail,
+                demoPatientId: secret("DemoPatientId")
             )
         }
     }

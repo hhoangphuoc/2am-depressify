@@ -12,6 +12,7 @@ import app.depressify.core.Summary
 import app.depressify.core.SuggestionKind
 import app.depressify.core.model.SharingConsent
 import app.depressify.shared.data.PatientBackend
+import app.depressify.shared.voice.GeminiLiveSession
 import app.depressify.shared.voice.LiveSession
 import app.depressify.shared.voice.Reply
 import app.depressify.shared.voice.ScriptedLiveSession
@@ -45,6 +46,7 @@ data class TypedCheckIn(
     val offer: SuggestionKind? = null,
     val accepted: Boolean = false,
     val outcome: Outcome? = null,
+    val offerDetails: String? = null,
 )
 
 data class PatientState(
@@ -77,7 +79,13 @@ class PatientViewModel(
     private val state = MutableStateFlow(PatientState())
     val ui: StateFlow<PatientState> = state.asStateFlow()
 
-    val live: LiveSession = ScriptedLiveSession(viewModelScope)
+    /** A real Gemini Live Check-in once a Patient is signed in; the scripted demo otherwise. */
+    val live: LiveSession = ScriptedLiveSession(viewModelScope).let { script ->
+        val checkIns = backend?.checkIns
+        val client = backend?.live
+        if (backend == null || checkIns == null || client == null) script
+        else GeminiLiveSession(viewModelScope, backend.patients, checkIns, client, backend.audio, { patientId }, script, onCrisis = { open(Route.Crisis) }, nowMillis)
+    }
 
     /** Navigation 3 back stack, owned here so it survives configuration changes. */
     val backStack = mutableStateListOf<Route>(Route.Today)
@@ -87,6 +95,14 @@ class PatientViewModel(
 
     init {
         if (backend != null) viewModelScope.launch { connect(backend) }
+        // A typed live Check-in shows the same conversation as the spoken one.
+        viewModelScope.launch {
+            live.snapshot.collect { snap ->
+                if (live.isLive) state.update {
+                    it.copy(typedCheckIn = it.typedCheckIn.copy(lines = snap.transcript, offer = snap.offer, offerDetails = snap.offerDetails, accepted = snap.accepted))
+                }
+            }
+        }
     }
 
     /** Signs in, makes sure the Patient record exists and shows the stored sharing choice. */
@@ -179,7 +195,10 @@ class PatientViewModel(
 
     fun setTyped(typed: Boolean) { state.update { it.copy(typed = typed) }; live.setMuted(typed) }
 
-    fun typedOutcome(outcome: Outcome, said: String) = state.update {
+    fun typedOutcome(outcome: Outcome, said: String) = if (live.isLive) {
+        live.sendText(said)
+        state.update { it.copy(typedCheckIn = it.typedCheckIn.copy(outcome = outcome)) }
+    } else state.update {
         it.copy(typedCheckIn = it.typedCheckIn.copy(
             outcome = outcome,
             lines = it.typedCheckIn.lines + TranscriptLine(Speaker.You, said) + TranscriptLine(Speaker.Companion, "Would a little time outside feel right tomorrow?"),
@@ -191,6 +210,7 @@ class PatientViewModel(
 
     fun sendTyped(text: String) {
         if (text.isBlank()) return
+        if (live.isLive) return live.sendText(text.trim())
         state.update {
             it.copy(typedCheckIn = it.typedCheckIn.copy(
                 lines = it.typedCheckIn.lines + TranscriptLine(Speaker.You, text.trim()) + TranscriptLine(Speaker.Companion, "Thank you for sharing. We can keep the next step small."),
@@ -200,7 +220,7 @@ class PatientViewModel(
     }
 
     fun reply(reply: Reply) {
-        if (state.value.typed) {
+        if (state.value.typed && !live.isLive) {
             when (reply) {
                 Reply.Accept -> state.update { it.copy(typedCheckIn = it.typedCheckIn.copy(accepted = true, lines = it.typedCheckIn.lines + TranscriptLine(Speaker.You, "That works for me."))) }
                 Reply.Smaller -> state.update { it.copy(typedCheckIn = it.typedCheckIn.copy(offer = SuggestionKind.Window)) }

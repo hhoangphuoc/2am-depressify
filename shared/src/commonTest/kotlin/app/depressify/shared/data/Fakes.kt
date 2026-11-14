@@ -2,8 +2,12 @@ package app.depressify.shared.data
 
 import app.depressify.core.model.Consent
 import app.depressify.core.model.ConsentPurpose
+import app.depressify.core.model.DailyDoc
+import app.depressify.core.model.Flag
 import app.depressify.core.model.PatientDoc
 import app.depressify.core.model.SharingConsent
+import app.depressify.core.model.Suggestion
+import app.depressify.core.model.Summary
 
 class FakeAuthGateway(var signedInUid: String? = null, private val newUid: String = "patient-1") : AuthGateway {
     var failSignIn: Boolean = false
@@ -57,5 +61,34 @@ class FakeConsentStore : ConsentStore {
 
     override suspend fun set(patientId: String, consent: Consent) {
         stored.getOrPut(patientId) { mutableMapOf() }[consent.subject] = consent
+    }
+}
+
+/** The Patient's Check-in records in memory, and a fixed Live token. */
+class FakeCheckInGateway : CheckInGateway {
+    var days: List<DailyDoc> = emptyList()
+    var summaries: List<Summary> = emptyList()
+    val suggestions: MutableList<Suggestion> = mutableListOf()
+    val flags: MutableList<Flag> = mutableListOf()
+    var failWrites: Boolean = false
+    var failStart: Boolean = false
+
+    override suspend fun startCheckIn(patientId: String): LiveStart {
+        if (failStart) throw IllegalStateException("UNAVAILABLE")
+        return LiveStart("token-1", "gemini-3.8-live")
+    }
+
+    override suspend fun recentDays(patientId: String, count: Int): List<DailyDoc> = days.take(count)
+    override suspend fun recentSummaries(patientId: String, count: Int): List<Summary> = summaries.take(count)
+    override suspend fun lastSuggestion(patientId: String): Suggestion? = suggestions.lastOrNull()
+
+    override suspend fun saveSuggestion(patientId: String, suggestion: Suggestion) {
+        if (failWrites) throw IllegalStateException("UNAVAILABLE")
+        suggestions += suggestion
+    }
+
+    override suspend fun raiseFlag(patientId: String, flagId: String, flag: Flag) {
+        if (failWrites) throw IllegalStateException("UNAVAILABLE")
+        flags += flag
     }
 }

@@ -21,6 +21,8 @@ targets:
         product: FirebaseAuth
       - package: Firebase
         product: FirebaseFirestore
+      - package: Firebase
+        product: FirebaseFunctions
     info:
       path: Depressify/Info.plist
       properties:

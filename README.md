@@ -27,7 +27,7 @@ There is no `google-services.json` and no Google Services plugin. The Android ap
 
 - **By default** it uses the emulator-only project `demo-twoam`, which needs no credentials, and debug builds talk to the local emulators on `127.0.0.1`. On a phone or an Android emulator, forward the ports first:
   ```sh
-  adb reverse tcp:9099 tcp:9099 && adb reverse tcp:8080 tcp:8080
+  adb reverse tcp:9099 tcp:9099 && adb reverse tcp:8080 tcp:8080 && adb reverse tcp:5001 tcp:5001
   ```
 - **For a real project**, register an Android app in the Firebase console with the package name `app.depressify.patient` (the `applicationId` in `androidApp/build.gradle.kts`), then copy `secrets.properties.example` to a gitignored `secrets.properties` at the repository root:
   ```properties
@@ -144,7 +144,7 @@ Where each key or credential lives, following [ADR 0002](docs/adr/0002-phone-con
 
 | Credential | Where it goes | Used by | State |
 |---|---|---|---|
-| `GEMINI_API_KEY` | Function secret: `firebase functions:secrets:set GEMINI_API_KEY --project prod`. Locally: `firebase/functions/.secret.local` (copy `.secret.local.example`). | Interactions API (`gemini-4-hydrogen`, `store: false`) for Intake and the Digest. Later the same key mints Live tokens and calls Decisions. | Wired; no real call made yet |
+| `GEMINI_API_KEY` | Function secret: `firebase functions:secrets:set GEMINI_API_KEY --project prod`. Locally: `firebase/functions/.secret.local` (copy `.secret.local.example`). | Interactions API (`gemini-4-hydrogen`, `store: false`) for Intake and the Digest, and Start Check-in, which mints the single-use Gemini Live token (`gemini-3.8-live`) the phone connects with. Later, Decisions. | Wired; no real call made from this repository yet |
 | `MAPS_API_KEY` | Function secret, same two places. Enable `mapstools.googleapis.com` and restrict the key to it. | Maps agent tools (`lookupWeather`, `searchText`, `computeRoutes`) from the Map tool function. | Name reserved; the function is not built (#18) |
 | Google Calendar | No key. The Patient grants access on the phone. | Free time and booking, on the phone. | Not built (#19) |
 | Firebase app config | `secrets.properties` (Android), `GoogleService-Info.plist` (iOS). These identify the project and are not secrets, but stay out of the repository. | The Patient app. | Wired |
@@ -154,6 +154,19 @@ Before the first real Gemini call:
 - Use a paid-tier Gemini project. The terms require it for users in the EEA, and paid-tier prompts are not used for training.
 - Turn off AI Studio logging for that project. It is on by default for Interactions calls.
 - The SDK calls `/v1/interactions`. Live tokens (`/v1beta/auth_tokens`) and Decisions (`/v1beta/decisions`) exist only on `v1beta`, so those calls must set the API version when they are added.
+## The spoken Check-in
+
+A Check-in is a Gemini Live session the phone opens itself (ADR 0002):
+
+1. The app calls `startCheckIn {patientId}`. The function mints a single-use token locked to `gemini-3.8-live`, the Companion's instruction (with the Intake highlights) and its tools.
+2. The app opens the Live WebSocket with the token (`KtorLiveClient`), streams the microphone at 16 kHz and plays the Companion's speech at 24 kHz. Typing uses the same connection.
+3. The Companion's tool calls run on the phone (`CompanionTools`): it reads the Patient's background, recent daily Signals against their Baseline, recent Summaries and the last Suggestion from Firestore, records the Suggestion it offers, and can show a music or Google Maps search card. Each call shows on screen as a short status line and, where there is something to show, a card.
+4. A lost connection offers a retry and keeps what was said. Without a signed-in Patient the app plays the scripted demo instead.
+
+To give the Companion history to draw on, seed the Demo Patients and set `demo.patientId` in `secrets.properties` (Android) or `DemoPatientId` in `Secrets.plist` (iOS) to `demo-steady`, `demo-declining` or `demo-sparse`. Locally, put `GEMINI_API_KEY` in `firebase/functions/.secret.local` and restart the emulators.
+
+Not built yet: Finish Check-in (the Summary, ratings and flag from the transcript), weather, place results and walking routes from the Maps agent tools, and calendar booking. The place card only opens a Google Maps search.
+
 ## Run the walking skeleton locally
 
 ```sh

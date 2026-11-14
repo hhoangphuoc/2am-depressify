@@ -28,6 +28,6 @@ class DepressifyApplication : Application() {
             )
         }
         if (BuildConfig.FIREBASE_EMULATOR_HOST.isNotEmpty()) FirebaseEmulators.use(BuildConfig.FIREBASE_EMULATOR_HOST)
-        backend = firebasePatientBackend(BuildConfig.CLINICIAN_EMAIL)
+        backend = firebasePatientBackend(BuildConfig.CLINICIAN_EMAIL, BuildConfig.DEMO_PATIENT_ID)
     }
 }

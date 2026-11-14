@@ -70,7 +70,7 @@ Not enforced for the demo: `email_verified`. Production must require it (see the
 |---|---|---|
 | Extract Intake | **Built:** `extractIntake` and `saveIntake` (#13) | Clinician-only callables. Extraction writes nothing; saving writes only `intakeHighlights` (at most 120 words). The report is never stored or logged, and a spy test checks this. |
 | Weekly Digest | **Built:** `weeklyDigest` (Mondays 07:00 Helsinki) and `generateDigest` (callable) (#23) | Document key is the ISO week (`2026-W46`). Uses only shared records. A week with no Check-ins gets fixed text and never calls the model. Patients who aren't sharing get no Digest. |
-| Start Check-in (Live token) | Not built | #14, blocked by #6 (spike results) |
+| Start Check-in (Live token) | **Built:** `startCheckIn` (callable, the Patient or anyone for a Demo Patient) | Mints a single-use token locked to `gemini-3.8-live`, the Companion's instruction and tools (`src/checkIn.ts`). Not yet deployed, and not yet run against Gemini: the request follows the research note and the SDK's `authTokens.create`, without the spike's recorded shapes (#6). |
 | Finish Check-in | Not built | #14 and #20. It will be the only writer of Summaries, ratings, Voice cues, the crisis marker and Outcome fields. |
 | Map tool | Not built | #18 |
 | Red flag alert | Not built | #22 |
@@ -117,7 +117,7 @@ The callables are reached through the Firebase SDK (`httpsCallable` in `europe-n
 | Service ([research](research/)) | Status | Where |
 |---|---|---|
 | Gemini Interactions API, text model `gemini-4-hydrogen` with `store: false` | **Integrated** for Intake and Digest | `src/gemini.ts`: `@google/genai` 3.3.0, `TextModelClient` interface, 15-second timeout, `GEMINI_API_KEY` set through `defineSecret`. The SDK posts to `/v1/interactions` with the key in `x-goog-api-key` and `store: false` in the body (checked with a stubbed `fetch`). The tests use a fake client; a real call has not been made yet because there is no API key. |
-| Gemini Live, plus ephemeral tokens (`POST /v1beta/auth_tokens`) | Not started | The phone connects directly (ADR 0002). The backend part is the token-minting callable (#14), which waits on #6's recorded request shapes. |
+| Gemini Live, plus ephemeral tokens (`POST /v1beta/auth_tokens`) | **Built, not yet run against Gemini** | `startCheckIn` mints the token; `shared/voice` holds the Ktor WebSocket client, the protocol, the tools and audio for Android and iOS. Verified on the Android emulator up to the token request, which fails without a key and shows "Connection lost" with a retry. iOS audio is built but has not run on a device. |
 | Gemini Decisions API (`gemini-decision-1`) | Not started | Finish Check-in's three yes/no questions (#20) |
 | Maps agent tools (weather, text search, routes) | Not started | #18. The key will be the function secret `MAPS_API_KEY`; it never reaches the phone. |
 | Google Calendar API v3 | Not started | #19. Permission is granted on the phone. |

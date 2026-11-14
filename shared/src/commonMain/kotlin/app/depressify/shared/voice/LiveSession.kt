@@ -2,6 +2,7 @@ package app.depressify.shared.voice
 
 import app.depressify.core.Outcome
 import app.depressify.core.SuggestionKind
+import app.depressify.shared.voice.live.ToolCard
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -50,6 +51,10 @@ data class LiveSnapshot(
     val offer: SuggestionKind? = null,
     val accepted: Boolean = false,
     val wrapped: Boolean = false,
+    /** The Companion's own wording of the Suggestion, when it comes from a live Check-in. */
+    val offerDetails: String? = null,
+    /** What tool calls have put on screen, oldest first. */
+    val cards: List<ToolCard> = emptyList(),
 ) {
     val shownState: LiveState get() = if (muted || !connected) LiveState.Paused else event.state
 }
@@ -57,12 +62,18 @@ data class LiveSnapshot(
 /** The contract a real Gemini Live client will implement; the prototype plays a script. */
 interface LiveSession {
     val snapshot: StateFlow<LiveSnapshot>
+
+    /** True while the running Check-in is a real Gemini Live connection, not the script. */
+    val isLive: Boolean get() = false
     fun start(returning: Boolean)
     fun interrupt()
     fun setMuted(muted: Boolean)
     fun respond(reply: Reply)
     fun setConnected(connected: Boolean)
     fun stop()
+
+    /** Sends typed words to the Companion. The script ignores them. */
+    fun sendText(text: String) {}
 }
 
 object LiveScript {

@@ -4,6 +4,7 @@ import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 plugins {
     alias(libs.plugins.kotlin.multiplatform)
     alias(libs.plugins.android.kmp.library)
+    alias(libs.plugins.kotlin.serialization)
     alias(libs.plugins.compose.multiplatform)
     alias(libs.plugins.compose.compiler)
 }
@@ -42,6 +43,10 @@ kotlin {
             api(libs.gitlive.firebase.app)
             implementation(libs.gitlive.firebase.auth)
             implementation(libs.gitlive.firebase.firestore)
+            implementation(libs.gitlive.firebase.functions)
+            // The Gemini Live WebSocket (ADR 0002): one shared client, with an engine per platform.
+            implementation(libs.ktor.client.core)
+            implementation(libs.ktor.client.websockets)
         }
         commonTest.dependencies {
             implementation(libs.kotlin.test)
@@ -49,6 +54,10 @@ kotlin {
         }
         androidMain.dependencies {
             implementation(libs.androidx.activity.compose)
+            implementation(libs.ktor.client.okhttp)
+        }
+        iosMain.dependencies {
+            implementation(libs.ktor.client.darwin)
         }
     }
 }

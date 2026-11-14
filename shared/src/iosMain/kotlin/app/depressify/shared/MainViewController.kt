@@ -11,11 +11,12 @@ private var backend: PatientBackend? = null
 /**
  * Called once from Swift after `FirebaseApp.configure()`. Pass an emulator host (for example
  * "127.0.0.1" on the simulator) to use the local emulators, and the Clinician a new Patient is
- * linked to (read by Swift from `Secrets.plist`).
+ * linked to (read by Swift from `Secrets.plist`). [demoPatientId] makes the app act as a seeded
+ * Demo Patient.
  */
-fun startBackend(emulatorHost: String?, clinicianEmail: String) {
+fun startBackend(emulatorHost: String?, clinicianEmail: String, demoPatientId: String?) {
     if (emulatorHost != null) FirebaseEmulators.use(emulatorHost)
-    backend = firebasePatientBackend(clinicianEmail)
+    backend = firebasePatientBackend(clinicianEmail, demoPatientId)
 }
 
 /** Entry point for the SwiftUI host. The callback lets SwiftUI match the status bar to the night theme. */
