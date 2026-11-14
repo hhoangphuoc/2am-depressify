@@ -26,9 +26,9 @@ android {
     compileSdk = libs.versions.android.compileSdk.get().toInt()
 
     defaultConfig {
-        // The installed app's id, which is also the package name registered in Firebase. The Kotlin
-        // namespace and source packages stay com.twoam.companion.
-        applicationId = "com.depressify.app"
+        // The installed app's id, which is also the package name registered in Firebase. It is set
+        // here, apart from `namespace` above.
+        applicationId = "app.depressify"
         minSdk = libs.versions.android.minSdk.get().toInt()
         targetSdk = libs.versions.android.targetSdk.get().toInt()
         versionCode = 1
