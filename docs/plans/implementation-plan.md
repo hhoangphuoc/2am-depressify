@@ -2,6 +2,8 @@
 
 **Goal:** Build the demo described in [system-design.md](../context/system-design.md): a Kotlin Multiplatform Patient app (Android first, iOS for the Check-in), a Firebase backend, and a plain web Clinician dashboard.
 
+**Progress:** what is built, what the Patient app still shows from demo data, and the open follow-ups are in [implementation-status.md](../implementation-status.md). The Firestore data contract is in [firestore-schema.md](../firestore-schema.md).
+
 **How to use this plan:** work task by task. Each task lists the files it owns, the interfaces it consumes and produces, the tests to write first, and how to verify it. Steps use checkboxes for tracking. Terms follow [GLOSSARY.md](../../GLOSSARY.md); use them in code names too.
 
 This plan replaces the one in the closed [PR #2](https://github.com/hhoangphuoc/2am-depressify/pull/2). It keeps that plan's tested logic (baseline, rules, learning, tool dispatch, aggregation) and changes the stack, names and rules to match the merged design. "Changes from PR #2" at the end lists the differences.

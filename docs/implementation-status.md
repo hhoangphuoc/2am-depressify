@@ -4,9 +4,9 @@ Status as of 14 November 2026. Covers issues #7, #8, #9, #10, #11, #12, #13, #23
 
 ## Scope from here on
 
-Teammates are building the frontend (the Clinician dashboard and the Patient app screens). This repository's work now covers the **backend only**: Firestore rules, Cloud Functions, the seed, the data contract, and the Gemini and Google API integrations in [research/](research/) and [context/system-design.md](context/system-design.md).
+Teammates are building the frontend (the Clinician dashboard and the Patient app screens). This repository's work now covers the **backend only**: Firestore rules, Cloud Functions, the seed, the data contract, the client data layer in `shared`, and the Gemini and Google API integrations in [research/](research/) and [context/system-design.md](context/system-design.md).
 
-The UI built during this pass is listed under [Frontend built in this pass](#frontend-built-in-this-pass) so the frontend team can decide what to keep when the two are merged.
+The Patient app UI now comes from `main` (PRs #33, #46 and #47) and was merged with the backend on `integrate/ui-main`; see [Patient app](#patient-app-frontend-from-main).
 
 ## Branches
 
@@ -98,8 +98,8 @@ There is also a trivial `health` endpoint.
 
 ### Configuration for a real project
 
-- **Clinician's email:** never in code (the repository is public). Android reads `demo.clinicianEmail` from `secrets.properties` into `BuildConfig.CLINICIAN_EMAIL`; iOS reads `ClinicianEmail` from `iosApp/iosApp/Secrets.plist`. Both pass it into `shared` as `DemoConfig` through Koin. Only the emulator falls back to `clinician@example.com`.
-- **App id:** `app.depressify` on Android and iOS; the app is called Depressify. The Kotlin source package is `app.depressify` too (renamed from `com.twoam.companion` to match the frontend team).
+- **Clinician's email:** never in code (the repository is public). Android reads `demo.clinicianEmail` from `secrets.properties` into `BuildConfig.CLINICIAN_EMAIL`; iOS reads `ClinicianEmail` from `iosApp/Depressify/Secrets.plist`. Both pass it into `shared` as `DemoConfig` through Koin. Only the emulator falls back to `clinician@example.com`.
+- **App id:** `app.depressify.patient` on Android (`applicationId`) and iOS (`PRODUCT_BUNDLE_IDENTIFIER` in `iosApp/project.yml`), the frontend team's id; the app is called Depressify. The Android app `app.depressify.patient` is registered in `junction26hel-7400`, and `firebase.applicationId` in `secrets.properties` is its App ID. The earlier registration for `app.depressify` is no longer used. The iOS app still has to be registered with `app.depressify.patient` before an iOS build can use the real project.
 - **Setup steps:** "Set up a real Firebase project" in the [README](../README.md#set-up-a-real-firebase-project).
 
 ## Gemini and Google API integrations
@@ -114,31 +114,71 @@ There is also a trivial `health` endpoint.
 | Health Connect and HealthKit | Not started | Read on the phone (ADR 0003), so there is no backend part beyond the `daily` contract. |
 | Trigger Email extension (`mail` collection) | Not started | #22. The rules already reserve `mail` for functions. |
 
-## Frontend built in this pass
+## Patient app (frontend from main)
 
-The frontend was in scope for the first pass, so these exist. Teammates may replace them; the backend doesn't depend on them.
+The Patient app UI is the frontend team's (PRs #33, #46, #47): `shared` in package `app.depressify.shared` (`DepressifyApp`, `screens`, `state/PatientViewModel`, `ui`, `voice`), `androidApp` (`app.depressify.android.MainActivity`), and the SwiftUI host in `iosApp/Depressify` built with XcodeGen from `iosApp/project.yml`. Our first-pass Compose screens, theme, shell and their UI tests, and our `iosApp/iosApp.xcodeproj`, were removed in the merge.
 
-- **Clinician dashboard** (`firebase/hosting`, plain JS with the Firebase JS SDK):
-  - Sign-in, a live Patient list sorted by Attention flag, search and a level filter.
-  - The red-flag banner with an optional sound, flag detail, and the "Clear after follow-up" dialog.
-  - The Patient page in four sections: Overview, Summaries, Signals, and Intake and Visits.
-- **Patient app** (Compose Multiplatform):
-  - Anonymous sign-in on first open, the welcome and sharing-choice screens, and the three-tab shell.
-  - "Sharing and privacy" in Settings.
-  - Today and History are empty placeholders.
+### The client data layer
 
-Useful for the merge:
-- `firebase/hosting/js/lib/*` holds pure helpers (sorting, Phases, Baseline, series, what helps, clearing) with tests that don't depend on the UI.
-- Dashboard queries go through `patientCollectionQuery` in `js/lib/sharing.js`, which adds the sharing-stamp filter the rules require.
+UI-free, in `shared` under `app.depressify.shared`:
+
+| Package | What it holds |
+|---|---|
+| `data`, `data.firebase` | `AuthGateway`, `PatientStore`, `ConsentStore` and their GitLive Firebase implementations; `FirebaseEmulators` |
+| `session` | `PatientSession` (anonymous sign-in, then the Patient record linked to the configured Clinician), `PatientStartup` (runs it as `StartupState` with a retry), `PatientBackend` (what the app state needs), `StartupCopy` |
+| `sharing` | `SharingController` (sharing Consent and the ratings and Voice cues Consents, saved and never assumed), `SharingCopy` (vetted wording, including the share-again and withdrawal notes the screens could adopt) |
+| `config`, `di` | `DemoConfig` (the Clinician's email) and the Koin modules |
+
+The platform entry points start Firebase, then Koin: `DepressifyApplication` on Android (from `BuildConfig`, fed by `secrets.properties`) and `startCompanion(...)` from `iosApp/Depressify/iOSApp.swift` (from `GoogleService-Info.plist` and `Secrets.plist`, or the `demo-twoam` emulators). `DepressifyApp` builds `PatientViewModel(PatientBackend.fromKoinOrNull())`; without Koin (previews, tests) the app runs on `DemoData` only.
+
+### Wired to the backend
+
+- **App start.** `PatientViewModel` runs `PatientSession` on start: anonymous sign-in, then the Patient record linked to `DemoConfig.clinicianEmail` if it is missing. It exposes `startupState` (`Disabled`, `Starting`, `Failed(message)`, `Ready`) and `retryStartup()`.
+- **First use.** A Patient whose `sharingConsent` is `undecided` is sent to the Welcome on start (only from the untouched Today, in the Everyday scenario). **Share my progress** and **Continue without sharing** on the Sharing screen save `granted` or `declined` (the record and `consents/sharing` in one transaction). **Explore the demo** on the Welcome records nothing, so the Welcome shows again next time.
+- **Sharing & privacy.** **Share future progress** and **Stop sharing** (after the app's own confirmation sheet) save the choice. The switch and the notice change only once the server accepts it; a failed save keeps the stored choice and the notice says why (`SharingCopy.saveFailed`).
+- **Ratings and Voice observations Signals.** Allow and Stop and delete save `consents/ratings` and `consents/voice_cues`, and the stored values are shown once loaded. A failed save puts back the stored value with `SharingCopy.purposeSaveFailed` as the notice.
+- `PatientViewModelBackendTest` covers these with fakes.
+
+**For the UI team: start-up has no place in the UI yet.** `vm.startupState` is in the ViewModel only. Nothing is shown while it is `Starting`, and a `Failed` start leaves the app on demo data with nothing saved. A screen or banner should show `StartupCopy.STARTING` while starting and, on `Failed(message)`, the message with a `StartupCopy.RETRY` button that calls `vm.retryStartup()`.
+
+### Still on `DemoData`
+
+| Screen | What still comes from `DemoData` or local state | What will replace it |
+|---|---|---|
+| Today | Patient name, today's date, the week bar and History, the nearby places map | `displayName` from the Patient record (already loaded in `StartedPatient`); `checkIns` and `summaries` under the Patient (written by Finish Check-in, #14/#20); the map tool (#18) |
+| History, Summary | `DemoData.history` (Summaries, ratings trend) | A listener on `patients/{id}/summaries` (and `checkIns` for ratings), written only by Finish Check-in (#14/#20) |
+| Check-in intro, Check-in (voice and typed), Ratings, Finishing | `ScriptedLiveSession` and a local Summary built in `makeSummary` | Gemini Live with the token from the Start Check-in callable (#14, blocked on #6); Finish Check-in writes the Summary, ratings, Voice cues and Suggestion (#14/#20) |
+| Suggestion, booking sheet | The fixed walk Suggestion and a demo calendar | `patients/{id}/suggestions` (the Patient may write `status` and `booked`); Google Calendar (#19) |
+| Signals, Signal (device Signals) | Consents for Sleep, Steps, heart rate, HRV, Time at home, Movement radius, Calendar, Late-night screen; all readings | `consents/{signalKey}` through `ConsentStore` (map `SignalId` to the contract's `Signal.key`) and `daily` records from Health Connect and HealthKit (#19), with Baseline comparisons |
+| Quiet hours | Local state | `quietHoursStart` and `quietHoursEnd` on the Patient record (the rules allow the Patient to update them); Nudges on the phone (#20) |
+| Sharing (first use), Sharing & privacy | The Clinician's name `DemoData.ClinicianName` ("Fictional demo Clinician") and the sample Summary | `StartedPatient.patient.clinicianEmail` until the Invite brings a name. The choice itself is wired. |
+| Crisis, Support | Simulated dialler and Clinician notice | The Crisis notice (#12) raising a `crisis` flag; the red flag email (#22) |
+| Demo sheet | Prototype scenarios and theme | Stays a demo control |
+
+### Two `core` packages
+
+`core` holds the data contract in `app.depressify.core.model` (mirrored in TypeScript, guarded by `contract.json`) and the frontend's rules in `app.depressify.core` (`CheckIn`, `Schedule`, `Signals`, tested by `CoreRulesTest`). They are kept apart for now. Follow-ups where they overlap:
+
+- **Baseline.** `app.depressify.core.Baseline` (median of the previous 14 days, at least 5 valid days) is a second copy of the rule pinned by `fixtures/baseline/baseline-cases.json`, without the spread floor or the comparison. #16 should make the Kotlin Baseline read that fixture and keep one implementation.
+- **Signals.** `SignalId` (11 entries, including Ratings and Voice observations) and the contract's `Signal` (9 keys) need one mapping, used for `consents/{signalKey}` and `daily`.
+- **Check-ins.** `Summary`, `Ratings`, `Outcome` and `SuggestionKind` exist in both, with different shapes and enum spellings; the screens should read the contract's types once Summaries come from Firestore.
+- **Quiet hours.** `QuietHours`/`LocalMinutes` and the record's `quietHoursStart`/`quietHoursEnd`.
+
+### Clinician dashboard
+
+The dashboard in `firebase/hosting` (plain JS with the Firebase JS SDK) was built in the first pass and is unchanged by the merge: sign-in, a live Patient list sorted by Attention flag with search and a level filter, the red-flag banner with an optional sound, flag detail and "Clear after follow-up", and the Patient page in four sections. `firebase/hosting/js/lib/*` holds pure, tested helpers; dashboard queries go through `patientCollectionQuery` in `js/lib/sharing.js`, which adds the sharing-stamp filter the rules require. The `design/clinician` prototype is the frontend team's design for it.
 
 ## Verification
 
-Results on `chore/real-project-config` (on top of `fix/review-decisions`), all from local runs:
+Results on `integrate/ui-main` (the backend merged with the frontend from `main`), all from local runs:
 
 | Suite | Command | Result |
 |---|---|---|
-| Kotlin `core` and `shared`, Android build | `./gradlew :core:jvmTest :shared:jvmTest :androidApp:assembleDebug` | 19 + 62 pass, APK builds |
-| Functions | `cd firebase/functions && npm test` | 123 pass |
+| Kotlin `core` (contract and `CoreRulesTest`) | `./gradlew :core:jvmTest` | 24 pass |
+| Kotlin `shared` common tests on the Android host | `./gradlew :shared:testAndroidHostTest` | 51 pass |
+| Android build | `./gradlew :androidApp:assembleDebug` | APK builds; `BuildConfig` has `app.depressify.patient` and the App ID from `secrets.properties` |
+| iOS Kotlin and Swift | `./gradlew :shared:compileKotlinIosSimulatorArm64`; `swiftc -parse iosApp/Depressify/*.swift` | Compile and parse (Xcode not installed) |
+| Functions | `cd firebase/functions && npm test` | 124 pass |
 | Seed | `cd firebase/seed && npm test` | 78 pass |
 | Dashboard helpers | `cd firebase/hosting && node --test` | 308 pass |
 | Rules, functions and end-to-end on the emulators | `firebase emulators:exec --only auth,firestore,functions --project demo-twoam "npm --prefix functions run test:emulator"` | 78 pass |
@@ -165,7 +205,7 @@ Deploy notes:
 **Not verified (needs a person, hardware or credentials):**
 - A full Intake extraction or Digest through the deployed callables, signed in as the Clinician.
 - The app on the S24+.
-- An iOS build in Xcode.
+- An iOS build in Xcode (XcodeGen, the Firebase SPM packages and linking the static `Shared` framework).
 - The phone-width layout on a real device.
 
 ## Decisions made in review

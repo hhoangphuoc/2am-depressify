@@ -96,7 +96,7 @@ The rule is pinned by a shared fixture, [`fixtures/baseline/baseline-cases.json`
 | `changedAtMillis` | int | |
 
 - `consents/sharing` mirrors the record's `sharingConsent` (`granted` is `true` only for `granted`) and is written in the same transaction. The record's field is what the rules and functions read.
-- `consents/ratings` and `consents/voice_cues`: with no document, ratings and Voice cues are included in Check-ins; `granted: false` leaves them out of future Check-ins (the Brief's instructions omit them). They are set in Settings → Sharing and privacy and are independent of sharing and of every Signal Consent.
+- `consents/ratings` and `consents/voice_cues`: with no document, ratings and Voice cues are included in Check-ins; `granted: false` leaves them out of future Check-ins (the Brief's instructions omit them). The app sets them on the ratings and Voice observations Signals (Settings → Signals); they are independent of sharing and of every Signal Consent.
 
 ### `checkIns/{checkInId}`: CheckIn
 

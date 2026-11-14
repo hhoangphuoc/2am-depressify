@@ -1,15 +1,16 @@
 # Depressify
 
-A wellbeing companion for the time between Visits: a Kotlin Multiplatform Patient app (Android and iOS), a Firebase backend, and a plain web Clinician dashboard. The design is in [docs/context/system-design.md](docs/context/system-design.md), terms are in [GLOSSARY.md](GLOSSARY.md), and the Firestore data contract is in [docs/firestore-schema.md](docs/firestore-schema.md).
+A wellbeing companion for the time between Visits: a Kotlin Multiplatform Patient app (Android and iOS), a Firebase backend, and a plain web Clinician dashboard. The design is in [docs/context/system-design.md](docs/context/system-design.md), the build plan in [docs/plans/implementation-plan.md](docs/plans/implementation-plan.md), the interface design in [docs/design/interface-design.md](docs/design/interface-design.md), terms are in [GLOSSARY.md](GLOSSARY.md), and the Firestore data contract is in [docs/firestore-schema.md](docs/firestore-schema.md). What is built, and what the Patient app still shows from demo data, is in [docs/implementation-status.md](docs/implementation-status.md).
 
 ## Layout
 
 | Path | What it is |
 |---|---|
-| `core/` | Pure Kotlin Multiplatform common code (JVM, Android, iOS): the data contract and, later, the decision logic. No platform or `java.*` imports. |
-| `shared/` | Kotlin Multiplatform client code: Compose Multiplatform UI (Small Step theme), view models, Firebase through the GitLive SDK, Koin. |
-| `androidApp/` | Android application entry point. |
-| `iosApp/` | Xcode project and Swift glue. |
+| `core/` | Pure Kotlin Multiplatform common code (JVM, Android, iOS). `app.depressify.core.model`: the Firestore data contract. `app.depressify.core`: the app's rules (Check-in, Schedule, Signals). No platform or `java.*` imports. |
+| `shared/` | Kotlin Multiplatform client code for the Patient app. `app.depressify.shared`: the Compose Multiplatform UI and app state (`DepressifyApp`, `screens`, `state`, `ui`, `voice`). `app.depressify.shared.data`, `.session`, `.sharing`, `.config`, `.di`: the UI-free client data layer (Firebase through the GitLive SDK, Koin). |
+| `androidApp/` | Android application entry point (`MainActivity`, and `DepressifyApplication`, which starts Firebase and Koin). |
+| `iosApp/` | SwiftUI host (`iosApp/Depressify`) and its XcodeGen spec (`iosApp/project.yml`). |
+| `design/` | Web design prototypes: the Patient app, the Clinician dashboard and the screen deck. See `PRODUCT.md`. |
 | `firebase/` | `firebase.json`, Firestore rules, `functions/` (TypeScript, vitest), `hosting/` (the dashboard) and `seed/` (the Demo Patients). |
 | `fixtures/` | Fixtures shared by Kotlin and Node tests, such as the Baseline cases. |
 | `gradle/libs.versions.toml` | The only place library versions are pinned. |
@@ -22,13 +23,13 @@ A wellbeing companion for the time between Visits: a Kotlin Multiplatform Patien
 
 ### Firebase configuration
 
-There is no `google-services.json` and no Google Services plugin. The Android app initialises Firebase in code (`CompanionApplication`) from `BuildConfig` fields set in `androidApp/build.gradle.kts`:
+There is no `google-services.json` and no Google Services plugin. The Android app initialises Firebase in code (`DepressifyApplication`) from `BuildConfig` fields set in `androidApp/build.gradle.kts`:
 
 - **By default** it uses the emulator-only project `demo-twoam`, which needs no credentials, and debug builds talk to the local emulators on `127.0.0.1`. On a phone or an Android emulator, forward the ports first:
   ```sh
   adb reverse tcp:9099 tcp:9099 && adb reverse tcp:8080 tcp:8080
   ```
-- **For a real project**, register an Android app in the Firebase console with the package name `app.depressify` (the `applicationId` in `androidApp/build.gradle.kts`), then create a gitignored `secrets.properties` at the repository root:
+- **For a real project**, register an Android app in the Firebase console with the package name `app.depressify.patient` (the `applicationId` in `androidApp/build.gradle.kts`), then create a gitignored `secrets.properties` at the repository root:
   ```properties
   firebase.projectId=your-project
   firebase.applicationId=1:1234567890:android:abcdef
@@ -39,7 +40,7 @@ There is no `google-services.json` and no Google Services plugin. The Android ap
   demo.clinicianEmail=<clinician-email>
   ```
 
-iOS reads `iosApp/iosApp/GoogleService-Info.plist` (gitignored) when it exists, and otherwise uses `demo-twoam` and the emulators. Register the iOS app with the bundle ID `app.depressify` (`BUNDLE_ID` in `iosApp/Configuration/Config.xcconfig`). The app is called Depressify on both platforms. The dashboard uses the emulators when served from `localhost`, and the deployed project's `/__/firebase/init.json` otherwise.
+iOS reads `iosApp/Depressify/GoogleService-Info.plist` (gitignored) when it exists, and otherwise uses `demo-twoam` and the emulators. Register the iOS app with the bundle ID `app.depressify.patient` (`PRODUCT_BUNDLE_IDENTIFIER` in `iosApp/project.yml`). The app is called Depressify on both platforms. The dashboard uses the emulators when served from `localhost`, and the deployed project's `/__/firebase/init.json` otherwise.
 
 ### The Clinician's email
 
@@ -48,7 +49,7 @@ The repository is public, so the Clinician's email is configuration, never code.
 | Where | Setting | Without it |
 |---|---|---|
 | Android app | `demo.clinicianEmail` in `secrets.properties` (becomes `BuildConfig.CLINICIAN_EMAIL`) | `clinician@example.com` for the `demo-twoam` emulator project; with a real `firebase.projectId` the build fails |
-| iOS app | `ClinicianEmail` (string) in a gitignored `iosApp/iosApp/Secrets.plist`, or in `Info.plist` | `clinician@example.com` with the emulators; with `GoogleService-Info.plist` the app stops at launch |
+| iOS app | `ClinicianEmail` (string) in a gitignored `iosApp/Depressify/Secrets.plist`, or in `Info.plist` | `clinician@example.com` with the emulators; with `GoogleService-Info.plist` the app stops at launch |
 | Allowlist | `npm run allow-clinician -- --email <clinician-email> [--project <project-id>]` in `firebase/seed` | a new Patient cannot create their record |
 | Seed | `--clinician <clinician-email>` or `CLINICIAN_EMAIL` (the option wins); the seed also allows that email | `clinician@example.com` in the emulator; a real project (`--project`) refuses to seed |
 
@@ -72,22 +73,28 @@ Emails are stored trimmed and in lower case, as Firebase Auth puts them in the s
 ./gradlew :androidApp:installDebug         # install on a connected phone
 ```
 
-iOS: open `iosApp/iosApp.xcodeproj` in Xcode and run. The build phase calls `./gradlew :shared:embedAndSignAppleFrameworkForXcode`; Xcode resolves the Firebase iOS SDK through Swift Package Manager.
+iOS: put `GoogleService-Info.plist` and `Secrets.plist` (both optional and gitignored) in `iosApp/Depressify/`, then generate the Xcode project with [XcodeGen](https://github.com/yonaskolb/XcodeGen) and run it:
+
+```sh
+cd iosApp && xcodegen generate && open Depressify.xcodeproj
+```
+
+The generated project and `Info.plist` are gitignored; change `iosApp/project.yml` instead. Its build phase calls `./gradlew :shared:embedAndSignAppleFrameworkForXcode`, and Xcode resolves the Firebase iOS SDK (Core, Auth, Firestore, the version the GitLive SDK needs) through Swift Package Manager. Swift calls `StartCompanionKt.startCompanion(...)` once at launch, then shows `MainViewControllerKt.MainViewController`.
 
 ## Tests, one command per seam
 
 | Seam | Command |
 |---|---|
-| 1. `core` JVM tests (data contract; later Baseline, rules, learning) | `./gradlew :core:jvmTest` |
+| 1. `core` JVM tests (data contract, the app's rules in `CoreRulesTest`; later Baseline, flags, learning) | `./gradlew :core:jvmTest` |
 | 2. Cloud Functions (vitest, plus a type check) | `cd firebase/functions && npm install && npm test` |
 | 3. Dashboard helpers (Node test runner) | `cd firebase/hosting && node --test` |
 | 3. Seed generator and Baseline fixture (Node test runner, plus a type check) | `cd firebase/seed && npm install && npm test` |
-| 4. `shared` common tests (view models, session, with fakes) | `./gradlew :shared:jvmTest` |
-| 5. Compose UI tests (`*UiTest`, common UI test API on the JVM) | `./gradlew :shared:jvmTest` |
+| 4. `shared` common tests on the Android host (data layer, session, sharing, the app state's backend wiring, with fakes; GitLive's encoder against the contract) | `./gradlew :shared:testAndroidHostTest` |
+| 5. Builds | `./gradlew :androidApp:assembleDebug :shared:compileKotlinIosSimulatorArm64` |
 
 `./gradlew :core:jvmTest` also fails if `core/src/commonMain` imports a platform or JVM-only API, and it regenerates `firebase/functions/test/fixtures/contract.json`, which the functions tests compare with the TypeScript and dashboard mirrors. Commit that file when it changes.
 
-Android host tests are switched on in `shared` and skip the `*UiTest` specs: `./gradlew :shared:testAndroidHostTest`.
+`shared` has no JVM target (the UI uses Android and iOS APIs), so its common tests run as Android host tests.
 
 Security rules and the end-to-end flow run against the emulators:
 
@@ -111,7 +118,7 @@ The Firestore database and every function are in `europe-north1` (Finland); the 
    firebase use default      # back to demo-twoam for local work
    ```
    `firebase use --add` writes the alias into `.firebaserc`. A project ID is not a secret, but leave that change out of commits unless the team wants it.
-2. **In the Firebase console:** enable the Anonymous and Email/Password sign-in providers, add the Clinician as a user (Authentication, Users, Add user), and register the apps: Android package name `app.depressify`, iOS bundle ID `app.depressify`. Put the apps' values in `secrets.properties` (with `demo.clinicianEmail`) and `iosApp/iosApp/GoogleService-Info.plist` plus `Secrets.plist`, as above.
+2. **In the Firebase console:** enable the Anonymous and Email/Password sign-in providers, add the Clinician as a user (Authentication, Users, Add user), and register the apps: Android package name `app.depressify.patient`, iOS bundle ID `app.depressify.patient`. Put the apps' values in `secrets.properties` (with `demo.clinicianEmail`) and `iosApp/Depressify/GoogleService-Info.plist` plus `Secrets.plist`, as above.
 3. **Deploy the rules and indexes.** Run the rules tests first. The dashboard's latest-Digest query needs the composite index in `firestore.indexes.json` (the emulator does not check indexes). Before real Patients use it, require `email_verified` in `authEmail()` in `firestore.rules` (see the comment there).
    ```sh
    firebase deploy --only firestore:rules,firestore:indexes --project prod
@@ -155,7 +162,7 @@ This starts Auth (9099), Firestore (8080), Functions (5001), Hosting (5002) and 
    ```
    (`npm run seed` allows its Clinician too.)
 2. Open http://localhost:5002 and sign in as that Clinician. The Patient list is empty.
-3. Run the Android debug build (after `adb reverse`, above). The app signs in anonymously and creates the Patient record, then shows the welcome and the sharing choice. Choose **Share**: the app lands on Today and "Live patient" appears on the dashboard without a reload. **Don't share** also lands on Today, and the Patient stays off the dashboard (the security rules allow the Clinician to see a Patient only while sharing is granted). Withdrawing in Settings → Sharing and privacy removes them from the open dashboard at once. Sharing again shows what is saved from then on and what was shared before, never what was saved in between: every shared record is stamped `sharedWithClinician` when it is saved (see [the sharing stamp](docs/firestore-schema.md#the-sharing-stamp)).
+3. Run the Android debug build (after `adb reverse`, above). The app signs in anonymously and creates the Patient record, then shows the welcome. Choose **Get started**, then **Share my progress**: the app lands on Today and "Live patient" appears on the dashboard without a reload. **Continue without sharing** also lands on Today, and the Patient stays off the dashboard (the security rules allow the Clinician to see a Patient only while sharing is granted). **Explore the demo** on the welcome records no choice, so the welcome shows again next time. Stopping in Settings → Sharing & privacy removes them from the open dashboard at once. Sharing again shows what is saved from then on and what was shared before, never what was saved in between: every shared record is stamped `sharedWithClinician` when it is saved (see [the sharing stamp](docs/firestore-schema.md#the-sharing-stamp)).
 
 Use only the `demo-twoam` project with the emulators. Do not run `firebase deploy` against it.
 
