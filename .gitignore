@@ -105,3 +105,30 @@ ui-debug.log*
 database-debug.log*
 pubsub-debug.log*
 emulator-data/
+
+# --- Exported decks, documents, images and video: keep them local ---
+*.pdf
+*.ppt
+*.pptx
+*.doc
+*.docx
+*.xls
+*.xlsx
+*.png
+*.jpg
+*.jpeg
+*.gif
+*.webp
+*.mp4
+*.mov
+.deck-build/
+output/
+# ...except the image assets the apps and the designs ship with. Files already tracked stay tracked;
+# to add another one on purpose, use `git add -f <file>`.
+!androidApp/src/**/res/**
+!iosApp/**/*.xcassets/**
+!shared/src/**/composeResources/**
+!design/**
+
+# --- Claude Code working copies ---
+.claude/worktrees/
