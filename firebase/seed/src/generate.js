@@ -17,6 +17,7 @@ import { createRandom, hashString } from "./random.js";
 /** @typedef {import("../../functions/src/types.ts").Flag} Flag */
 /** @typedef {import("../../functions/src/types.ts").Visit} Visit */
 /** @typedef {import("../../functions/src/types.ts").VoiceCue} VoiceCue */
+/** @typedef {import("./profiles.js").Story} Story */
 /** @typedef {import("../../functions/src/types.ts").SignalKey} SignalKey */
 /** @typedef {import("./baseline.js").SignalMap} SignalMap */
 /** @typedef {import("./profiles.js").Profile} Profile */
@@ -106,19 +107,9 @@ function signalValues(profile, random, d, date) {
   return values;
 }
 
-const SUGGESTION_DETAILS = /** @type {Record<SuggestionKind, string>} */ ({
-  walk: "A fifteen-minute walk around the block before dinner.",
-  nature: "Half an hour in the park by the shore.",
-  music: "Put on an album you used to love and listen to the whole side.",
-  social_call: "A short call with your sister this evening.",
-  breathing: "Five minutes of slow breathing before bed.",
-  class_activity: "Try the Thursday evening yoga class at the community centre.",
-  daylight: "Step outside in daylight around midday, even for ten minutes.",
-});
-
 const SUGGESTION_NAMES = /** @type {Record<SuggestionKind, string>} */ ({
   walk: "the walk",
-  nature: "the time in the park",
+  nature: "the time outside",
   music: "the music",
   social_call: "the call",
   breathing: "the breathing exercise",
@@ -126,25 +117,24 @@ const SUGGESTION_NAMES = /** @type {Record<SuggestionKind, string>} */ ({
   daylight: "the time in daylight",
 });
 
-const THEMES = {
-  well: ["a walk outside", "work going steadily", "time with friends", "cooking", "weekend plans", "family", "music"],
-  low: ["low energy", "staying in", "broken sleep", "cancelled plans", "feeling flat", "work piling up"],
-};
-
+// What the voice sounded like, not what was said: the same for every Patient. What they talked
+// about (themes, quotes, Suggestions) is each profile's own story, in profiles.js.
 const CUES = {
-  well: [{ label: "bright tone", heard: "Laughed while talking about the weekend" }],
+  well: [
+    { label: "bright tone", heard: "Laughed while talking about the weekend" },
+    { label: "steady pace", heard: "Spoke at an even, unhurried pace" },
+    { label: "lively voice", heard: "Voice lifted when talking about plans" },
+    { label: "warm tone", heard: "Sounded relaxed and warm throughout" },
+  ],
   low: [
     { label: "flat tone", heard: "Short answers with long pauses" },
     { label: "hesitation", heard: "Paused for a while before talking about sleep" },
     { label: "quiet voice", heard: "Spoke more softly than earlier Check-ins" },
+    { label: "slow speech", heard: "Spoke slowly and trailed off at the end of sentences" },
+    { label: "sighing", heard: "Sighed several times while describing the day" },
+    { label: "tired voice", heard: "Sounded tired, with a hoarse voice" },
   ],
 };
-
-const QUOTES = [
-  "I just haven't had the energy to go out.",
-  "Nights have been really broken this week.",
-  "I keep cancelling things and then feeling bad about it.",
-];
 
 /** @param {number | null} minutes */
 function sleepLine(minutes) {
@@ -264,7 +254,7 @@ export function makePatient(profileKey, options) {
     /** @type {VoiceCue[]} */
     const voiceCues = script
       ? (script.voiceCues ?? []).map((cue) => ({ ...cue }))
-      : low || random.chance(0.15)
+      : low || random.chance(0.4)
         ? [{ ...random.pick(CUES[tone]), intensity: low ? random.int(2, 4) : random.int(1, 2) }]
         : [];
     const checkInId = `${idPrefix}checkin-${date}`;
@@ -308,9 +298,10 @@ export function makePatient(profileKey, options) {
       }
     }
 
+    // Without a script the draws stay in main's order (kind, details, status), so the Demo Patients don't change.
     const kind = script ? script.suggestion.kind : random.pick(/** @type {readonly SuggestionKind[]} */ (profile.suggestionKinds));
+    const details = script ? script.suggestion.details : random.pick(/** @type {string[]} */ (/** @type {Story} */ (profile.story).suggestions[kind]));
     const status = script ? script.suggestion.status : random.chance(0.2) ? "declined" : "accepted";
-    const details = script ? script.suggestion.details : SUGGESTION_DETAILS[kind];
     const suggestionId = `${idPrefix}suggestion-${date}`;
     suggestionDays.push(d);
     suggestions.push({
@@ -334,9 +325,9 @@ export function makePatient(profileKey, options) {
 
     /** @type {string[]} */
     const themes = script ? [...script.themes] : [];
-    const themeCount = script ? themes.length : random.int(1, 3);
+    const themeCount = script ? themes.length : random.int(2, 4);
     while (themes.length < themeCount) {
-      const theme = random.pick(THEMES[tone]);
+      const theme = random.pick(/** @type {Story} */ (profile.story).themes[tone]);
       if (!themes.includes(theme)) themes.push(theme);
     }
     const summaryAtMillis = endedAtMillis + random.int(4, 9) * 1000;
@@ -351,7 +342,7 @@ export function makePatient(profileKey, options) {
         voiceCues,
         suggestion: status === "accepted" ? details : null,
         previousOutcome: previousSaid ?? (previous ? previousOutcomeLine(previous) : null),
-        quotes: script ? [...(script.quotes ?? [])] : low && random.chance(0.6) ? [random.pick(QUOTES)] : [],
+        quotes: script ? [...(script.quotes ?? [])] : random.chance(0.7) ? [random.pick(/** @type {Story} */ (profile.story).quotes[tone])] : [],
         sharedWithClinician: sharedAt(summaryAtMillis),
       },
     });
@@ -438,6 +429,7 @@ export function makePatient(profileKey, options) {
     synthetic: profile.synthetic ?? true,
     sharingConsent: "granted",
     sharingChangedAtMillis: sharingMillis,
+    location: profile.location ?? null,
   };
 
   return { id: options.patientId ?? profile.id, profile: profile.key, patient, daily, consents, checkIns, summaries, suggestions, flags, visits };

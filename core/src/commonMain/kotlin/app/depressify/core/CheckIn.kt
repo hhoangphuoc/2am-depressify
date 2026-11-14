@@ -10,7 +10,9 @@ data class Ratings(val mood: Int? = null, val energy: Int? = null, val sleepQual
 enum class SuggestionKind(val title: String, val detail: String) {
     Walk("A little time outside", "Tomorrow around 11:00 · ten minutes, at your pace."),
     Window("A moment by the window", "One minute, whenever it suits you."),
-    Music("A little music", "One song you like, in your own app."),
+    Music("A little music", "One calm album or song you know well."),
+    Read("Read two quiet pages", "With warm tea, at your own pace."),
+    Game("A cozy puzzle or game", "Fifteen unhurried minutes to rest busy thoughts."),
     Call("A call to someone close", "You choose who, and you place the call."),
 }
 

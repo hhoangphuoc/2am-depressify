@@ -10,6 +10,7 @@ kotlinx-serialization = "1.13.0"
 kotlinx-datetime = "0.8.0"
 gitlive-firebase = "2.8.0"
 ktor = "3.4.2"
+maps-compose = "9.0.1"
 android-compileSdk = "37"
 android-targetSdk = "36"
 android-minSdk = "28"
@@ -36,6 +37,7 @@ ktor-client-core = { module = "io.ktor:ktor-client-core", version.ref = "ktor" }
 ktor-client-websockets = { module = "io.ktor:ktor-client-websockets", version.ref = "ktor" }
 ktor-client-okhttp = { module = "io.ktor:ktor-client-okhttp", version.ref = "ktor" }
 ktor-client-darwin = { module = "io.ktor:ktor-client-darwin", version.ref = "ktor" }
+maps-compose = { module = "com.google.maps.android:maps-compose", version.ref = "maps-compose" }
 kotlin-test = { module = "org.jetbrains.kotlin:kotlin-test", version.ref = "kotlin" }
 
 [plugins]

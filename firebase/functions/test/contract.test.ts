@@ -12,6 +12,7 @@ const contract = JSON.parse(readFileSync(join(__dirname, "fixtures", "contract.j
 // when a field is missing or extra; the tests below then compare the field names with Kotlin.
 const samples: Record<string, object> = {
   PatientDoc: types.newPatientDoc("Live patient", "clinician@example.com"),
+  PatientLocation: { label: "An apartment in Vallila, Helsinki", latitude: 60.19, longitude: 24.96 } satisfies types.PatientLocation,
   DailyDoc: { date: "2026-11-13", values: {}, vsBaseline: {}, composite: null, demoOverride: false, sharedWithClinician: true } satisfies types.DailyDoc,
   Consent: { subject: "steps", granted: true, changedAtMillis: 1 } satisfies types.Consent,
   VoiceCue: { label: "flat tone", intensity: 2, heard: "short answers" } satisfies types.VoiceCue,

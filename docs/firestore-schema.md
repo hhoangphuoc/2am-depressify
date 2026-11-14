@@ -64,6 +64,7 @@ patientLimits/{patientId}            PatientLimits   hourly caps and who started
 | `synthetic` | boolean | `false` | `true` for Demo Patients. |
 | `sharingConsent` | SharingConsent | `undecided` | The Patient's Consent for the Clinician's view. Only `granted` lets the Clinician see anything; see [Sharing Consent](#sharing-consent). |
 | `sharingChangedAtMillis` | int or null | `null` | When `sharingConsent` last changed. Written with every change. |
+| `location` | PatientLocation or null | `null` | `{label, latitude, longitude}`: where the `suggestToday` function looks for places near the Patient. Only Demo Patients have one, an example address written by the seed. A live Patient's location stays on their phone, so theirs is `null` and their Suggestions come without places. No client writes it. |
 
 ### `daily/{date}`: DailyDoc
 
