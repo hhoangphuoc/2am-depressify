@@ -1,4 +1,4 @@
-# 2am interface design
+# Depressify interface design
 
 Design date: 13 November 2026. Direction: **Small Step**, selected by the user, refined toward less text, less decoration, and a calm, friendly experience. This is an interface specification and a local interactive design prototype, not a connected clinical product.
 
@@ -70,15 +70,35 @@ Clinician navigation starts with **Patients**. Patient detail has four sections:
 | Space | 4, 8, 12, 16, 24, 32, 48; 24 px Patient margins, 16 on narrow screens |
 | Shape | Pill primary buttons; 16 px supporting surfaces; 10 px inputs; no mixed decorative radii |
 | Depth | Flat resting surfaces. Elevation reserved for a menu, sheet, or dialog |
-| Imagery | One small Finnish autumn landscape on Today; optional elsewhere only when it clarifies a Suggestion |
+| Imagery | An illustrated map of nearby places on Today; one Finnish autumn landscape on the Suggestion detail; optional elsewhere only when it clarifies a Suggestion |
 
-No glass, gradients (the voice orb is the one exception), animated backgrounds, confetti, decorative icon tiles, mood emoji, completion rings, streaks, achievement scores, or alarming Patient status colors. Icons support meaning and retain text labels; use an existing icon set. The `2am` wordmark is text, not an invented medical symbol. Do not expose domain capitalization mechanically in long prose.
+No glass, gradients (the voice orb is the one exception), animated backgrounds, confetti, mood emoji, completion rings, streaks, achievement scores, or alarming Patient status colors. Icons support meaning and retain text labels; use an existing icon set (Phosphor). A round icon tile is allowed where the icon names a Signal, a rating or a kind of Suggestion and sits beside its label. The `Depressify` wordmark is text, not an invented medical symbol. Do not expose domain capitalization mechanically in long prose.
 
 ### Night theme
 
-From 22:00 to 05:00 the Patient app switches to a dark palette (ground `#101B21`, ink `#E4EBE8`, secondary `#9FB1B5`), and Today changes its words to `Nights can feel long.` / `I’m here if you want company.` / `Talk for a bit`. Sheets stay light. Photos dim slightly. The time-of-day greeting sits on one quiet line above the headline: `Friday 13 November · Good morning, Alex`.
+From 22:00 to 05:00 the Patient app switches to a dark palette (ground `#101B21`, ink `#E4EBE8`, secondary `#9FB1B5`), and Today changes its words to `Nights can feel long.` / `I’m here if you want company.` / `Talk for a bit`. Sheets stay light. Photos dim slightly. The time-of-day greeting sits on one quiet line above the headline: `Good morning, Alex`. The date sits on the Check-in card.
 
 Design Taste's editorial-greeting composition was dealt with seed **1605424581**, preserving the selected palette and type. Its open-plane shell and tonal grouping inform the desktop. The brief overrides its generic four-count home pattern: this product has no useful KPI row. The clinician list leads with people and reasons. A changing Patient rating is data, not a performance target.
+
+### Health-style cards
+
+Added on 2026-11-14 after review comments on Today, History, Signals and Summary. The Patient asked for less text, visible progress, places to go and a journal of Check-ins, with Apple Health and Samsung Health as references. Three Today layouts were prototyped (ring first, Check-in first, path); **Check-in first** was chosen. The prototype with all three is kept on the branch `codex/prototype-today-variants`.
+
+What the references contribute: one soft card per subject, an icon tile beside each label, one large tabular value, and a small chart or scale instead of a sentence. Apple Health pairs State of Mind entries with factors such as sleep and exercise; Samsung Health leads with a compact activity summary and stacks rounded cards below it.
+
+| Surface | Pattern |
+| --- | --- |
+| Check-in card (Today) | Date and `About 3 min · AI Companion` on one line, a still orb, the title, and two actions with icons: **Talk** and **Type** |
+| Week row (Today, History) | Seven short bars, one per day. A bar fills once a Check-in exists for that day; today is tinted; other days stay neutral |
+| Places card (Today) | A map with three pins: Park, Yoga, Meditation. Chips choose the kind; one row names the place, the walking time and a link to Google Maps; the last row opens the current Suggestion |
+| Trend card (History) | Mood, Energy and Sleep quality behind one segmented control; unanswered days are gaps |
+| Your path (History) | Check-ins as steps on one line, newest first, each with its Suggestion icon, date, title, mood dots and `Tried` when the step was tried |
+| Signal groups (Signals) | Body, Places, Your day, Check-ins. Each row has an icon tile, the latest value or `Not collected`, and an On or Off pill |
+| How you felt (Summary) | Three ratings with icon, value and a five-dot scale; then the next small step and the previous Outcome as plain rows |
+
+Progress rules. Studies of people with depression report that streaks and achievement rewards feel goal-driven and that a lost streak leads some people to disengage ([Frontiers in Digital Health 2022](https://www.frontiersin.org/journals/digital-health/articles/10.3389/fdgth.2022.1045765/full), [JMIR mHealth 2025](https://mhealth.jmir.org/2025/1/e67141), [JMIR mHealth 2026](https://mhealth.jmir.org/2026/1/e95414)). So the week row only counts what happened: no goal, no streak, no reset, no percentage, and a day without a Check-in is never marked as missed.
+
+Places rules. The map shows synthetic demo places on an illustrated map, labelled `Demo places`. A live Google Maps view needs an API key and the Patient's location Consent; the map image is the one part to replace. Links open Google Maps outside the app.
 
 ## Patient screens and states
 
@@ -86,7 +106,7 @@ Design Taste's editorial-greeting composition was dealt with seed **1605424581**
 | --- | --- | --- |
 | Welcome | `A little support, at home.` One sentence identifying the AI Companion. Continue; `Explore the demo` is secondary | Anonymous startup loading, failed startup and Retry; no account creation or Invite requirement in demo |
 | Sharing Consent | Name the linked Clinician; show exactly what is shared. A short sample Summary. Explicit choice to share, with a usable decline path | Not yet chosen, accepted, declined, save failed; do not bundle with Signal Consent |
-| Today | `One small thing is enough.` / `A few minutes, at your pace.` Start Check-in; Type instead. One latest Suggestion with Take a look | First use has no empty card; after Check-in shows latest Suggestion; offline exposes saved content and a reconnect action; stale data is labeled |
+| Today | `One small thing is enough.` / `A few minutes, at your pace.` Check-in card with Talk and Type; week row; places card that opens the latest Suggestion | First use has no empty card; after Check-in shows latest Suggestion; offline exposes saved content and a reconnect action; stale data is labeled |
 | Check-in introduction | First use: `I'm an AI Companion, not a clinician.` Explain audio streaming, temporary transcript, saved Summary, and source notice. Start speaking or type | Microphone not requested until speaking; denied or unavailable offers Type instead; simulated permission is clearly a prototype state |
 | Live Check-in | Calm status Listening / Companion speaking / Microphone off. Persistent verbatim transcript and obvious mute, type, finish controls | Connecting, long pause, interruption, muted, typing, looking up context, failed tool, disconnected, approaching time cap; never imply recording before connection |
 | Typed Check-in | Same conversation and tools; text field and Send; spoken output can be muted | Empty send disabled; multiline input; keyboard moves composer, not transcript; draft survives a tool failure, not an app crash |
@@ -96,10 +116,10 @@ Design Taste's editorial-greeting composition was dealt with seed **1605424581**
 | Calendar confirmation | Activity, date, local time, duration, destination calendar, explicit Add action. Spoken agreement can authorize the same operation | Read Consent separate from booking authorization; access declined; busy slot; save failed retains fields; added status only after success; repeated tap must not duplicate |
 | Ratings | Mood, energy, sleep quality, each 1–5, one question at a time. Endpoints written out; Skip is visible | Unanswered remains null; never preselect 3, infer a self-report, or substitute a questionnaire; back preserves earlier choices |
 | Finishing | `Making your Summary…` End microphone and playback immediately; no spinning full-screen trap | Pending, save failed with retry while transcript is still in memory, saved; closing warns the Summary cannot be recovered if it is not saved |
-| Summary | Themes, ratings, one Suggestion, previous Outcome, Voice cues under an optional disclosure. Label AI-generated, and shared status | Patient and Clinician receive the same Summary; no full transcript or audio playback; empty/short Check-in says there was little to summarize; failed generation never invents success |
-| History | A small mood trend and chronological Summary rows, newest first | First Check-in CTA, missing ratings as gaps, date group empty, loading, stale cached list, read failure; a lone rating is one point, not a fabricated trend |
+| Summary | Themes, a How you felt card with three ratings, the next small step, the previous Outcome, Voice cues under an optional disclosure. Label AI-generated, and shared status | Patient and Clinician receive the same Summary; no full transcript or audio playback; empty/short Check-in says there was little to summarize; failed generation never invents success |
+| History | Week row, a trend card for mood, energy and sleep quality, and Check-ins as a path, newest first | First Check-in CTA, missing ratings as gaps, date group empty, loading, stale cached list, read failure; a lone rating is one point, not a fabricated trend |
 | Settings | Signals, Quiet hours, Sharing & privacy, Support; compact rows | Saved state, save error, offline; no account/password settings invented for anonymous demo |
-| Signals | Each Signal has its own Consent row and source/status | Off, requesting, on, no data, unsupported, stale, permission lost, stopping and deleting, deletion failed |
+| Signals | Grouped cards; each Signal has its own Consent row with icon, latest value or status, and an On or Off pill | Off, requesting, on, no data, unsupported, stale, permission lost, stopping and deleting, deletion failed |
 | Signal detail | What is read, what leaves the phone, why it helps; Enable / Stop and delete | Native permission is separate from app Consent. Stopping deletes its collected data; explain effects before confirmation; failure cannot be presented as completed deletion |
 | Quiet hours | Start and end local times; overnight range supported; save confirmation | Default proposed 21:00–09:00; invalid or identical endpoints rejected in prototype; save failed preserves edits; time zone shown |
 | Sharing & privacy | Linked Clinician and exact sharing scope; current Consent. Explain provider processing without absolute secrecy claims | Withdraw pauses access. Confirmation names affected progress data and deletion; service must reconcile derived records before shipping. No hidden transcript archive |
@@ -130,7 +150,7 @@ The voice Check-in has one focal object, an orb, with a one-word state under it 
 | Wrap up | Client timer | One line, then `Continue to ratings` |
 | Crisis | Raise-crisis tool | Crisis notice before any network call |
 
-The orb is a WebGL cloud field adapted from the orb-ui `cloud` theme (MIT): warped noise forms a two-tone sky with a light band along a moving horizon. Each state has a four-colour gradient drawn from the 2am palette, and states crossfade over about half a second. The audio level rises over about 210 ms and falls over about 380 ms; drift speed and size follow the level, running at 75% of orb-ui's tempo to stay calm. Under Reduce Motion, or when WebGL is unavailable, the orb paints a still frame or a flat CSS sphere and only its colour changes. When the Suggestion card arrives, the orb shrinks to 112 px so the card and its main action stay above the controls. What the Companion records is shown plainly under the caption, for example `Noted: walk tried · felt 4 of 5`.
+The orb is a WebGL cloud field adapted from the orb-ui `cloud` theme (MIT): warped noise forms a two-tone sky with a light band along a moving horizon. Each state has a four-colour gradient drawn from the Depressify palette, and states crossfade over about half a second. The audio level rises over about 210 ms and falls over about 380 ms; drift speed and size follow the level, running at 75% of orb-ui's tempo to stay calm. Under Reduce Motion, or when WebGL is unavailable, the orb paints a still frame or a flat CSS sphere and only its colour changes. When the Suggestion card arrives, the orb shrinks to 112 px so the card and its main action stay above the controls. What the Companion records is shown plainly under the caption, for example `Noted: walk tried · felt 4 of 5`.
 
 ### Suggestions and learning
 

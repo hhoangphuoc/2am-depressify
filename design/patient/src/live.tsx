@@ -52,7 +52,7 @@ export function Icon({ name, label }: { name: string; label?: string }) {
   return <span className="icon-mask" role={label ? 'img' : undefined} aria-label={label} aria-hidden={label ? undefined : true} style={{ '--icon': 'url(/assets/' + name + '.svg)' } as CSSProperties} />;
 }
 
-// Gradient per state from the 2am palette: deep, upper, lower, light band.
+// Gradient per state from the Depressify palette: deep, upper, lower, light band.
 const PALETTES: Record<LiveState, string[]> = {
   speaking: ['#b47a55', '#d6a680', '#efd8c2', '#fcf4ec'],
   listening: ['#326b73', '#5d9893', '#bcdad6', '#eef6f4'],
@@ -93,7 +93,7 @@ const FRAG = [
 ].join('\n');
 
 // Audio level eases up fast and down slower; drift speed and size follow the level and the state.
-export function Orb({ state, onInterrupt, frozen = false }: { state: LiveState; onInterrupt?: () => void; frozen?: boolean }) {
+export function Orb({ state, onInterrupt, frozen = false, decorative = false }: { state: LiveState; onInterrupt?: () => void; frozen?: boolean; decorative?: boolean }) {
   const canvas = useRef<HTMLCanvasElement>(null), halo = useRef<HTMLSpanElement>(null), stateRef = useRef(state), drawRef = useRef<(now: number) => void>(() => {});
   const [webgl, setWebgl] = useState(true);
   stateRef.current = state;
@@ -134,6 +134,7 @@ export function Orb({ state, onInterrupt, frozen = false }: { state: LiveState; 
   // Still mode (Reduce Motion or a frozen deck frame) repaints once per state; colour still changes.
   useEffect(() => { if (reducedMotion() || frozen) drawRef.current(performance.now()); }, [state, frozen]);
   const canInterrupt = state === 'speaking' && !!onInterrupt;
+  if (decorative) return <span className="orb" data-state={state} aria-hidden="true">{webgl ? <canvas className="orb-canvas" ref={canvas} /> : <span className="orb-core" />}</span>;
   return <button type="button" className="orb" data-state={state} aria-disabled={!canInterrupt} aria-label={canInterrupt ? 'Interrupt the Companion' : 'Voice session'} onClick={() => canInterrupt && onInterrupt?.()}>
     <span className="orb-halo" ref={halo} aria-hidden="true" />
     {webgl ? <canvas className="orb-canvas" ref={canvas} aria-hidden="true" /> : <span className="orb-core" aria-hidden="true" />}

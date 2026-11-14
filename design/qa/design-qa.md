@@ -1,4 +1,4 @@
-# Design QA · 2am patient app and clinician dashboard
+# Design QA · Depressify patient app and clinician dashboard
 
 final result: passed
 
@@ -24,7 +24,7 @@ final result: passed
 
 Today, target and build side by side (`deck-today-compare.png`): the composition, order, palette, pill action, Suggestion card with landscape and three-tab bar match. Headline, action label and Suggestion title now match the target's proportions. The build adds one quiet line, `Friday 13 November · Good morning, Alex`, above the headline; this is an intended adoption from the Claude artifacts. The device status bar and home indicator are template chrome and are not judged.
 
-Voice session against the Claude board (compared side by side during review; captures not kept): the build keeps the artifact's single orb, state colours, speaker-labelled caption and step marker on the plain 2am ground, without the painted landscape. The caption cannot be hidden, as the requirements need.
+Voice session against the Claude board (compared side by side during review; captures not kept): the build keeps the artifact's single orb, state colours, speaker-labelled caption and step marker on the plain Depressify ground, without the painted landscape. The caption cannot be hidden, as the requirements need.
 
 ## Focused regions
 
@@ -52,7 +52,7 @@ Voice session against the Claude board (compared side by side during review; cap
 
 **Iteration 3 · passed**
 
-- [P2] Booking sheet showed the text keyboard over its action. Two causes: date and time used `KeyboardInput`, and focus inside the sheet scrolled the clipped phone screen to reveal the hidden keyboard. Fix: native date and time inputs, and the phone screen's scroll pinned to 0. Evidence: booking slide in `design/deck/2am-screens.pdf`.
+- [P2] Booking sheet showed the text keyboard over its action. Two causes: date and time used `KeyboardInput`, and focus inside the sheet scrolled the clipped phone screen to reveal the hidden keyboard. Fix: native date and time inputs, and the phone screen's scroll pinned to 0. Evidence: booking slide in `design/deck/depressify-screens.pdf`.
 - [P2] Impeccable detector: orb resize animated width, height and inset. Fix: removed; only colour crossfades. Detector now returns no findings for the patient files.
 - Post-fix evidence: `deck-today-compare.png`, `deck-voice.png`, full deck rebuilt with `{"slides":40,"errors":[]}`.
 
@@ -70,7 +70,8 @@ Checked in the in-app browser and headless Chromium: voice session advance, tap-
 
 ## Residual gaps (not blocking)
 
-- [P3] Greeting line above the Today headline is an addition to the target.
+- [P3] Today no longer matches the first Small Step image: after review it uses health-style cards (Check-in card, week row, places map). See `docs/design/interface-design.md`, Health-style cards.
+- The places map is an illustration with synthetic places; no live Google Maps view is embedded.
 - Not done: Pixel 10 captures, a full VoiceOver and keyboard-only pass, real microphone and Gemini Live audio, and testing on a physical phone.
 - Clinician screens have no single selected image target; they were reviewed against the Claude dashboard artifact and the interface spec.
 

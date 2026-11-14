@@ -192,7 +192,7 @@ function SignIn({ onSignIn, expired, fail }) {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const job = useSimulation();
-  return <div className="signin-wrap"><section className="signin"><span className="wordmark">2am</span><p className="muted">Clinician workspace</p><h1>Welcome back</h1>{expired && <p className="notice" role="status">Your demo session expired. Sign in again to continue.</p>}<form noValidate onSubmit={e => {
+  return <div className="signin-wrap"><section className="signin"><span className="wordmark">Depressify</span><p className="muted">Clinician workspace</p><h1>Welcome back</h1>{expired && <p className="notice" role="status">Your demo session expired. Sign in again to continue.</p>}<form noValidate onSubmit={e => {
     e.preventDefault();
     if (email.trim().toLowerCase() !== 'clinician@example.test' || password !== 'smallstep') { setError('Email or password did not match. Use the demo details below and try again.'); return; }
     setError(''); job.run(onSignIn, fail, 'Sign-in could not finish. Your demo details are still here. Try again.');
@@ -219,7 +219,7 @@ export function App() {
   const visible = state === 'empty' ? [] : all;
   const filtered = visible.filter(p => p.name.toLowerCase().includes(query.toLowerCase().trim()) && (filter === 'all' || p.level === filter));
   const reds = visible.filter(p => p.level === 'red');
-  useEffect(() => { document.title = `${signedIn && patient ? `${patient.name} · ` : ''}2am · Clinician workspace`; }, [patient?.name, signedIn]);
+  useEffect(() => { document.title = `${signedIn && patient ? `${patient.name} · ` : ''}Depressify · Clinician workspace`; }, [patient?.name, signedIn]);
   useEffect(() => { if (signedIn) pageHeading.current?.focus(); }, [patientId, signedIn]);
   function openPatient(id) { setPatientId(id); setTab('Overview'); setSummaryId(null); setNotice(''); }
   function updatePatient(changes) { setPatients(current => current.map(p => p.id === patientId ? { ...p, ...changes } : p)); }
@@ -258,7 +258,7 @@ export function App() {
 
   if (!signedIn) return <>{disclosure}<SignIn key={state} expired={state === 'expired'} fail={state === 'authfail'} onSignIn={() => { setSignedIn(true); setState('default'); setNotice('Signed in to the demo workspace.'); }} /><footer className="signin-footer">{utilities}</footer></>;
 
-  return <div className="workspace"><a className="skip-link" href="#workspace-main">Skip to main content</a><aside className="sidebar"><div><button className="brand-button" onClick={() => { setPatientId(null); setNotice(''); }} aria-label="2am Patients"><span className="wordmark">2am</span></button><p className="workspace-label">Clinician workspace</p><nav aria-label="Workspace"><button className="nav-item active" aria-current="page" onClick={() => { setPatientId(null); setNotice(''); }}>Patients <span>{visible.length}</span></button></nav></div><div className="account"><span className="account-avatar" aria-hidden="true">CL</span><div><span>Demo clinician</span><button className="text-button" onClick={() => { setSignedIn(false); setModal(null); setNotice(''); }}>Sign out</button></div></div></aside>
+  return <div className="workspace"><a className="skip-link" href="#workspace-main">Skip to main content</a><aside className="sidebar"><div><button className="brand-button" onClick={() => { setPatientId(null); setNotice(''); }} aria-label="Depressify Patients"><span className="wordmark">Depressify</span></button><p className="workspace-label">Clinician workspace</p><nav aria-label="Workspace"><button className="nav-item active" aria-current="page" onClick={() => { setPatientId(null); setNotice(''); }}>Patients <span>{visible.length}</span></button></nav></div><div className="account"><span className="account-avatar" aria-hidden="true">CL</span><div><span>Demo clinician</span><button className="text-button" onClick={() => { setSignedIn(false); setModal(null); setNotice(''); }}>Sign out</button></div></div></aside>
     <div className="workspace-body">{disclosure}<main id="workspace-main" className="main-content">
       <div className="workspace-meta"><span>Friday, 13 November 2026</span><span>Helsinki · 14:20</span></div>
       {state === 'offline' && <div className="notice stale" role="status"><strong>Offline · showing saved data</strong><span>Last refreshed today, 14:19. Changes need a connection.</span><button onClick={() => setState('default')}>Reconnect</button></div>}
@@ -290,7 +290,7 @@ export function App() {
           </div>
         </>}
       </>}
-    </main><footer className="page-footer workspace-footer"><p className="small muted">2am · Clinician workspace</p>{utilities}</footer></div>
+    </main><footer className="page-footer workspace-footer"><p className="small muted">Depressify · Clinician workspace</p>{utilities}</footer></div>
     {modal && patient && !withdrawn && <Modal key={`${patient.id}-${modal}`} title={{ visit: 'Record a Visit', clear: 'Clear Attention flag', history: 'Attention flag history', intake: 'Add fictional Intake', tms: patient.tms ? 'Edit TMS end date' : 'Add TMS end date' }[modal]} onClose={closeModal}>
       {modal === 'visit' && <VisitForm patient={patient} onClose={closeModal} fail={state === 'savefail'} offline={state === 'offline'} onSave={visit => { updatePatient({ visits: [...patient.visits, visit] }); setModal(null); setNotice(`Visit saved for ${dateLabel(visit.date)}${visit.type !== 'none' ? ` · ${visit.type} ${visit.score}` : ''}. Attention flag unchanged.`); }} />}
       {modal === 'clear' && <ClearFlagForm patient={patient} onClose={closeModal} fail={state === 'savefail'} offline={state === 'offline'} onSave={note => { updatePatient(clearFlags(patient, note)); if (state === 'silence') setState('default'); setModal(null); setNotice('Attention flag cleared. History preserved.'); }} />}

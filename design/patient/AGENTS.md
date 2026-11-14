@@ -4,7 +4,7 @@
 
 The user selected Small Step (option 3): paper-white, blue-green ink, system sans, calm and friendly, minimalist with short copy and little noise. Use a small nature photo on Today and gentle gouache illustration for first use/empty History; no decorative motion on task screens. Preserve the complete flows in `../../docs/design/interface-design.md`. All services and records are synthetic/local in this prototype. This is a production-quality UI design, not a production healthcare service.
 
-Later decisions: the voice Check-in uses the WebGL cloud orb in `src/live.tsx` (state gradients from the 2am palette, orb-ui-style motion at a calmer tempo, still frame under Reduce Motion) with an always-on live caption; the app turns to the night palette from 22:00 to 05:00; date and time fields are native inputs so they open pickers, not the text keyboard. Deep links such as `?screen=check&at=8&hour=2` open any state for `design/deck/build.cjs`.
+Later decisions: the voice Check-in uses the WebGL cloud orb in `src/live.tsx` (state gradients from the Depressify palette, orb-ui-style motion at a calmer tempo, still frame under Reduce Motion) with an always-on live caption; the app turns to the night palette from 22:00 to 05:00; date and time fields are native inputs so they open pickers, not the text keyboard. Deep links such as `?screen=check&at=8&hour=2` open any state for `design/deck/build.cjs`.
 
 ## Prototype Instructions
 

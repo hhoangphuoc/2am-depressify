@@ -20,7 +20,7 @@ This plan replaces the one in the closed [PR #2](https://github.com/hhoangphuoc/
 
 ## Global constraints
 
-- Package `com.twoam.companion`. Versions are the latest stable at hour 0, pinned in `gradle/libs.versions.toml`. The research recorded Kotlin 2.4.21, Compose Multiplatform 1.12.2, Ktor 3.6.1 and GitLive `firebase-kotlin-sdk` 2.8.0 ([kmp research](../research/kmp-mobile-integration.md)).
+- Package `app.depressify`. Versions are the latest stable at hour 0, pinned in `gradle/libs.versions.toml`. The research recorded Kotlin 2.4.21, Compose Multiplatform 1.12.2, Ktor 3.6.1 and GitLive `firebase-kotlin-sdk` 2.8.0 ([kmp research](../research/kmp-mobile-integration.md)).
 - Use the current project layout: the Android app is its own module and shared modules use `com.android.kotlin.multiplatform.library`.
 - `core` has no platform imports and no `java.*` imports. Use `kotlinx-datetime` and `kotlinx.serialization`. Run its tests with `./gradlew :core:jvmTest`.
 - Ktor client engines: OkHttp on Android, Darwin on iOS. The `Android` engine has no WebSocket support.
@@ -71,14 +71,14 @@ With two developers, Dev 2 takes the Firebase track after the core logic, and Ta
 ### Task 1: Project scaffold and shared data contract
 
 **Files:**
-- Create: `settings.gradle.kts`, `build.gradle.kts`, `gradle/libs.versions.toml`, `core/build.gradle.kts`, `shared/build.gradle.kts`, `androidApp/build.gradle.kts`, `androidApp/src/main/AndroidManifest.xml`, `androidApp/src/main/kotlin/com/twoam/companion/MainActivity.kt`, `iosApp/` (from the Kotlin Multiplatform wizard)
-- Create: `core/src/commonMain/kotlin/com/twoam/companion/core/model/Models.kt`, `.../core/model/FirestoreJson.kt`
+- Create: `settings.gradle.kts`, `build.gradle.kts`, `gradle/libs.versions.toml`, `core/build.gradle.kts`, `shared/build.gradle.kts`, `androidApp/build.gradle.kts`, `androidApp/src/main/AndroidManifest.xml`, `androidApp/src/main/kotlin/app/depressify/MainActivity.kt`, `iosApp/` (from the Kotlin Multiplatform wizard)
+- Create: `core/src/commonMain/kotlin/app/depressify/core/model/Models.kt`, `.../core/model/FirestoreJson.kt`
 - Create: `firebase/firebase.json`, `firebase/.firebaserc`, `firebase/functions/src/types.ts`, `docs/firestore-schema.md`
 - Modify: `.gitignore` (secrets files above, `.gradle/`, `**/build/`, `firebase/functions/node_modules/`, `firebase/functions/lib/`, `iosApp/Pods/`)
-- Test: `core/src/commonTest/kotlin/com/twoam/companion/core/model/ModelsSerializationTest.kt`
+- Test: `core/src/commonTest/kotlin/app/depressify/core/model/ModelsSerializationTest.kt`
 
 **Interfaces:**
-- Produces (in `com.twoam.companion.core.model`, all `@Serializable`; `types.ts` mirrors them by hand):
+- Produces (in `app.depressify.core.model`, all `@Serializable`; `types.ts` mirrors them by hand):
   - `enum class Signal(val key: String, val higherIsBetter: Boolean)`: `SLEEP_MINUTES("sleepMinutes", true)`, `STEPS("steps", true)`, `RESTING_HR("restingHr", false)`, `HRV("hrv", true)`, `TIME_AT_HOME_MIN("timeAtHomeMinutes", false)`, `RADIUS_KM("movementRadiusKm", true)`, `LATE_SCREEN_MIN("lateNightScreenMinutes", false)`
   - `enum class FlagLevel { green, amber, red }`
   - `enum class FlagKind { drift, low_mood, poor_sleep, decline, unassessed, sleep_collapse, inactive, silent, crisis }`
@@ -146,8 +146,8 @@ With two developers, Dev 2 takes the Firebase track after the core logic, and Ta
 ### Task 3: Baseline
 
 **Files:**
-- Create: `core/src/commonMain/kotlin/com/twoam/companion/core/baseline/Baseline.kt`
-- Test: `core/src/commonTest/kotlin/com/twoam/companion/core/baseline/BaselineTest.kt`
+- Create: `core/src/commonMain/kotlin/app/depressify/core/baseline/Baseline.kt`
+- Test: `core/src/commonTest/kotlin/app/depressify/core/baseline/BaselineTest.kt`
 
 **Interfaces:**
 - Consumes: `Signal`.
@@ -170,8 +170,8 @@ With two developers, Dev 2 takes the Firebase track after the core logic, and Ta
 ### Task 4: Attention flag rules
 
 **Files:**
-- Create: `core/src/commonMain/kotlin/com/twoam/companion/core/flag/FlagRules.kt`, `.../flag/FlagPolicy.kt`
-- Test: `core/src/commonTest/kotlin/com/twoam/companion/core/flag/FlagRulesTest.kt`, `.../flag/FlagPolicyTest.kt`
+- Create: `core/src/commonMain/kotlin/app/depressify/core/flag/FlagRules.kt`, `.../flag/FlagPolicy.kt`
+- Test: `core/src/commonTest/kotlin/app/depressify/core/flag/FlagRulesTest.kt`, `.../flag/FlagPolicyTest.kt`
 
 **Interfaces:**
 - Consumes: `Baseline.composite`, `Signal`, `CheckIn`, `Flag`, `FlagLevel`, `FlagKind`.
@@ -202,7 +202,7 @@ With two developers, Dev 2 takes the Firebase track after the core logic, and Ta
 ### Task 5: Nudge rules
 
 **Files:**
-- Create: `core/src/commonMain/kotlin/com/twoam/companion/core/nudge/NudgeRules.kt`
+- Create: `core/src/commonMain/kotlin/app/depressify/core/nudge/NudgeRules.kt`
 - Test: `.../core/nudge/NudgeRulesTest.kt`
 
 **Interfaces:**
@@ -226,7 +226,7 @@ With two developers, Dev 2 takes the Firebase track after the core logic, and Ta
 ### Task 6: Learning what helps
 
 **Files:**
-- Create: `core/src/commonMain/kotlin/com/twoam/companion/core/learn/SuggestionRanker.kt`
+- Create: `core/src/commonMain/kotlin/app/depressify/core/learn/SuggestionRanker.kt`
 - Test: `.../core/learn/SuggestionRankerTest.kt`
 
 **Interfaces:**
@@ -249,7 +249,7 @@ With two developers, Dev 2 takes the Firebase track after the core logic, and Ta
 ### Task 7: Tool catalog, dispatcher and Check-in recorder
 
 **Files:**
-- Create: `core/src/commonMain/kotlin/com/twoam/companion/core/companion/ToolCatalog.kt`, `.../companion/ToolBackend.kt`, `.../companion/ToolDispatcher.kt`, `.../companion/CheckInRecorder.kt`
+- Create: `core/src/commonMain/kotlin/app/depressify/core/companion/ToolCatalog.kt`, `.../companion/ToolBackend.kt`, `.../companion/ToolDispatcher.kt`, `.../companion/CheckInRecorder.kt`
 - Test: `.../core/companion/ToolDispatcherTest.kt`
 
 **Interfaces:**
@@ -288,7 +288,7 @@ With two developers, Dev 2 takes the Firebase track after the core logic, and Ta
 ### Task 8: Brief builder
 
 **Files:**
-- Create: `core/src/commonMain/kotlin/com/twoam/companion/core/companion/BriefBuilder.kt`
+- Create: `core/src/commonMain/kotlin/app/depressify/core/companion/BriefBuilder.kt`
 - Test: `.../core/companion/BriefBuilderTest.kt`
 
 **Interfaces:**
@@ -321,9 +321,9 @@ With two developers, Dev 2 takes the Firebase track after the core logic, and Ta
 ### Task 9: Map and calendar tool clients
 
 **Files:**
-- Create: `core/src/commonMain/kotlin/com/twoam/companion/core/tools/{TimeWindows.kt, MapToolParsers.kt, CalendarClient.kt}`
-- Create: `shared/src/commonMain/kotlin/com/twoam/companion/tools/{MapToolClient.kt, CalendarAuth.kt}`, `shared/src/androidMain/.../tools/AndroidCalendarAuth.kt`
-- Test: `core/src/commonTest/kotlin/com/twoam/companion/core/tools/{TimeWindowsTest.kt, ParsersTest.kt}` (fixtures from Task 2)
+- Create: `core/src/commonMain/kotlin/app/depressify/core/tools/{TimeWindows.kt, MapToolParsers.kt, CalendarClient.kt}`
+- Create: `shared/src/commonMain/kotlin/app/depressify/tools/{MapToolClient.kt, CalendarAuth.kt}`, `shared/src/androidMain/.../tools/AndroidCalendarAuth.kt`
+- Test: `core/src/commonTest/kotlin/app/depressify/core/tools/{TimeWindowsTest.kt, ParsersTest.kt}` (fixtures from Task 2)
 
 **Interfaces:**
 - Produces:
@@ -348,9 +348,9 @@ With two developers, Dev 2 takes the Firebase track after the core logic, and Ta
 ### Task 10: Gemini Live client and audio
 
 **Files:**
-- Create: `core/src/commonMain/kotlin/com/twoam/companion/core/live/{LiveClient.kt, LiveProtocol.kt}`
-- Create: `shared/src/commonMain/kotlin/com/twoam/companion/live/{KtorLiveClient.kt, AudioIO.kt}`, `shared/src/androidMain/.../live/AndroidAudioIO.kt`, `shared/src/iosMain/.../live/IosAudioIO.kt` (stub until Task 21)
-- Test: `core/src/commonTest/kotlin/com/twoam/companion/core/live/LiveProtocolTest.kt`
+- Create: `core/src/commonMain/kotlin/app/depressify/core/live/{LiveClient.kt, LiveProtocol.kt}`
+- Create: `shared/src/commonMain/kotlin/app/depressify/live/{KtorLiveClient.kt, AudioIO.kt}`, `shared/src/androidMain/.../live/AndroidAudioIO.kt`, `shared/src/iosMain/.../live/IosAudioIO.kt` (stub until Task 21)
+- Test: `core/src/commonTest/kotlin/app/depressify/core/live/LiveProtocolTest.kt`
 
 **Interfaces:**
 - Consumes: `ToolSpec`, `docs/spike-results.md` (the exact messages).
@@ -373,9 +373,9 @@ With two developers, Dev 2 takes the Firebase track after the core logic, and Ta
 ### Task 11: The Check-in
 
 **Files:**
-- Create: `core/src/commonMain/kotlin/com/twoam/companion/core/checkin/CheckInRunner.kt`
-- Create: `shared/src/commonMain/kotlin/com/twoam/companion/checkin/{AppToolBackend.kt, CheckInViewModel.kt, CheckInScreen.kt, SuggestionCard.kt}`, `shared/src/commonMain/.../data/{PatientRepo.kt, PatientSession.kt}`
-- Test: `core/src/commonTest/kotlin/com/twoam/companion/core/checkin/CheckInRunnerTest.kt`
+- Create: `core/src/commonMain/kotlin/app/depressify/core/checkin/CheckInRunner.kt`
+- Create: `shared/src/commonMain/kotlin/app/depressify/checkin/{AppToolBackend.kt, CheckInViewModel.kt, CheckInScreen.kt, SuggestionCard.kt}`, `shared/src/commonMain/.../data/{PatientRepo.kt, PatientSession.kt}`
+- Test: `core/src/commonTest/kotlin/app/depressify/core/checkin/CheckInRunnerTest.kt`
 
 **Interfaces:**
 - Consumes: `LiveClient`, `AudioIO`, `ToolDispatcher`, `CheckInRecorder`, `BriefBuilder`, `SuggestionRanker`, Task 9 clients, `startCheckIn` and `finishCheckIn` callables (Tasks 13, 14).
@@ -400,8 +400,8 @@ With two developers, Dev 2 takes the Firebase track after the core logic, and Ta
 ### Task 12: Crisis notice
 
 **Files:**
-- Create: `shared/src/commonMain/kotlin/com/twoam/companion/crisis/{CrisisNumbers.kt, CrisisController.kt, CrisisNotice.kt, Dialler.kt}`, `shared/src/androidMain/.../crisis/AndroidDialler.kt`, `shared/src/iosMain/.../crisis/IosDialler.kt`
-- Test: `shared/src/commonTest/kotlin/com/twoam/companion/crisis/CrisisControllerTest.kt`
+- Create: `shared/src/commonMain/kotlin/app/depressify/crisis/{CrisisNumbers.kt, CrisisController.kt, CrisisNotice.kt, Dialler.kt}`, `shared/src/androidMain/.../crisis/AndroidDialler.kt`, `shared/src/iosMain/.../crisis/IosDialler.kt`
+- Test: `shared/src/commonTest/kotlin/app/depressify/crisis/CrisisControllerTest.kt`
 
 **Interfaces:**
 - Consumes: `PatientRepo.addFlag`, `PatientRepo.setFlagOnPatient`.
@@ -594,10 +594,10 @@ With two developers, Dev 2 takes the Firebase track after the core logic, and Ta
 ### Task 19: Signals and Consent on Android
 
 **Files:**
-- Create: `core/src/commonMain/kotlin/com/twoam/companion/core/sensing/Aggregators.kt`
-- Create: `shared/src/commonMain/kotlin/com/twoam/companion/sensing/{HealthReader.kt, LocationSamples.kt, UsageReader.kt, DayBuilder.kt}`, `shared/src/androidMain/.../sensing/{AndroidHealthReader.kt, AndroidHrvReader.kt, LocationSampleWorker.kt, AndroidUsageReader.kt}`, `shared/src/commonMain/.../settings/{SettingsScreen.kt, ConsentController.kt}`
+- Create: `core/src/commonMain/kotlin/app/depressify/core/sensing/Aggregators.kt`
+- Create: `shared/src/commonMain/kotlin/app/depressify/sensing/{HealthReader.kt, LocationSamples.kt, UsageReader.kt, DayBuilder.kt}`, `shared/src/androidMain/.../sensing/{AndroidHealthReader.kt, AndroidHrvReader.kt, LocationSampleWorker.kt, AndroidUsageReader.kt}`, `shared/src/commonMain/.../settings/{SettingsScreen.kt, ConsentController.kt}`
 - Modify: `androidApp/src/main/AndroidManifest.xml` (Health Connect read permissions and rationale activity, `ACCESS_FINE_LOCATION`, `PACKAGE_USAGE_STATS`, `POST_NOTIFICATIONS`, `RECORD_AUDIO`, `FOREGROUND_SERVICE_MICROPHONE`)
-- Test: `core/src/commonTest/kotlin/com/twoam/companion/core/sensing/AggregatorsTest.kt`, `shared/src/commonTest/.../settings/ConsentControllerTest.kt`
+- Test: `core/src/commonTest/kotlin/app/depressify/core/sensing/AggregatorsTest.kt`, `shared/src/commonTest/.../settings/ConsentControllerTest.kt`
 
 **Interfaces:**
 - Produces (core) `object Aggregators`:
@@ -626,9 +626,9 @@ With two developers, Dev 2 takes the Firebase track after the core logic, and Ta
 ### Task 20: Daily job, heartbeat and Nudges
 
 **Files:**
-- Create: `core/src/commonMain/kotlin/com/twoam/companion/core/daily/DailyPipeline.kt`
-- Create: `shared/src/commonMain/kotlin/com/twoam/companion/daily/{DailyJob.kt, Notifier.kt}`, `shared/src/androidMain/.../daily/{DailyWorker.kt, AndroidNotifier.kt}`
-- Test: `core/src/commonTest/kotlin/com/twoam/companion/core/daily/DailyPipelineTest.kt`
+- Create: `core/src/commonMain/kotlin/app/depressify/core/daily/DailyPipeline.kt`
+- Create: `shared/src/commonMain/kotlin/app/depressify/daily/{DailyJob.kt, Notifier.kt}`, `shared/src/androidMain/.../daily/{DailyWorker.kt, AndroidNotifier.kt}`
+- Test: `core/src/commonTest/kotlin/app/depressify/core/daily/DailyPipelineTest.kt`
 
 **Interfaces:**
 - Consumes: `Baseline`, `FlagRules`, `FlagPolicy`, `NudgeRules`, `Outcomes`, `DayBuilder`, `PatientRepo`, `CalendarClient`, `MapToolClient`.
@@ -652,7 +652,7 @@ With two developers, Dev 2 takes the Firebase track after the core logic, and Ta
 ### Task 21: iOS
 
 **Files:**
-- Create: `shared/src/iosMain/kotlin/com/twoam/companion/live/IosAudioIO.kt`, `shared/src/iosMain/.../daily/{IosNotifier.kt, IosDailyTask.kt}`, `shared/src/iosMain/.../sensing/IosHealthReader.kt` (returns nulls)
+- Create: `shared/src/iosMain/kotlin/app/depressify/live/IosAudioIO.kt`, `shared/src/iosMain/.../daily/{IosNotifier.kt, IosDailyTask.kt}`, `shared/src/iosMain/.../sensing/IosHealthReader.kt` (returns nulls)
 - Modify: `iosApp/` (Firebase iOS SDK through Swift Package Manager, `GoogleService-Info.plist`, microphone usage description, background task identifier)
 
 **Interfaces:**
@@ -673,7 +673,7 @@ With two developers, Dev 2 takes the Firebase track after the core logic, and Ta
 ### Task 22: Demo controls, script and rehearsal
 
 **Files:**
-- Create: `shared/src/commonMain/kotlin/com/twoam/companion/demo/{DemoOverrides.kt, DebugPanel.kt, DemoPatientPicker.kt}`, `docs/demo-script.md`, `docs/demo/fictional-intake.md`
+- Create: `shared/src/commonMain/kotlin/app/depressify/demo/{DemoOverrides.kt, DebugPanel.kt, DemoPatientPicker.kt}`, `docs/demo-script.md`, `docs/demo/fictional-intake.md`
 - Modify: `DayBuilder` (apply overrides), `DailyJob` (mark `demoOverride: true`)
 
 **Interfaces:**
@@ -709,9 +709,9 @@ With two developers, Dev 2 takes the Firebase track after the core logic, and Ta
 Only after Task 22 is rehearsed. If it is not stable, drop it; never send recorded audio anywhere as a substitute.
 
 **Files:**
-- Create: `core/src/commonMain/kotlin/com/twoam/companion/core/voice/{VoiceAnalyzer.kt, PitchDetector.kt}`
+- Create: `core/src/commonMain/kotlin/app/depressify/core/voice/{VoiceAnalyzer.kt, PitchDetector.kt}`
 - Modify: `Signal` (add `PITCH_VARIATION`, `SPEECH_RATE`, `PAUSE_RATIO`), `CheckInRunner` (feed frames with `gated = audio.companionSpeaking`), `CheckIn` (optional `voice` map), dashboard Signal trends
-- Test: `core/src/commonTest/kotlin/com/twoam/companion/core/voice/VoiceAnalyzerTest.kt`
+- Test: `core/src/commonTest/kotlin/app/depressify/core/voice/VoiceAnalyzerTest.kt`
 
 **Interfaces:**
 - Produces: `fun interface PitchDetector { fun pitchHz(frame: FloatArray, sampleRate: Int): Float? }` with a YIN implementation written in common Kotlin (range 60–400 Hz), and `class VoiceAnalyzer(sampleRate: Int = 16_000, detector: PitchDetector) { fun accept(frame: ShortArray, gated: Boolean); fun finish(): VoiceFeatures? }`.
