@@ -353,22 +353,24 @@ describe("profiles", () => {
 
 describe("each Demo Patient's own story", () => {
   test("every profile has Suggestions for each of its kinds, and themes and quotes in the Summary's limits", () => {
-    for (const profile of Object.values(PROFILES)) {
-      for (const kind of profile.suggestionKinds) {
-        assert.ok((profile.story.suggestions[kind]?.length ?? 0) >= 1, profile.id + ": no Suggestion for " + kind);
+    // The live demo Patient's Check-ins come from its script, not a story.
+    for (const profile of Object.values(PROFILES).filter((p) => !p.script)) {
+      const story = /** @type {import("../../src/profiles.js").Story} */ (profile.story);
+      for (const kind of profile.suggestionKinds ?? []) {
+        assert.ok((story.suggestions[kind]?.length ?? 0) >= 1, profile.id + ": no Suggestion for " + kind);
       }
       for (const tone of /** @type {const} */ (["well", "low"])) {
         // A Summary has up to four different themes, so each tone needs at least four.
-        assert.ok(profile.story.themes[tone].length >= 4, profile.id + ": too few " + tone + " themes");
-        for (const theme of profile.story.themes[tone]) assert.ok(theme.split(" ").length >= 2 && theme.split(" ").length <= 4, theme);
-        for (const quote of profile.story.quotes[tone]) assert.ok(quote.length <= 200, quote);
+        assert.ok(story.themes[tone].length >= 4, profile.id + ": too few " + tone + " themes");
+        for (const theme of story.themes[tone]) assert.ok(theme.split(" ").length >= 2 && theme.split(" ").length <= 4, theme);
+        for (const quote of story.quotes[tone]) assert.ok(quote.length <= 200, quote);
       }
     }
   });
 
   test("Summaries and Suggestions speak only of that Patient's life", () => {
     for (const p of all) {
-      const story = PROFILES[/** @type {keyof typeof PROFILES} */ (p.profile)].story;
+      const story = /** @type {import("../../src/profiles.js").Story} */ (PROFILES[/** @type {keyof typeof PROFILES} */ (p.profile)].story);
       const themes = [...story.themes.well, ...story.themes.low];
       const quotes = [...story.quotes.well, ...story.quotes.low];
       const details = Object.values(story.suggestions).flat();

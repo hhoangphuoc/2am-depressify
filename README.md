@@ -11,7 +11,7 @@ A wellbeing companion for the time between Visits: a Kotlin Multiplatform Patien
 | `androidApp/` | Android application entry point. |
 | `iosApp/` | XcodeGen spec (`project.yml`) and Swift glue. |
 | `design/` | The Patient and Clinician design prototypes and the screen deck. |
-| `firebase/` | `firebase.json`, Firestore rules, `functions/` (TypeScript, vitest), `hosting/` (the dashboard) and `seed/` (the Demo Patients). |
+| `firebase/` | `firebase.json`, Firestore rules, `functions/` (TypeScript, vitest), `hosting/` (the dashboard) and `seed/` (the Demo Patients and the live demo Patient's seeded history). |
 | `fixtures/` | Fixtures shared by Kotlin and Node tests, such as the Baseline cases. |
 | `gradle/libs.versions.toml` | The only place library versions are pinned. |
 
@@ -52,6 +52,7 @@ The repository is public, so the Clinician's email is configuration, never code.
 | iOS app | `ClinicianEmail` (string) in a gitignored `iosApp/Depressify/Secrets.plist` | `clinician@example.com` with the emulators; with `GoogleService-Info.plist` the app stops at launch |
 | Allowlist | `npm run allow-clinician -- --email <clinician-email> [--project <project-id>]` in `firebase/seed` | a new Patient cannot create their record |
 | Seed | `--clinician <clinician-email>` or `CLINICIAN_EMAIL` (the option wins); the seed also allows that email | `clinician@example.com` in the emulator; a real project (`--project`) refuses to seed |
+| Live demo Patient | `--clinician <clinician-email>` or `CLINICIAN_EMAIL`; it must already be allowed (a warning if not) | `clinician@example.com` in the emulator; a real project refuses to seed |
 
 Emails are stored trimmed and in lower case, as Firebase Auth puts them in the sign-in token. A minimal `Secrets.plist`:
 
@@ -408,3 +409,43 @@ Each Demo Patient has their own invented life in Helsinki, so the Companion has 
 Each Demo Patient also has a `location`: an example apartment address in their neighbourhood (a public landmark's coordinates), which `suggestToday` searches around.
 
 The Demo Patients are linked to the Clinician from `--clinician` or `CLINICIAN_EMAIL`, and the seed adds that Clinician to the `clinicians` allowlist. Only the emulator falls back to `clinician@example.com`; a real project must be given the email, and the placeholder is refused there. The same inputs (`--today`, `--seed`, the Clinician) give the same data. The Clinician sees `demo-declining` (red), `demo-sparse` (amber) and `demo-steady` (green), in that order. `demo-steady` stopped sharing for three days about four weeks ago, so its Signals and Summaries show a gap there: what was saved while not sharing stays hidden from the Clinician. Live Patients are never touched. Needs Node 22 or newer.
+
+## Live demo Patient
+
+`npm run seed-live-patient` gives one real Patient account six weeks of invented history, so the Companion has context and "what seems to help" has something to learn from. Unlike the Demo Patients, the record is not synthetic: only the account itself and its Clinician can read it, and alerts apply as for any Patient.
+
+```sh
+cd firebase/seed && npm install
+npm run seed-live-patient -- --email <patient-email>              # Auth and Firestore emulators
+npm run seed-live-patient -- --email <patient-email> --reset      # delete the seeded history and write it again
+npm run seed-live-patient -- --email <patient-email> --clinician <clinician-email> --project <your-project-id>
+                                                                  # a real project (Application Default Credentials)
+```
+
+| Option | Meaning |
+|---|---|
+| `--email <email>` | The Patient's account (required). Printed only once, masked. Never commit it: the repository is public. |
+| `--clinician <email>` | The Clinician, also `CLINICIAN_EMAIL`. Required for a real project; the emulator falls back to `clinician@example.com`. It should already be on the allowlist (`npm run allow-clinician`); the command warns if not. |
+| `--display-name <name>` | Default `Alex`. |
+| `--today <date>`, `--seed <n>` | The last day of history and the pseudo-random seed, as for the seed. `--today` is for the emulators: on a real project the history always ends today, since a past day would look silent and the silence check would flag the Patient red. A real project also refuses a seed whose history has a red flag. |
+| `--reset` | Delete this Patient's seeded history and write it again. Without it, a Patient who already has seeded history is refused. |
+| `--project <id>` | As for the seed: the emulators by default; a `demo-` project is refused outside them. The Auth emulator goes with the Firestore emulator (`$FIREBASE_AUTH_EMULATOR_HOST`, or `127.0.0.1:9099`); a real project with `FIREBASE_AUTH_EMULATOR_HOST` set is refused. |
+
+**The account.** Found by email, or created with the email verified, the display name and no password. An existing account is reused and its email marked verified. No custom claims are set. The command refuses an account with the Clinician role and an email on the `clinicians` allowlist, and a Patient who declined sharing or withdrew a Consent in the app (it would undo their choice). It prints the uid, which is also the Patient id.
+
+**What it writes** under `patients/<uid>`, in Europe/Helsinki dates:
+
+- **The record:** `synthetic: false`, `healthSource: "synthetic"` (so the dashboard labels the data as synthetic), linked to the Clinician, `sharingConsent: "granted"`, invented Intake highlights that begin "Synthetic demo data" like the Demo Patients', a TMS end date 42 days ago, quiet hours 21 to 9, last seen now, last Check-in yesterday evening, and the level and reasons of the open flags.
+- **42 daily records** with stored Baseline comparisons and composites (the shared Baseline rule). A stable month, then nine days of drift: shorter sleep, fewer steps, more time at home, more late-night screen time. Two days without any Signals and four with the watch off, stored as `null`.
+- **24 Check-ins with Summaries**, more often in the first two weeks. Themes: work deadlines, sleep, missing friends, photography, cycling and the evening phone habit. Ratings dip in the last week.
+- **24 Suggestions** of six kinds, most accepted, with Outcomes by the seed's Outcome rule: morning daylight, walks and time in nature felt better; music helped a little; calls with friends were mixed; the breathing exercise was mostly not tried. Yesterday's Suggestion (morning daylight) is accepted with no Outcome, so the next Check-in asks how it went.
+- **Flags:** an amber `poor_sleep` flag from a deadline week, cleared by the Clinician after follow-up; an open amber `poor_sleep` flag from the last nights, and `drift` when the Signals hold low for three days. No red flag. All stamped `sharedWithClinician: true`. The Patient is amber on the dashboard.
+- **Two Visits** with PHQ-9 scores (at the TMS end date and 21 days ago), and every Consent granted (each Signal, sharing, ratings, Voice cues). No Digests: the Digest function writes those.
+
+**How reset finds the seeded history:** daily records carry `demoOverride: true`, and every other seeded id starts with `demo-` (`demo-checkin-<date>`, `demo-suggestion-<date>`, `demo-<kind>-<date>`, `demo-visit-<date>`). `--reset` deletes exactly those and writes them again. The functions' documents are never deleted: their ids are random, `<kind>-<checkInId>`, `crisis-…` or `silent-…`. The daily job writes `demoOverride: false`, so a date it already wrote keeps its record; a daily record a demo control wrote (`demoOverride: true`, demo values too) is deleted with the seeded history. Consents and the record are rewritten; the record's level and latest Check-in also count the app's own flags and Check-ins. Digests are left alone.
+
+With your own Google account as Application Default Credentials, the Firebase Auth calls may need a quota project: `gcloud auth application-default set-quota-project <your-project-id>`.
+
+**Signing in as this Patient.** The app on `main` signs in anonymously, so it gets a new uid and its own new record, not this one. To use this history the app has to sign in with this account (Google sign-in, or email and password after a password reset email from Firebase Auth), so that the auth uid is the Patient id. `demo.patientId` does not help: it only works for Demo Patients, which are synthetic.
+
+**Keep it alive.** It is a real, sharing Patient: once `silenceCheck` is deployed, a day without the app connecting raises a red `silent` flag and emails the Clinician. Open the app, or run the command again with `--reset`, within a day of a demo.

@@ -14,6 +14,10 @@ _Avoid_: User, client
 A Patient that exists only for testing and demos, whose Signals and history are synthetic.
 _Avoid_: Test account, fake user, mock
 
+**Live demo Patient**:
+A Patient with a real account on the demo phone, not synthetic, given seeded history so the demo has context. Only the account itself and its Clinician read it.
+_Avoid_: Test account, mock patient
+
 **Clinician**:
 A care professional who follows the progress of the Patients linked to them.
 _Avoid_: Doctor, therapist, admin

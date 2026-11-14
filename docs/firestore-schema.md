@@ -76,7 +76,7 @@ Written by the phone's daily job (#26): the decision is `DailyJob.run` in `core`
 | `values` | map of Signal key to number or null | Holds every Signal key; `null` where there is no value. |
 | `vsBaseline` | map of Signal key to number or null | Today's distance from the Patient's own Baseline, in units of their spread. `null` with fewer than 5 valid prior days or no value today. |
 | `composite` | number or null | Mean of the oriented comparisons that exist; `null` if none. |
-| `demoOverride` | boolean | `true` when a demo control wrote this record. Overrides only ever touch these. |
+| `demoOverride` | boolean | `true` when a demo control wrote this record. Overrides only ever touch these. The live demo Patient's seeded history sets it on every daily record it writes, and `--reset` deletes exactly those (see [Live demo Patient](#live-demo-patient)). The app writes `false`. |
 | `sharedWithClinician` | boolean | The sharing stamp. A record rewritten later in the day keeps the stamp it was created with. |
 
 #### Baseline
@@ -290,6 +290,7 @@ What the functions count per Patient record (`firebase/functions/src/limits.ts`)
 | Clear after follow-up | `patients/{id}/flags` where `sharedWithClinician == true`, then the reviewed flags by id in a transaction | none |
 | Digest functions | `summaries` by `createdAtMillis` range, `daily` by `date` range (Admin SDK); the stamp is filtered in code | single field (automatic) |
 | Seed reset | `patients` where `synthetic == true` (Admin SDK) | single field (automatic) |
+| Live demo Patient reset | every document of one Patient's `daily`, `checkIns`, `summaries`, `suggestions`, `flags` and `visits`, filtered in code by the seeded markers (Admin SDK) | none |
 | Finish Check-in | in the finish transaction, `patients/{id}/flags` where `kind in ["crisis", "decline", "unassessed"]` (Admin SDK) | single field (automatic) |
 | Silence check | all `patients`, selecting `sharingConsent`, `synthetic` and `lastSeenAtMillis` only; then, in each silent Patient's transaction, `patients/{id}/flags` where `kind == "silent"` (Admin SDK) | single field (automatic) |
 
@@ -298,6 +299,22 @@ The list query must carry the sharing filter (built by `clinicianListFilters` in
 ## Demo Patients
 
 `firebase/seed` writes three Demo Patients with the Admin SDK: `demo-steady` (green), `demo-declining` (amber flags, then red in the last two days) and `demo-sparse` (seven Check-ins at most, days of missing Signals, amber for low mood). Each has `synthetic: true`, `healthSource: "synthetic"`, `sharingConsent: "granted"`, the seeded Clinician (`--clinician` or `CLINICIAN_EMAIL`, also added to `clinicians`), an Intake that begins "Synthetic demo data", 42 daily records ending today, a TMS end date 42 days ago, one Visit 21 days ago with a PHQ-9 score, every Consent granted, and Check-ins with Summaries and Suggestions (most with an Outcome score). Every value is invented. Flags sit on the first morning the spec's starting thresholds hold. Every stamped document is `sharedWithClinician: true`, except that `demo-steady` stopped sharing from 06:00 30 days ago to 06:00 27 days ago: its three daily records, Check-ins, Summaries and Suggestions from that time are stamped `false`, so the dashboard shows a three-day gap; its `sharingChangedAtMillis` and `consents/sharing` are the time it shared again. Seeded Check-ins carry `assessment: "assessed"` and, when the previous Suggestion was accepted, `previousTried` equal to its `tried`; that Suggestion's Outcome is scored by the shared Outcome rule and its `outcomeCheckInId` is that Check-in. Document ids are stable: daily records by date, `checkin-<date>` (also the Summary id), `suggestion-<date>`, `<kind>-<date>` for flags and `visit-<date>`.
+
+## Live demo Patient
+
+`npm run seed-live-patient` in `firebase/seed` gives one real account (found or created in Firebase Auth by `--email`) six weeks of invented history under `patients/<uid>`. The record is a normal Patient's: `synthetic: false`, so only the owner and their Clinician read it and alerts apply, with `healthSource: "synthetic"` to label the data, `sharingConsent: "granted"` and the given Clinician. The history comes from the same generator as the Demo Patients (profile `live` in `firebase/seed/src/live-profile.js`). The README lists what it contains.
+
+The contract has no marker field on most documents, so the seeded history is marked with what the contract already has:
+
+| Collection | Marker | Why it is safe |
+|---|---|---|
+| `daily` | `demoOverride: true` (the id is the date) | The daily job writes `false`, so a date it has written (`demoOverride: false`) is skipped and its record wins. A demo control (#31) also writes `true`; `--reset` deletes those too, since they hold demo values as well. On the day of seeding the phone keeps today's seeded values (the daily job keeps a `demoOverride` record's values), so that day's demo shows the seeded drift. |
+| `checkIns`, `summaries`, `suggestions`, `flags`, `visits` | id starts with `demo-`: `demo-checkin-<date>` (also the Summary id), `demo-suggestion-<date>`, `demo-<kind>-<date>`, `demo-visit-<date>` | Start Check-in uses random ids, the app's crisis flag is `crisis-<millis>`, the silence check's is `silent-<millis>`, Finish Check-in's flags are `<kind>-<checkInId>` (and it never finishes a seeded Check-in), and the app's Suggestion ids are `s<millis>`. Visits the Clinician writes (no dashboard screen yet) must not use `demo-` ids. |
+| `consents` | none: one document per subject | Rewritten (all granted) on every run, never deleted. A run refuses a Patient who declined sharing or withdrew a Consent in the app, so the seed never undoes their choice. |
+| the record | none | Rewritten on every run (merged), with `flagLevel` and `flagReasons` from every open flag stamped `sharedWithClinician`, the app's included, and `lastCheckInAtMillis` the later of the seeded history's and the app's. |
+| `digests` | not written | The Digest function's. A Digest it made from seeded Summaries stays after a reset. |
+
+Without `--reset`, a Patient who already has seeded history is refused. With it, the documents with these markers are deleted and the history written again; nothing else is deleted. `npm run seed` never touches this Patient (it deletes only `synthetic == true`).
 
 
 ## Security rules

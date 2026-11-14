@@ -1,11 +1,16 @@
-// The three Demo Patients. Every value is invented; no open dataset is used.
+// The three Demo Patients, and the live demo Patient's profile (live-profile.js). Every value is
+// invented; no open dataset is used.
 //
 // A profile describes a Patient's shape: their usual Signal values, how those change, which days
 // they check in and how they rate their day. The generator (generate.js) turns a profile into
 // documents and places the Attention flags the history raises (flags.js). `d` is always the
 // number of days before today (0 = today, 41 = the first daily record, 42 = the TMS end date).
 
+import { live } from "./live-profile.js";
+
 /** @typedef {import("../../functions/src/types.ts").SuggestionKind} SuggestionKind */
+/** @typedef {import("../../functions/src/types.ts").FlagKind} FlagKind */
+/** @typedef {import("../../functions/src/types.ts").VoiceCue} VoiceCue */
 /** @typedef {import("./random.js").Random} Random */
 
 /**
@@ -44,14 +49,34 @@
  */
 
 /**
+ * One Check-in of a profile that tells a fixed story: what the Patient rated and talked about,
+ * the Suggestion made, and what they said about it at the next Check-in.
+ * @typedef {object} ScriptedCheckIn
+ * @property {Ratings} ratings
+ * @property {string[]} themes at most four, each a few words
+ * @property {string[]} [quotes] the Patient's own words, at most three
+ * @property {VoiceCue[]} [voiceCues] observations, never a diagnosis
+ * @property {string} [sleepNote] added to the sleep line, in the Patient's terms
+ * @property {{ kind: SuggestionKind, details: string, status: "accepted" | "declined" }} suggestion
+ * @property {{ tried: boolean, felt: number | null, said: string }} [outcome] the answer given at the
+ *   next Check-in; none for a declined Suggestion and for the latest one, which is still open
+ */
+
+/**
  * @typedef {object} Profile
- * @property {"steady" | "declining" | "sparse"} key
- * @property {string} id stable Patient document id
+ * @property {"steady" | "declining" | "sparse" | "live"} key
+ * @property {string} id stable Patient document id (the live Patient's comes from its auth uid)
  * @property {string} displayName
  * @property {string} intakeHighlights begins "Synthetic demo data"
- * @property {{ label: string, latitude: number, longitude: number }} location an example address
- *   near where the story is set (a public landmark's coordinates), for place searches
+ * @property {{ label: string, latitude: number, longitude: number }} [location] an example address
+ *   near where the story is set (a public landmark's coordinates), for place searches. None for the
+ *   live demo Patient: a live Patient's location stays on their phone.
+ * @property {boolean} [synthetic] false for the live demo Patient, a real account; default true
+ * @property {boolean} [seededHistory] mark every document as seeded history, so it can be found and
+ *   reset without touching what the app writes later: daily records get `demoOverride: true`, and
+ *   every other id starts with `demo-` (see SEED_ID_PREFIX)
  * @property {number} visitScore PHQ-9 score at the Visit 21 days ago
+ * @property {number} [tmsEndVisitScore] PHQ-9 score at a Visit on the TMS end date, if there was one
  * @property {UsualValues} usual
  * @property {Shape} decline
  * @property {(d: number) => Partial<Record<string, number>>} [overrides] fixed values on given days
@@ -60,8 +85,12 @@
  * @property {(d: number, random: Random) => "all" | "some" | "none"} signalsPresent
  * @property {(d: number, random: Random) => boolean} checksIn
  * @property {(d: number, random: Random) => Ratings} ratings
- * @property {readonly SuggestionKind[]} suggestionKinds weighted by repetition
- * @property {Story} story
+ * @property {readonly SuggestionKind[]} [suggestionKinds] weighted by repetition; not used with a script
+ * @property {Story} [story] what the Check-ins are about; not used with a script
+ * @property {Record<number, ScriptedCheckIn>} [script] by day: the Check-ins of a fixed story. With a
+ *   script, its days are the Check-in days and everything said comes from it.
+ * @property {{ kind: FlagKind, at: Moment }[]} [followUps] the Clinician cleared the open flag of
+ *   this kind at this time, after following up
  * @property {{ d: number, hour: number, minute: number }} lastSeen
  * @property {{ from: Moment, to: Moment }} [sharingPause] a time in the past when the Patient did
  *   not share: withdrew at `from` and shared again at `to`. What was saved in between is stamped
@@ -393,4 +422,4 @@ const sparse = {
   lastSeen: { d: 1, hour: 7, minute: 16 },
 };
 
-export const PROFILES = Object.freeze({ steady, declining, sparse });
+export const PROFILES = Object.freeze({ steady, declining, sparse, live });

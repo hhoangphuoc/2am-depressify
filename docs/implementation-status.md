@@ -16,6 +16,7 @@ Kept up to date as PRs are opened and merged. Each PR also updates its own rows 
 | #61 | `codex/find-places` → `main` | #18: the `mapTool` callable (`find_places` with real nearby places, `get_weather`) and `generateMusic` | Open |
 | #69 | `feat/26-daily-job-rules` (from `main`) | #26, `core` only: the daily job's pure pipeline (daily record, Baseline, sign of life, Signal flag rules, write plan) | Tested (core 124, seed 105, dashboard 310); the app's background work, debug action and device check are still to do |
 | #68 | `feat/27-nudge-rules` → `feat/26-daily-job-rules` (stacked on #69) | #27, `core` part: Nudge rules, Nudge text, quiet hours, and the `core` purity check | Open; tested (core 161) |
+| #70 | `feat/live-demo-patient` → `main` | Live demo Patient: `npm run seed-live-patient` gives one real Patient account six weeks of seeded history | Open; tested (seed 151 after merging `main`). A rerun with `--display-name` also renames the existing account. **Run on `junction26hel-7400` on 14 November 2026** for the team's test Gmail account: account created (verified, no password), 42 daily, 24 Check-ins and Summaries, 24 Suggestions, 3 flags (level amber), 2 Visits, 12 Consents. Seeded before the Intake label: `--reset` once to add it. |
 
 **Deployed on `junction26hel-7400`:**
 - Rules and indexes.
@@ -218,6 +219,18 @@ Write plan, mirroring `raisedAttention` and `hasOpenFlag` in the functions:
 - **Clinician:** `--clinician <email>` or `CLINICIAN_EMAIL`. Only the emulator falls back to the placeholder `clinician@example.com`; a real project must be given the email and refuses the placeholder. The seed also adds that Clinician to the `clinicians` allowlist.
 - **`npm run allow-clinician -- --email <email> [--project <id>]`** adds a Clinician to the allowlist, with the same targeting rules.
 - **Shared Baseline fixture:** `fixtures/baseline/baseline-cases.json`, with a 14-day median, at least 5 valid days, and a floor on the spread. The seed and the dashboard check it now, and #16 must check it from Kotlin.
+
+**Live demo Patient** (`feat/live-demo-patient`). `npm run seed-live-patient -- --email <patient-email> [--clinician <email>] [--display-name <name>] [--today <date>] [--seed <n>] [--reset] [--project <id>]` gives one real Patient account six weeks of seeded history, so the Companion and "what seems to help" have context:
+
+| Part | State |
+|---|---|
+| Account | Found by email in Firebase Auth, or created with a verified email and no password; no custom claims. Refuses a Clinician's account. Prints the uid; the email only masked. |
+| Record | `synthetic: false` (owner and Clinician only; alerts apply), `healthSource: "synthetic"`, sharing granted, amber. |
+| History | The `live` profile in `src/live-profile.js`, written by the shared generator: 42 daily records (a stable month, then nine days of drift), 24 Check-ins with Summaries, 24 Suggestions with Outcomes (daylight, walks and nature on top; the latest open), a cleared and an open amber `poor_sleep` flag plus `drift`, two Visits, every Consent. No red flag; no Digests. |
+| Reset | Daily records `demoOverride: true`, other ids `demo-…`; `--reset` deletes only those. What the app wrote is kept, and counts toward the record's level and last Check-in. |
+| Tests | `test/unit/live-patient.test.js` and `live-cli.test.js` (determinism, the story's invariants across seeds and dates, the contract), `test/emulator/live-patient.test.js` (the account, `--reset`, the owner's and the Clinician's reads under the rules). |
+| Results on this branch | Seed 151 pass after merging `main`; the Demo Patients' output is byte-identical to `main`'s generator. On `junction26hel-7400`: `--today` is refused, and a rerun without `--reset` passes the Consent check and stops at the seeded history, writing nothing. |
+| Still to do | The app on `main` signs in anonymously, so it cannot open this Patient until it signs in with the account (Google, or email and password after a reset). |
 
 ### Configuration for a real project
 
