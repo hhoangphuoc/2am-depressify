@@ -193,7 +193,11 @@ describe("every Demo Patient", () => {
           assert.equal(data.status, "accepted");
           assert.notEqual(data.tried, null);
           assert.ok(data.outcomeScore >= -1 && data.outcomeScore <= 1);
-          assert.equal(data.outcomeScore, outcomeScore(/** @type {boolean} */ (data.tried), data.felt, data.objectiveChange));
+          assert.equal(data.outcomeScore, outcomeScore(data.tried, data.felt, data.objectiveChange));
+          // Recorded by the next Check-in, as Finish Check-in records it.
+          assert.ok(p.checkIns.some((c) => c.id === data.outcomeCheckInId), `${p.id}: ${data.outcomeCheckInId}`);
+        } else {
+          assert.equal(data.outcomeCheckInId, null);
         }
         if (data.status === "declined") assert.equal(data.tried, null);
       }

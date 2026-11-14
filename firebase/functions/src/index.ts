@@ -4,6 +4,7 @@ import { setGlobalOptions } from "firebase-functions/v2";
 import { onRequest } from "firebase-functions/v2/https";
 import { adminAlertStore, createAlertFunctions, dashboardUrlFromParams } from "./alertFunctions";
 import { adminCheckInStore, createCheckInFunctions } from "./checkInFunctions";
+import { fetchDecisionsClient } from "./decisionsApi";
 import { GEMINI_API_KEY, genaiTextClient } from "./gemini";
 import { adminDigestStore, createDigestFunctions } from "./digestFunctions";
 import { healthStatus } from "./health";
@@ -67,12 +68,14 @@ export const { silenceCheck } = createSilenceFunctions({
 
 /**
  * Check-in (the Patient, or anyone signed in on a Demo Patient): `startCheckIn` mints the
- * single-use Live token and creates the Check-in; `finishCheckIn` writes the Summary and the
- * Check-in's ratings and Voice cues, and drops the transcript.
+ * single-use Live token and creates the Check-in; `finishCheckIn` writes the Summary, the
+ * Check-in's ratings and Voice cues, and the Attention flags the Decisions API's answers raise
+ * (#20), and drops the transcript.
  */
 export const { startCheckIn, finishCheckIn } = createCheckInFunctions({
   store: () => adminCheckInStore(adminDb()),
   textModel: () => genaiTextClient(GEMINI_API_KEY.value()),
+  decisions: () => fetchDecisionsClient(GEMINI_API_KEY.value()),
   liveTokens: () => fetchLiveTokenClient(GEMINI_API_KEY.value()),
 });
 

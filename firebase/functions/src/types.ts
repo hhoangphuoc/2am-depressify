@@ -76,6 +76,17 @@ export type ConsentPurpose = (typeof CONSENT_PURPOSES)[number];
 export const QUESTIONNAIRE_KINDS = ["phq2", "phq9"] as const;
 export type QuestionnaireKind = (typeof QUESTIONNAIRE_KINDS)[number];
 
+/**
+ * How Finish Check-in's automatic review (the Decisions API, #20) of a Check-in went. For the
+ * Clinician's dashboard only; the Patient app never shows it.
+ * - `assessed`: the questions were answered (any flag they gave is in `flags`);
+ * - `unassessed`: the safety filter refused to judge it (an amber `unassessed` flag was raised);
+ * - `unavailable`: a timeout or other failure. No flag came from it, and the dashboard shows
+ *   "assessment unavailable" beside the last known flag, never a new green.
+ */
+export const ASSESSMENTS = ["assessed", "unassessed", "unavailable"] as const;
+export type Assessment = (typeof ASSESSMENTS)[number];
+
 // ---------------------------------------------------------------------------------------------
 // Collections
 // ---------------------------------------------------------------------------------------------
@@ -184,7 +195,8 @@ export interface VoiceCue {
 
 /**
  * `patients/{id}/checkIns/{checkInId}`. Ratings are integers 1 to 5, or null. The app owns only the
- * times; the ratings, Voice cues and crisis marker are written by Finish Check-in.
+ * times; the ratings, Voice cues, crisis marker, assessment and `previousTried` are written by
+ * Finish Check-in.
  */
 export interface CheckIn {
   id: string;
@@ -195,6 +207,17 @@ export interface CheckIn {
   sleepQuality: number | null;
   voiceCues: VoiceCue[];
   crisis: boolean;
+  /**
+   * How the automatic review went (`ASSESSMENTS`), written by Finish Check-in. Null until then, and
+   * for a Check-in in which the Patient said nothing (there was nothing to review).
+   */
+  assessment: Assessment | null;
+  /**
+   * Whether the Patient tried the previous Suggestion, as the automatic review heard it: true, false,
+   * or null when unknown (not discussed, unclear, no previous Suggestion, or no review). Written by
+   * Finish Check-in; the Outcome on the Suggestion (#21) is written from it.
+   */
+  previousTried: boolean | null;
   /** Whether the Patient was sharing when this Check-in was created. Never changes. */
   sharedWithClinician: boolean;
 }
@@ -219,7 +242,8 @@ export interface Summary {
 
 /**
  * `patients/{id}/suggestions/{suggestionId}`. The app changes only `status` and `booked`; the Outcome
- * (`tried`, `felt`, `objectiveChange`, `outcomeScore`) is written by functions only.
+ * (`tried`, `felt`, `objectiveChange`, `outcomeScore`, `outcomeCheckInId`) is written by functions
+ * only, by Finish Check-in (#21; src/outcomes.ts).
  */
 export interface Suggestion {
   id: string;
@@ -228,12 +252,19 @@ export interface Suggestion {
   suggestedAtMillis: number;
   status: SuggestionStatus;
   booked: boolean;
-  /** Null until the Patient answers; false means "not this time". */
+  /** True or false once the Patient answers; false means "not this time". Null while open, and for "prefer not to say". */
   tried: boolean | null;
-  /** 1 to 5. */
+  /** How trying it felt, 1 to 5, or null. Only when tried. */
   felt: number | null;
+  /** The oriented steps comparison with Baseline on the day the Suggestion was made, or null. */
   objectiveChange: number | null;
+  /** Null until the Patient answers, and for "prefer not to say"; -0.1 for not tried; otherwise in -1..1. */
   outcomeScore: number | null;
+  /**
+   * The Check-in whose answer recorded the Outcome. Null while the Outcome is open: together with
+   * `tried` it tells open (null, null), "prefer not to say" (set, null), not tried and tried apart.
+   */
+  outcomeCheckInId: string | null;
   /** Whether the Patient was sharing when this Suggestion was created. Never changes. */
   sharedWithClinician: boolean;
 }

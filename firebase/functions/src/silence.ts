@@ -24,8 +24,9 @@
 // the same silence computes the same id, so a retried or overlapping run never writes a second one,
 // and an episode whose flag the Clinician has cleared is not flagged again until the phone has been
 // seen and gone quiet once more.
+import { hasOpenFlag, raisedAttention, type StoredFlag } from "./flags";
 import { isSharingActive, sharingStamp } from "./sharing";
-import { FLAG_LEVELS, type Flag, type FlagLevel, type PatientDoc } from "./types";
+import type { Flag, PatientDoc } from "./types";
 
 /** At the top of every hour. */
 export const SILENCE_SCHEDULE = "0 * * * *";
@@ -81,36 +82,6 @@ export function silentFlag(patient: Partial<Pick<PatientDoc, "sharingConsent">>,
   };
 }
 
-function rank(level: unknown): number {
-  return FLAG_LEVELS.indexOf(level as FlagLevel);
-}
-
-/**
- * The Patient's `flagLevel` and `flagReasons` after raising `flag`: the level only ever goes up,
- * and the reasons keep their order (highest level first, then newest), with the new reason placed
- * after any reason of a higher level. A new red reason, the newest red, therefore comes first.
- */
-export function raisedAttention(
-  patient: Partial<Pick<PatientDoc, "flagLevel" | "flagReasons">>,
-  flag: Pick<Flag, "level" | "reason">,
-): Pick<PatientDoc, "flagLevel" | "flagReasons"> {
-  const current: FlagLevel = rank(patient.flagLevel) >= 0 ? (patient.flagLevel as FlagLevel) : "green";
-  const flagLevel = rank(flag.level) > rank(current) ? flag.level : current;
-  const kept = (Array.isArray(patient.flagReasons) ? patient.flagReasons : []).filter(
-    (reason): reason is string => typeof reason === "string" && reason !== "" && reason !== flag.reason,
-  );
-  // Reasons on the record are ordered highest level first. A flag below the current level goes after
-  // all of them; one at or above it is the newest of the highest level, so it goes first.
-  const flagReasons = rank(flag.level) >= rank(current) ? [flag.reason, ...kept] : [...kept, flag.reason];
-  return { flagLevel, flagReasons };
-}
-
-/** A flag already stored for the Patient, with its id. */
-export interface StoredFlag {
-  id: string;
-  flag: Partial<Flag>;
-}
-
 export type SilencePlan =
   | { raise: true; flagId: string; flag: Flag; update: Pick<PatientDoc, "flagLevel" | "flagReasons"> }
   | { raise: false; skip: SilencePlanSkip };
@@ -130,9 +101,7 @@ export function silencePlan(
   const flag = silentFlag(patient!, nowMillis);
   const flagId = silentFlagId(decision.lastSeenAtMillis);
   const silent = silentFlags.filter((stored) => stored.flag.kind === "silent");
-  if (silent.some((stored) => stored.flag.clearedAtMillis == null && stored.flag.sharedWithClinician === flag.sharedWithClinician)) {
-    return { raise: false, skip: "already_open" };
-  }
+  if (hasOpenFlag(silent, "silent", flag.sharedWithClinician)) return { raise: false, skip: "already_open" };
   if (silent.some((stored) => stored.id === flagId)) return { raise: false, skip: "episode_flagged" };
   return { raise: true, flagId, flag, update: raisedAttention(patient!, flag) };
 }
