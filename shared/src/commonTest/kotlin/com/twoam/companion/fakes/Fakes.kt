@@ -1,8 +1,13 @@
 package com.twoam.companion.fakes
 
+import com.twoam.companion.core.model.Consent
+import com.twoam.companion.core.model.ConsentPurpose
 import com.twoam.companion.core.model.PatientDoc
+import com.twoam.companion.core.model.SharingConsent
 import com.twoam.companion.data.AuthGateway
+import com.twoam.companion.data.ConsentStore
 import com.twoam.companion.data.PatientStore
+import kotlinx.coroutines.CompletableDeferred
 
 class FakeAuthGateway(var signedInUid: String? = null, private val newUid: String = "uid-1") : AuthGateway {
     var failSignIn: Boolean = false
@@ -19,19 +24,60 @@ class FakeAuthGateway(var signedInUid: String? = null, private val newUid: Strin
     }
 }
 
-class FakePatientStore : PatientStore {
+/**
+ * The Patient record and its Consents in memory. A sharing write updates the record and
+ * `consents/sharing` together, like the Firestore transaction. Set [failSharingWrites] or
+ * [failReads] to simulate a server that cannot be reached, and [sharingGate] to hold a write open.
+ */
+class FakePatientStore(val consents: FakeConsentStore = FakeConsentStore()) : PatientStore {
     val records: MutableMap<String, PatientDoc> = mutableMapOf()
     var failReads: Boolean = false
+    var failSharingWrites: Boolean = false
+
+    /** When set, a sharing write commits on the server even though the call throws (a lost reply). */
+    var commitThenFail: Boolean = false
+    var sharingGate: CompletableDeferred<Unit>? = null
     var creates: Int = 0
         private set
+    var sharingWrites: Int = 0
+        private set
 
-    override suspend fun exists(patientId: String): Boolean {
+    override suspend fun get(patientId: String): PatientDoc? {
         if (failReads) throw IllegalStateException("offline")
-        return patientId in records
+        return records[patientId]
     }
 
     override suspend fun create(patientId: String, patient: PatientDoc) {
         creates++
         records[patientId] = patient
+    }
+
+    override suspend fun setSharingConsent(patientId: String, choice: SharingConsent, atMillis: Long) {
+        sharingWrites++
+        sharingGate?.await()
+        if (failSharingWrites && !commitThenFail) throw IllegalStateException("UNAVAILABLE: secret-internal-detail")
+        records[patientId] = records.getValue(patientId).copy(sharingConsent = choice, sharingChangedAtMillis = atMillis)
+        consents.stored.getOrPut(patientId) { mutableMapOf() }[ConsentPurpose.sharing.name] =
+            Consent(ConsentPurpose.sharing.name, choice == SharingConsent.granted, atMillis)
+        if (commitThenFail) throw IllegalStateException("DEADLINE_EXCEEDED")
+    }
+}
+
+class FakeConsentStore : ConsentStore {
+    /** patientId → subject → Consent. */
+    val stored: MutableMap<String, MutableMap<String, Consent>> = mutableMapOf()
+    var failReads: Boolean = false
+    var failWrites: Boolean = false
+    val writes: MutableList<Consent> = mutableListOf()
+
+    override suspend fun get(patientId: String, subject: String): Consent? {
+        if (failReads) throw IllegalStateException("offline")
+        return stored[patientId]?.get(subject)
+    }
+
+    override suspend fun set(patientId: String, consent: Consent) {
+        writes += consent
+        if (failWrites) throw IllegalStateException("UNAVAILABLE")
+        stored.getOrPut(patientId) { mutableMapOf() }[consent.subject] = consent
     }
 }

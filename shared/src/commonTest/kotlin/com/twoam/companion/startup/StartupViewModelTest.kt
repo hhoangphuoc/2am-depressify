@@ -2,7 +2,10 @@ package com.twoam.companion.startup
 
 import com.twoam.companion.fakes.FakeAuthGateway
 import com.twoam.companion.fakes.FakePatientStore
+import com.twoam.companion.config.DemoConfig
+import com.twoam.companion.core.model.PatientDoc
 import com.twoam.companion.session.PatientSession
+import com.twoam.companion.session.StartedPatient
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.StandardTestDispatcher
@@ -30,7 +33,11 @@ class StartupViewModelTest {
     @AfterTest
     fun tearDown() = Dispatchers.resetMain()
 
-    private fun viewModel() = StartupViewModel(PatientSession(auth, store, "clinician@example.com", "Live patient"))
+    private fun viewModel() = StartupViewModel(PatientSession(auth, store, DemoConfig.CLINICIAN_EMAIL, "Live patient"))
+
+    private val ready = StartupState.Ready(
+        StartedPatient("patient-1", PatientDoc(displayName = "Live patient", clinicianEmail = DemoConfig.CLINICIAN_EMAIL)),
+    )
 
     @Test
     fun startsInStartingThenBecomesReadyWithThePatientId() = runTest(dispatcher) {
@@ -39,7 +46,7 @@ class StartupViewModelTest {
 
         advanceUntilIdle()
 
-        assertEquals(StartupState.Ready("patient-1"), vm.state.value)
+        assertEquals(ready, vm.state.value)
     }
 
     @Test
@@ -65,7 +72,7 @@ class StartupViewModelTest {
         assertEquals(StartupState.Starting, vm.state.value)
         advanceUntilIdle()
 
-        assertEquals(StartupState.Ready("patient-1"), vm.state.value)
+        assertEquals(ready, vm.state.value)
         assertTrue(store.records.containsKey("patient-1"))
     }
 }

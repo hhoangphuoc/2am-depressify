@@ -7,7 +7,7 @@ import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
-import com.twoam.companion.shell.AppShell
+import com.twoam.companion.home.PatientHome
 import com.twoam.companion.startup.StartupRoute
 import com.twoam.companion.ui.theme.SmallStepTheme
 
@@ -16,7 +16,7 @@ import com.twoam.companion.ui.theme.SmallStepTheme
 fun App() {
     SmallStepTheme {
         Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background).safeDrawingPadding()) {
-            StartupRoute { AppShell() }
+            StartupRoute { started -> PatientHome(started) }
         }
     }
 }

@@ -25,8 +25,9 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import com.twoam.companion.history.HistoryState
 import com.twoam.companion.history.HistorySurface
-import com.twoam.companion.settings.SettingsState
 import com.twoam.companion.settings.SettingsSurface
+import com.twoam.companion.sharing.SharingAction
+import com.twoam.companion.sharing.SharingState
 import com.twoam.companion.today.TodayState
 import com.twoam.companion.today.TodaySurface
 import com.twoam.companion.ui.theme.SmallStepTokens
@@ -38,15 +39,15 @@ enum class Destination(val label: String) {
     SETTINGS("Settings"),
 }
 
-/** The three-tab shell, holding which destination is selected. */
+/** The three-tab shell, holding which destination is selected. Opens on Today. */
 @Composable
-fun AppShell(modifier: Modifier = Modifier) {
+fun AppShell(sharing: SharingState, onSharingAction: (SharingAction) -> Unit, modifier: Modifier = Modifier) {
     var selected by rememberSaveable { mutableStateOf(Destination.TODAY) }
     AppShellSurface(selected = selected, onSelect = { selected = it }, modifier = modifier) { destination ->
         when (destination) {
             Destination.TODAY -> TodaySurface(TodayState.Empty)
             Destination.HISTORY -> HistorySurface(HistoryState.Empty)
-            Destination.SETTINGS -> SettingsSurface(SettingsState.Empty)
+            Destination.SETTINGS -> SettingsSurface(sharing, onSharingAction)
         }
     }
 }

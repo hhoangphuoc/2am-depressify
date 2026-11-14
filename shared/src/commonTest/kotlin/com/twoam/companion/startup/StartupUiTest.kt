@@ -7,6 +7,8 @@ import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.v2.runComposeUiTest
+import com.twoam.companion.core.model.PatientDoc
+import com.twoam.companion.session.StartedPatient
 import com.twoam.companion.ui.theme.SmallStepTheme
 import com.twoam.companion.ui.theme.SmallStepTokens
 import kotlin.test.Test
@@ -35,7 +37,8 @@ class StartupUiTest {
     @Test
     fun readyShowsTheAppContent() = runComposeUiTest {
         setContent {
-            SmallStepTheme { StartupSurface(StartupState.Ready("p1"), onAction = {}) { id -> Text("ready $id") } }
+            val started = StartedPatient("p1", PatientDoc(displayName = "Live patient", clinicianEmail = "c@example.com"))
+            SmallStepTheme { StartupSurface(StartupState.Ready(started), onAction = {}) { Text("ready ${it.patientId}") } }
         }
 
         onNodeWithText("ready p1").assertIsDisplayed()

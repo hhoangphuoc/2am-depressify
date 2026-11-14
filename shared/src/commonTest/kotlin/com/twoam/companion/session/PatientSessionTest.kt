@@ -19,9 +19,10 @@ class PatientSessionTest {
 
     @Test
     fun firstOpenSignsInAnonymouslyAndCreatesThePatientLinkedToTheDemoClinician() = runTest {
-        val patientId = session.start()
+        val started = session.start()
 
-        assertEquals("patient-1", patientId)
+        assertEquals("patient-1", started.patientId)
+        assertEquals(store.records.getValue("patient-1"), started.patient)
         assertEquals(1, auth.signInCalls)
         val record = store.records.getValue("patient-1")
         assertEquals(DemoConfig.CLINICIAN_EMAIL, record.clinicianEmail)
@@ -43,10 +44,18 @@ class PatientSessionTest {
     }
 
     @Test
+    fun laterOpensReturnTheStoredRecordWithTheSharingDecision() = runTest {
+        session.start()
+        store.records["patient-1"] = store.records.getValue("patient-1").copy(sharingConsent = SharingConsent.declined)
+
+        assertEquals(SharingConsent.declined, session.start().patient.sharingConsent)
+    }
+
+    @Test
     fun aSignedInPatientWithoutARecordGetsOneCreated() = runTest {
         auth.signedInUid = "returning"
 
-        assertEquals("returning", session.start())
+        assertEquals("returning", session.start().patientId)
         assertEquals(0, auth.signInCalls)
         assertEquals(DemoConfig.CLINICIAN_EMAIL, store.records.getValue("returning").clinicianEmail)
     }

@@ -16,13 +16,14 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextAlign
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.twoam.companion.session.StartedPatient
 import com.twoam.companion.ui.theme.PillShape
 import com.twoam.companion.ui.theme.SmallStepTokens
 import org.koin.compose.viewmodel.koinViewModel
 
 /** View-model-bound startup: shows [ready] once the Patient is signed in and their record exists. */
 @Composable
-fun StartupRoute(ready: @Composable (patientId: String) -> Unit) {
+fun StartupRoute(ready: @Composable (started: StartedPatient) -> Unit) {
     val viewModel = koinViewModel<StartupViewModel>()
     val state by viewModel.state.collectAsStateWithLifecycle()
     StartupSurface(state = state, onAction = viewModel::onAction, ready = ready)
@@ -34,10 +35,10 @@ fun StartupSurface(
     state: StartupState,
     onAction: (StartupAction) -> Unit,
     modifier: Modifier = Modifier,
-    ready: @Composable (patientId: String) -> Unit,
+    ready: @Composable (started: StartedPatient) -> Unit,
 ) {
     when (state) {
-        is StartupState.Ready -> ready(state.patientId)
+        is StartupState.Ready -> ready(state.started)
         StartupState.Starting -> Centered(modifier) {
             CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
             Text(StartupCopy.STARTING, style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)

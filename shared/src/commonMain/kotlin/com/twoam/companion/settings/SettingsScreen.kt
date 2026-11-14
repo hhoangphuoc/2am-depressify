@@ -1,22 +1,34 @@
 package com.twoam.companion.settings
 
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
-import com.twoam.companion.ui.EmptyDestination
-
-/** Settings' screen state. Later slices add Signals and Consent, sharing and quiet hours. */
-sealed interface SettingsState {
-    data object Empty : SettingsState
-}
+import com.twoam.companion.sharing.SharingAction
+import com.twoam.companion.sharing.SharingPrivacySection
+import com.twoam.companion.sharing.SharingState
+import com.twoam.companion.sharing.Title
+import com.twoam.companion.ui.theme.SmallStepTokens
 
 object SettingsCopy {
     const val TITLE: String = "Settings"
-    const val EMPTY: String = "Choices about what you share will appear here."
 }
 
+/** Settings. Later slices add Signals and their Consents, quiet hours and Nudges. */
 @Composable
-fun SettingsSurface(state: SettingsState, modifier: Modifier = Modifier) {
-    when (state) {
-        SettingsState.Empty -> EmptyDestination(SettingsCopy.TITLE, SettingsCopy.EMPTY, modifier)
+fun SettingsSurface(sharing: SharingState, onSharingAction: (SharingAction) -> Unit, modifier: Modifier = Modifier) {
+    Column(
+        modifier = modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            .padding(SmallStepTokens.Size.ScreenPadding),
+        verticalArrangement = Arrangement.spacedBy(SmallStepTokens.Size.Gap),
+    ) {
+        Title(SettingsCopy.TITLE)
+        SharingPrivacySection(sharing, onSharingAction)
     }
 }

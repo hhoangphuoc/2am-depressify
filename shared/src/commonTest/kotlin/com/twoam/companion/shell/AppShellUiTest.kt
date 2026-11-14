@@ -9,7 +9,9 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.v2.runComposeUiTest
 import com.twoam.companion.history.HistoryCopy
-import com.twoam.companion.settings.SettingsCopy
+import com.twoam.companion.core.model.SharingConsent
+import com.twoam.companion.sharing.SharingCopy
+import com.twoam.companion.sharing.SharingState
 import com.twoam.companion.today.TodayCopy
 import com.twoam.companion.ui.theme.SmallStepTheme
 import com.twoam.companion.ui.theme.SmallStepTokens
@@ -17,9 +19,11 @@ import kotlin.test.Test
 
 @OptIn(ExperimentalTestApi::class)
 class AppShellUiTest {
+    private val sharing = SharingState(clinicianEmail = "clinician@example.com", choice = SharingConsent.granted)
+
     @Test
     fun opensOnTodayWithThreeTabs() = runComposeUiTest {
-        setContent { SmallStepTheme { AppShell() } }
+        setContent { SmallStepTheme { AppShell(sharing, onSharingAction = {}) } }
 
         onNodeWithText(TodayCopy.EMPTY).assertIsDisplayed()
         onTab("Today").assertIsSelected()
@@ -28,20 +32,20 @@ class AppShellUiTest {
     }
 
     @Test
-    fun tabsSwitchBetweenTheThreeEmptyDestinations() = runComposeUiTest {
-        setContent { SmallStepTheme { AppShell() } }
+    fun tabsSwitchBetweenTodayHistoryAndSettings() = runComposeUiTest {
+        setContent { SmallStepTheme { AppShell(sharing, onSharingAction = {}) } }
 
         onTab("History").performClick()
         onNodeWithText(HistoryCopy.EMPTY).assertIsDisplayed()
         onTab("Settings").performClick()
-        onNodeWithText(SettingsCopy.EMPTY).assertIsDisplayed()
+        onNodeWithText(SharingCopy.SETTINGS_TITLE).assertIsDisplayed()
         onTab("Today").performClick()
         onNodeWithText(TodayCopy.EMPTY).assertIsDisplayed()
     }
 
     @Test
     fun everyTabMeetsTheMinimumTouchTarget() = runComposeUiTest {
-        setContent { SmallStepTheme { AppShell() } }
+        setContent { SmallStepTheme { AppShell(sharing, onSharingAction = {}) } }
 
         Destination.entries.forEach { onTab(it.label).assertHeightIsAtLeast(SmallStepTokens.Size.MinTouchTarget) }
     }
