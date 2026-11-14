@@ -422,7 +422,7 @@ export interface FinishCurrent {
 }
 
 export interface FinishWrites {
-  /** `summaries/{checkInId}`, written whole (a retry overwrites). */
+  /** `summaries/{checkInId}`, written whole (a retry overwrites, unless it has no model output and the saved one has). */
   summary: Summary;
   /** Fields set on `checkIns/{checkInId}`; its stamp and start time are left alone. */
   checkIn: Pick<CheckIn, "mood" | "energy" | "sleepQuality" | "voiceCues" | "crisis" | "endedAtMillis">;

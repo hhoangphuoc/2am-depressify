@@ -112,14 +112,14 @@ describe("Check-in handlers with the Admin SDK on the Firestore emulator", () =>
     });
     expect(await docData(`patients/${uid}`)).toMatchObject({ lastCheckInAtMillis: 200_000, lastSeenAtMillis: 200_000 });
 
-    // A retry overwrites the one Summary and keeps its stamp and creation time.
+    // A retry without usable model output keeps the one Summary, its stamp and creation time.
     await adminDb.doc(`patients/${uid}`).update({ sharingConsent: "declined" });
     await finishCheckInHandler(
       { data: { patientId: uid, checkInId: started.checkInId, draft: DRAFT }, auth },
       { store, textModel: new FakeTextModel("not json"), clock: () => 300_000 },
     );
     expect(await count(`patients/${uid}/summaries`)).toBe(1);
-    expect(await docData(summaryPath)).toMatchObject({ themes: [], createdAtMillis: 200_000, sharedWithClinician: true });
+    expect(await docData(summaryPath)).toMatchObject({ themes: ["Library walk", "Calm reading"], createdAtMillis: 200_000, sharedWithClinician: true });
     await adminDb.doc(`patients/${uid}`).update({ sharingConsent: "granted" });
 
     // The Patient reads the Summary through the rules, may still change the Check-in's times, and

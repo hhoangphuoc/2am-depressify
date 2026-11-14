@@ -10,7 +10,8 @@
 //                  Calls the text model (storage off, structured output) for the Summary, writes
 //                  `summaries/{checkInId}`, the ratings, Voice cues (from the draft), crisis marker and
 //                  end time on the Check-in, and `lastCheckInAtMillis` / `lastSeenAtMillis` on the
-//                  Patient, all in one transaction. A retry overwrites the same Summary.
+//                  Patient, all in one transaction. A retry overwrites the same Summary,
+//                  but one without model output keeps what the model wrote before.
 //
 // The Brief, the token and the draft are never written or logged, including on error paths: every
 // failure becomes an HttpsError with fixed wording, and log lines carry ids and an HTTP status only.
