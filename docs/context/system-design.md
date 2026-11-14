@@ -168,7 +168,7 @@ The Summary and extraction use `gemini-4-hydrogen` with structured output. The j
 
 ## Learning what helps
 
-Each Suggestion has a kind (walk, class, music, calling someone, and so on). Its Outcome combines the Patient's answer at the next Check-in (whether they tried it, and how it felt from 1 to 5) with that day's change in steps and time outside against Baseline. The three best kinds go into the Brief. About one Suggestion in five deliberately tries something new. The dashboard shows "what works for this Patient".
+Each Suggestion has a kind (walk, class, music, calling someone, and so on). Its Outcome combines the Patient's answer at the next Check-in (whether they tried it, and how it felt from 1 to 5) with that day's change in steps against Baseline (time outside is not measured). The three best kinds go into the Brief. About one Suggestion in five deliberately tries something new. The dashboard shows "what works for this Patient".
 
 ## Attention flag
 

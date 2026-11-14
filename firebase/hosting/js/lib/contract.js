@@ -11,6 +11,7 @@
 /** @typedef {"green" | "amber" | "red"} FlagLevel */
 /** @typedef {"undecided" | "granted" | "declined"} SharingConsent */
 /** @typedef {"device" | "synthetic"} HealthSource */
+/** @typedef {"assessed" | "unassessed" | "unavailable"} Assessment */
 
 /**
  * `patients/{patientId}`.
@@ -30,6 +31,60 @@
  * @property {SharingConsent} sharingConsent
  * @property {number | null} sharingChangedAtMillis
  */
+
+/**
+ * `patients/{id}/checkIns/{checkInId}`. The ratings, Voice cues, crisis marker, assessment and
+ * previousTried are written by Finish Check-in.
+ * @typedef {object} CheckIn
+ * @property {string} id
+ * @property {number} startedAtMillis
+ * @property {number | null} endedAtMillis
+ * @property {number | null} mood
+ * @property {number | null} energy
+ * @property {number | null} sleepQuality
+ * @property {{ label: string, intensity: number, heard: string }[]} voiceCues
+ * @property {boolean} crisis
+ * @property {Assessment | null} assessment how the automatic review went (#20). `unavailable`: show
+ *   "assessment unavailable" beside the last known flag, never a new green. Null: not reviewed.
+ * @property {boolean | null} previousTried whether the Patient tried the previous Suggestion, as the
+ *   review heard it; null when unknown
+ * @property {boolean} sharedWithClinician
+ */
+
+/**
+ * `patients/{id}/suggestions/{suggestionId}`. The app changes only `status` and `booked`; the Outcome
+ * fields are written by Finish Check-in (#21). Open: `outcomeCheckInId` and `tried` null; "prefer
+ * not to say": `outcomeCheckInId` set, `tried` null; not tried: `tried` false; tried: `tried` true.
+ * @typedef {object} Suggestion
+ * @property {string} id
+ * @property {string} kind a SuggestionKind
+ * @property {string} details
+ * @property {number} suggestedAtMillis
+ * @property {"proposed" | "accepted" | "declined"} status
+ * @property {boolean} booked
+ * @property {boolean | null} tried
+ * @property {number | null} felt 1 to 5, only when tried
+ * @property {number | null} objectiveChange the oriented steps comparison with Baseline on the day it was made
+ * @property {number | null} outcomeScore null until answered and for "prefer not to say"; what "what seems to help" orders by
+ * @property {string | null} outcomeCheckInId the Check-in whose answer recorded the Outcome
+ * @property {boolean} sharedWithClinician
+ */
+
+/** The Suggestion's fields, in contract order. firebase/functions/test/contract.test.ts checks them. */
+export const SUGGESTION_FIELDS = Object.freeze([
+  "id",
+  "kind",
+  "details",
+  "suggestedAtMillis",
+  "status",
+  "booked",
+  "tried",
+  "felt",
+  "objectiveChange",
+  "outcomeScore",
+  "outcomeCheckInId",
+  "sharedWithClinician",
+]);
 
 /**
  * `patients/{id}/digests/{isoWeek}`, for example `2026-W46`. Written by functions only.
@@ -95,6 +150,8 @@ export const HEALTH_SOURCES = Object.freeze(["device", "synthetic"]);
 export const SHARING_CONSENTS = Object.freeze(["undecided", "granted", "declined"]);
 export const CONSENT_PURPOSES = Object.freeze(["sharing", "ratings", "voice_cues"]);
 export const QUESTIONNAIRE_KINDS = Object.freeze(["phq2", "phq9"]);
+/** How Finish Check-in's automatic review of a Check-in went (`CheckIn.assessment`). */
+export const ASSESSMENTS = Object.freeze(["assessed", "unassessed", "unavailable"]);
 
 export const COLLECTIONS = Object.freeze({
   patients: "patients",

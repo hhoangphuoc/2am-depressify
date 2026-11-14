@@ -2,8 +2,11 @@
 // method and both output streams before firebase-functions loads (its logger keeps its own reference
 // to the console methods), then runs full Check-ins through the real callable HTTP layer: start,
 // then finish with success, a model failure, malformed output, a write failure, a token failure,
-// refusals and bad requests. No captured line may contain the transcript, the Brief or the token,
-// and neither may any error the client receives.
+// refusals and bad requests, and every Decisions path (#20): answered with a crisis, a safety
+// refusal, a timeout and an error, each failing with an error that echoes the input, and the
+// Outcome paths (#21): recorded, a retry, and an answer about another Suggestion. No captured line
+// may contain the transcript, the Brief, the token, what the Patient said about the previous
+// Suggestion or its details, and neither may any error the client receives.
 import { createServer, type Server } from "node:http";
 import type { AddressInfo } from "node:net";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
@@ -64,13 +67,17 @@ const OTHER_TOKEN = idToken({ sub: "other-uid", user_id: "other-uid" });
 
 let server: Server;
 let baseUrl = "";
-let scenario: "ok" | "model-fails" | "malformed" | "write-fails" | "token-fails" = "ok";
+let scenario: "ok" | "model-fails" | "malformed" | "write-fails" | "token-fails" | "outcome" = "ok";
+const FEELING_MARKER = "Felt-Marker-3141";
+const DETAILS_MARKER = "Details-Marker-2718";
+let judging: "routine" | "crisis" | "refused" | "timeout" | "error" = "routine";
 let store: import("./fakes").FakeCheckInStore;
 
 beforeAll(async () => {
   const express = (await import("express")).default;
   const { createCheckInFunctions } = await import("../src/checkInFunctions");
-  const { FakeCheckInStore, FakeLiveTokens, FakeTextModel, failingTextModel } = await import("./fakes");
+  const { FakeCheckInStore, FakeDecisions, FakeLiveTokens, FakeTextModel, decisionsError, decisionsRefusal, decisionsReply, decisionsTimeout, failingTextModel } =
+    await import("./fakes");
 
   store = new FakeCheckInStore();
   const { startCheckIn, finishCheckIn } = createCheckInFunctions({
@@ -81,7 +88,19 @@ beforeAll(async () => {
     textModel: () => {
       if (scenario === "model-fails") return failingTextModel(500);
       if (scenario === "malformed") return new FakeTextModel(`{"themes": ["${TRANSCRIPT_MARKER}"`);
+      if (scenario === "outcome") {
+        return new FakeTextModel(
+          JSON.stringify({ themes: ["Dog walks"], previousOutcome: `Walked and felt ${FEELING_MARKER}`, previousTried: true, previousFelt: 4 }),
+        );
+      }
       return new FakeTextModel(JSON.stringify({ themes: ["Dog walks", "Choir"], quotes: [`FICTIONAL ${TRANSCRIPT_MARKER}`], mood: 4 }));
+    },
+    decisions: () => {
+      if (judging === "crisis") return new FakeDecisions(decisionsReply({ crisis: 0.93, decline: 0.99 }));
+      if (judging === "refused") return decisionsRefusal();
+      if (judging === "timeout") return decisionsTimeout();
+      if (judging === "error") return decisionsError(500);
+      return new FakeDecisions();
     },
     liveTokens: () => {
       const tokens = new FakeLiveTokens();
@@ -107,6 +126,7 @@ afterAll(async () => {
 
 beforeEach(() => {
   scenario = "ok";
+  judging = "routine";
 });
 
 async function call(name: string, data: unknown, token?: string): Promise<{ status: number; text: string }> {
@@ -155,6 +175,23 @@ describe("no log line and no client error contains the transcript, the Brief or 
       await record("finishCheckIn", data(checkInId), PATIENT_TOKEN);
       scenario = "ok";
     }
+    // Every Decisions path, each on a fresh Check-in: a crisis while the text model fails (the flags
+    // are written, the Summary is not), then answered with a crisis and a decline, a safety refusal,
+    // a timeout and an error.
+    {
+      const checkInId = await startOne();
+      judging = "crisis";
+      scenario = "model-fails";
+      await record("finishCheckIn", data(checkInId), PATIENT_TOKEN);
+      scenario = "ok";
+      judging = "routine";
+    }
+    for (const judgment of ["crisis", "refused", "timeout", "error"] as const) {
+      const checkInId = await startOne();
+      judging = judgment;
+      await record("finishCheckIn", data(checkInId), PATIENT_TOKEN);
+      judging = "routine";
+    }
     await record("finishCheckIn", data(first), OTHER_TOKEN);
     await record("finishCheckIn", data(first));
     await record("finishCheckIn", data("never-started"), PATIENT_TOKEN);
@@ -168,9 +205,14 @@ describe("no log line and no client error contains the transcript, the Brief or 
       "startCheckIn 401",
       "startCheckIn 400",
       "finishCheckIn 200",
-      "finishCheckIn 200", // model failure: minimal Summary
+      "finishCheckIn 503", // model failure: nothing saved, the phone retries
       "finishCheckIn 200", // malformed output: minimal Summary
       "finishCheckIn 503", // write failure
+      "finishCheckIn 503", // text model fails, Decisions finds a crisis: the flags are kept
+      "finishCheckIn 200", // Decisions: crisis and decline (already open, not raised again)
+      "finishCheckIn 200", // Decisions: safety refusal
+      "finishCheckIn 200", // Decisions: timeout (assessment unavailable, the Summary still saved)
+      "finishCheckIn 200", // Decisions: error
       "finishCheckIn 403",
       "finishCheckIn 401",
       "finishCheckIn 404",
@@ -179,7 +221,6 @@ describe("no log line and no client error contains the transcript, the Brief or 
     ]);
     const ok = JSON.parse(responses[4]!.text).result;
     expect(ok.summary.themes).toEqual(["Dog walks", "Choir"]);
-    expect(JSON.parse(responses[5]!.text).result.minimal).toBe(true);
     expect(JSON.parse(responses[6]!.text).result.minimal).toBe(true);
 
     const logs = captured.slice(start).join("\n");
@@ -188,6 +229,16 @@ describe("no log line and no client error contains the transcript, the Brief or 
     expect(logs).toContain("finishCheckIn: the text model call failed");
     expect(logs).toContain("finishCheckIn: the text model's reply was not usable");
     expect(logs).toContain("finishCheckIn: could not save the Summary");
+    expect(logs).toContain("finishCheckIn: the Decisions API declined to judge the Check-in");
+    expect(logs).toContain("finishCheckIn: the Decisions call failed");
+    // The flags were written: the crisis and decline by the finish whose text model failed, so the
+    // later ones are not raised again while those are open.
+    const flags = store.writes.filter((w) => w.path.includes("/flags/"));
+    expect(flags.map((w) => (w.data as { kind: string }).kind).sort()).toEqual(["crisis", "decline", "unassessed"]);
+    // No response tells the phone about a flag or a level.
+    for (const response of responses.filter((r) => r.status === 200)) {
+      expect(response.text).not.toMatch(/flag|\bred\b|amber|crisis|decline|assess/i);
+    }
     for (const secret of [TRANSCRIPT_MARKER, "Pepper", "choir", BRIEF_MARKER, TOKEN_MARKER, "auth_tokens/"]) {
       expect(logs).not.toContain(secret);
     }
@@ -198,13 +249,51 @@ describe("no log line and no client error contains the transcript, the Brief or 
     }
 
     // Nothing written holds the transcript: only the Summary (which may quote the Patient's own
-    // words, as the spec allows), the Check-in's fields and the Patient's times.
+    // words, as the spec allows), the Check-in's fields, the flags, the Patient's times and level,
+    // and the recorded starts.
     const paths = new Set(store.writes.map((w) => w.path.replace(/\/[^/]+$/, "/*")));
-    expect([...paths].sort()).toEqual([`patients/${PATIENT_ID}/checkIns/*`, `patients/${PATIENT_ID}/summaries/*`, "patients/*"].sort());
+    expect([...paths].sort()).toEqual(
+      [`patients/${PATIENT_ID}/checkIns/*`, `patients/${PATIENT_ID}/summaries/*`, `patients/${PATIENT_ID}/flags/*`, "patients/*", "patientLimits/*"].sort(),
+    );
     const written = JSON.stringify(store.writes);
     expect(written).not.toContain("How was the walk with Pepper");
     expect(written).not.toContain("sang in the choir");
     expect(written).not.toContain(BRIEF_MARKER);
     expect(written).not.toContain(TOKEN_MARKER);
+  });
+
+  it("through the Outcome (#21): recorded, retried, and an answer about another Suggestion", async () => {
+    const start = captured.length;
+    store.starts.clear(); // the first test used up the hourly cap on starts
+    const suggestion = (id: string, ago: number) =>
+      store.suggestions.set(`${PATIENT_ID}/${id}`, {
+        id, kind: "walk", details: `Walk ${DETAILS_MARKER}`, suggestedAtMillis: Date.now() - ago, status: "accepted", booked: false,
+        tried: null, felt: null, objectiveChange: null, outcomeScore: null, outcomeCheckInId: null, sharedWithClinician: true,
+      });
+    suggestion("s-older", 2 * 86_400_000);
+    suggestion("s-walk", 86_400_000);
+    scenario = "outcome";
+    const data = (checkInId: string, lastSuggestionId?: string) => ({ patientId: PATIENT_ID, checkInId, draft: DRAFT, lastSuggestionId });
+
+    const first = await startOne();
+    const statuses = [
+      (await call("finishCheckIn", data(first, "s-walk"), PATIENT_TOKEN)).status,
+      (await call("finishCheckIn", data(first, "s-walk"), PATIENT_TOKEN)).status, // a retry
+    ];
+    const second = await startOne();
+    statuses.push((await call("finishCheckIn", data(second, "s-elsewhere"), PATIENT_TOKEN)).status); // not the open Outcome
+    expect(statuses).toEqual([200, 200, 200]);
+
+    expect(store.suggestions.get(`${PATIENT_ID}/s-walk`)).toMatchObject({ tried: true, felt: 4, outcomeCheckInId: first });
+    expect(store.suggestions.get(`${PATIENT_ID}/s-older`)).toMatchObject({ outcomeCheckInId: null });
+    const logs = captured.slice(start).join("\n");
+    expect(logs).toContain("finishCheckIn: the last Suggestion is not the open Outcome");
+    for (const secret of [TRANSCRIPT_MARKER, "Pepper", FEELING_MARKER, DETAILS_MARKER, BRIEF_MARKER, TOKEN_MARKER]) {
+      expect(logs).not.toContain(secret);
+    }
+    // The Outcome holds the answer, never the words.
+    const outcomeWrites = JSON.stringify(store.writes.filter((w) => w.path.includes("/suggestions/")));
+    expect(outcomeWrites).not.toContain(FEELING_MARKER);
+    expect(outcomeWrites).not.toContain(TRANSCRIPT_MARKER);
   });
 });

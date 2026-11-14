@@ -549,15 +549,21 @@ describe("Re-consent shares future records only: the Clinician reads only what w
   });
 });
 
-describe("Ratings, Voice cues, the crisis marker and the Outcome are recorded by functions, not edited by hand", () => {
+describe("Ratings, Voice cues, the crisis marker, the assessment and the Outcome are recorded by functions, not edited by hand", () => {
   const RATINGS_AND_MARKERS: Record<string, unknown>[] = [
     { mood: 4 },
     { energy: 1 },
     { sleepQuality: 5 },
     { voiceCues: [{ label: "bright tone", intensity: 1, heard: "laughed" }] },
     { crisis: true },
+    // The sample Check-in holds "assessed" and true, so each of these is a change.
+    { assessment: "unassessed" },
+    { assessment: "unavailable" },
+    { previousTried: false },
   ];
-  const OUTCOME: Record<string, unknown>[] = [{ tried: true }, { tried: false }, { felt: 4 }, { objectiveChange: 0.4 }, { outcomeScore: 0.6 }];
+  const OUTCOME: Record<string, unknown>[] = [
+    { tried: true }, { tried: false }, { felt: 4 }, { objectiveChange: 0.4 }, { outcomeScore: 0.6 }, { outcomeCheckInId: "c1" },
+  ];
 
   /** The Patient themselves, and anyone signed in through the demo shortcut, stamped as each shares now. */
   const actors = () => [
@@ -574,7 +580,7 @@ describe("Ratings, Voice cues, the crisis marker and the Outcome are recorded by
     }
   });
 
-  it("the Patient cannot set ratings, Voice cues or the crisis marker on a new Check-in", async () => {
+  it("the Patient cannot set ratings, Voice cues, the crisis marker or the assessment on a new Check-in", async () => {
     for (const { db, patientId, shared } of actors()) {
       for (const field of RATINGS_AND_MARKERS) {
         await assertFails(setDoc(doc(db, `patients/${patientId}/checkIns/c2`), { ...appCreates("checkIns", shared), ...field }));
@@ -582,10 +588,10 @@ describe("Ratings, Voice cues, the crisis marker and the Outcome are recorded by
     }
   });
 
-  it("the Patient cannot change the ratings, Voice cues or crisis marker Finish Check-in wrote", async () => {
+  it("the Patient cannot change the ratings, Voice cues, crisis marker or assessment Finish Check-in wrote", async () => {
     for (const { db, patientId } of actors()) {
       const ref = doc(db, samplePath(patientId, "checkIns"));
-      for (const field of [...RATINGS_AND_MARKERS, { mood: null }, { voiceCues: [] }, { id: "other" }]) {
+      for (const field of [...RATINGS_AND_MARKERS, { mood: null }, { voiceCues: [] }, { assessment: null }, { previousTried: null }, { id: "other" }]) {
         await assertFails(updateDoc(ref, field));
       }
       await assertFails(setDoc(ref, { ...checkIn, mood: 5 }));
@@ -599,6 +605,9 @@ describe("Ratings, Voice cues, the crisis marker and the Outcome are recorded by
       await assertSucceeds(updateDoc(ref, { status: "accepted" }));
       await assertSucceeds(updateDoc(ref, { booked: true }));
       await assertSucceeds(updateDoc(doc(db, samplePath(patientId, "suggestions")), { status: "declined", booked: false }));
+      // An app built before #21 writes no `outcomeCheckInId` at all.
+      const { outcomeCheckInId: _left, ...older } = appCreates("suggestions", shared) as Record<string, unknown>;
+      await assertSucceeds(setDoc(doc(db, `patients/${patientId}/suggestions/s3`), older));
     }
   });
 
@@ -673,6 +682,16 @@ describe("The mail collection is not writable or readable by any client", () => 
       await assertFails(setDoc(doc(db, "mail/m2"), mail));
       await assertFails(updateDoc(doc(db, "mail/m1"), { to: "attacker@example.com" }));
       await assertFails(deleteDoc(doc(db, "mail/m1")));
+    }
+  });
+});
+
+describe("The patientLimits collection is not writable or readable by any client", () => {
+  it("no Patient (their own included), Clinician or signed-in user reads or resets the caps", async () => {
+    for (const db of [asPatient(env, ALICE), asClinician(env, CLINICIAN), asPatient(env, STRANGER), signedOut(env)]) {
+      await assertFails(getDoc(doc(db, `patientLimits/${ALICE}`)));
+      await assertFails(setDoc(doc(db, `patientLimits/${ALICE}`), { checkInStarts: [], redFlagEmailsAtMillis: [] }));
+      await assertFails(deleteDoc(doc(db, `patientLimits/${ALICE}`)));
     }
   });
 });

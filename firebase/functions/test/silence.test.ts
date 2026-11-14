@@ -2,12 +2,12 @@
 // Patient update, and the plan that keeps it to one open silent flag. The handler and the scheduled
 // function are in test/silence-handlers.test.ts.
 import { describe, expect, it } from "vitest";
+import { raisedAttention } from "../src/flags";
 import {
   SILENCE_SCHEDULE,
   SILENCE_THRESHOLD_MILLIS,
   SILENCE_TIME_ZONE,
   SILENT_REASON,
-  raisedAttention,
   silenceDecision,
   silencePlan,
   silentFlag,

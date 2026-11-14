@@ -59,6 +59,8 @@ export const checkIn: CheckIn = {
   sleepQuality: 2,
   voiceCues: [{ label: "flat tone", intensity: 2, heard: "short answers" }],
   crisis: false,
+  assessment: "assessed",
+  previousTried: true,
   sharedWithClinician: true,
 };
 export const summary: Summary = {
@@ -86,6 +88,7 @@ export const suggestion: Suggestion = {
   felt: null,
   objectiveChange: null,
   outcomeScore: null,
+  outcomeCheckInId: null,
   sharedWithClinician: true,
 };
 export const openFlag: Flag = {
@@ -151,7 +154,7 @@ export const OFF_PERIOD_ID = "off-period";
 export function appCreates(sub: Subcollection, sharedWithClinician: boolean): object {
   const data = SAMPLES[sub].data as Record<string, unknown>;
   if (sub === "checkIns") {
-    return { ...checkIn, endedAtMillis: null, mood: null, energy: null, sleepQuality: null, voiceCues: [], crisis: false, sharedWithClinician };
+    return { ...checkIn, endedAtMillis: null, mood: null, energy: null, sleepQuality: null, voiceCues: [], crisis: false, assessment: null, previousTried: null, sharedWithClinician };
   }
   return STAMPED.includes(sub) ? { ...data, sharedWithClinician } : data;
 }

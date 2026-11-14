@@ -45,6 +45,13 @@ describe("whatHelps", () => {
     assert.equal(waiting, 0);
   });
 
+  test("an answer the Patient preferred not to give is neither counted nor waiting", () => {
+    const notSaid = sug("walk", "2026-11-10", { tried: null, felt: null, outcomeScore: null });
+    const { rows, waiting } = whatHelps([{ ...notSaid, outcomeCheckInId: "checkin-2026-11-11" }], { ...WINDOW, timeZone: TZ });
+    assert.deepEqual(rows, []);
+    assert.equal(waiting, 0);
+  });
+
   test("counts only the stated window, by the day the Suggestion was made", () => {
     const { rows } = whatHelps([sug("walk", "2026-10-17"), sug("walk", "2026-10-18"), sug("walk", TODAY), sug("walk", "2026-11-15")], {
       ...WINDOW,

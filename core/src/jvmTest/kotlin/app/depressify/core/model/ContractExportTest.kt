@@ -37,6 +37,7 @@ class ContractExportTest {
                 put("SharingConsent", names(SharingConsent.entries))
                 put("ConsentPurpose", names(ConsentPurpose.entries))
                 put("QuestionnaireKind", names(QuestionnaireKind.entries))
+                put("Assessment", names(Assessment.entries))
             })
             put("collections", buildJsonObject {
                 put("patients", Collections.PATIENTS)

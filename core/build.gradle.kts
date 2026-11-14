@@ -30,4 +30,7 @@ tasks.named<Test>("jvmTest") {
     // The Live messages recorded in the #6 spike, for LiveProtocolFixturesTest.
     systemProperty("spike.live.fixtures", rootProject.file("fixtures/spike/live").path)
     inputs.dir(rootProject.file("fixtures/spike/live"))
+    // The shared Outcome fixture (#21), for OutcomeFixtureTest.
+    systemProperty("outcome.fixtures", rootProject.file("fixtures/outcomes").path)
+    inputs.dir(rootProject.file("fixtures/outcomes"))
 }
