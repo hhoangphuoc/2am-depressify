@@ -1,0 +1,12 @@
+{
+  "direction": "server->client",
+  "websocketFrame": "binary",
+  "tMs": 12970,
+  "message": {
+    "serverContent": {
+      "inputTranscription": {
+        "text": "Hi there. I slept badly last night, but I went for a short walk this morning and that helped a little."
+      }
+    }
+  }
+}

@@ -27,4 +27,7 @@ kotlin {
 // The JVM tests export the contract for the TypeScript mirror (see ContractExportTest).
 tasks.named<Test>("jvmTest") {
     systemProperty("contract.export", rootProject.file("firebase/functions/test/fixtures/contract.json").path)
+    // The Live messages recorded in the #6 spike, for LiveProtocolFixturesTest.
+    systemProperty("spike.live.fixtures", rootProject.file("fixtures/spike/live").path)
+    inputs.dir(rootProject.file("fixtures/spike/live"))
 }

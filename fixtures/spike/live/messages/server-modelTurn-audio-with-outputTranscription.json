@@ -1,0 +1,23 @@
+{
+  "direction": "server->client",
+  "websocketFrame": "binary",
+  "tMs": 1611,
+  "message": {
+    "serverContent": {
+      "modelTurn": {
+        "parts": [
+          {
+            "inlineData": {
+              "mimeType": "audio/pcm;rate=24000",
+              "data": "AAA="
+            }
+          }
+        ],
+        "role": "model"
+      },
+      "outputTranscription": {
+        "text": "Hello! I'm doing "
+      }
+    }
+  }
+}

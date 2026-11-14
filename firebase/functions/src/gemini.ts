@@ -20,6 +20,18 @@ export interface TextRequest {
   store: false;
   system_instruction: string;
   input: string;
+  /**
+   * Structured output, the shape recorded in the #6 spike: the reply is JSON matching `schema`,
+   * read from `output_text`. The schema's length limits are not enforced by the model, so callers
+   * still validate and cap what comes back.
+   */
+  response_format?: JsonResponseFormat;
+}
+
+export interface JsonResponseFormat {
+  type: "text";
+  mime_type: "application/json";
+  schema: Record<string, unknown>;
 }
 
 export interface TextModelClient {

@@ -1,0 +1,103 @@
+{
+  "request": {
+    "method": "POST",
+    "url": "https://places.googleapis.com/v1/places:searchText",
+    "headers": {
+      "X-Goog-Api-Key": "REDACTED",
+      "X-Goog-FieldMask": "places.id,places.displayName,places.location,places.googleMapsUri,places.primaryType,places.formattedAddress"
+    },
+    "body": {
+      "textQuery": "park",
+      "languageCode": "en",
+      "regionCode": "FI",
+      "pageSize": 5,
+      "locationBias": {
+        "circle": {
+          "center": {
+            "latitude": 60.1699,
+            "longitude": 24.9384
+          },
+          "radius": 1500
+        }
+      }
+    }
+  },
+  "response": {
+    "status": 200,
+    "latencyMs": 705,
+    "body": {
+      "places": [
+        {
+          "id": "ChIJHWZ9v8sLkkYRQLoVPFK1AA8",
+          "formattedAddress": "Bulevardi, 00120 Helsinki",
+          "location": {
+            "latitude": 60.16599289999999,
+            "longitude": 24.939863
+          },
+          "googleMapsUri": "https://maps.google.com/?cid=1081063275368921664&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+          "displayName": {
+            "text": "Old Church Park",
+            "languageCode": "en"
+          },
+          "primaryType": "city_park"
+        },
+        {
+          "id": "ChIJn65pyM4LkkYRMLoVPFK1AA8",
+          "formattedAddress": "Pohjoisesplanadi, 00130 Helsinki",
+          "location": {
+            "latitude": 60.1674815,
+            "longitude": 24.9476095
+          },
+          "googleMapsUri": "https://maps.google.com/?cid=1081063275368921648&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+          "displayName": {
+            "text": "Esplanadi",
+            "languageCode": "en"
+          },
+          "primaryType": "city_park"
+        },
+        {
+          "id": "ChIJp-X19tILkkYRFmKyep6-zKY",
+          "formattedAddress": "Kaisaniemen puistokuja, 00100 Helsinki",
+          "location": {
+            "latitude": 60.1750425,
+            "longitude": 24.9432986
+          },
+          "googleMapsUri": "https://maps.google.com/?cid=12019191093417632278&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+          "displayName": {
+            "text": "Kaisaniemi Park",
+            "languageCode": "en"
+          },
+          "primaryType": "city_park"
+        },
+        {
+          "id": "ChIJreKKpi0KkkYRgDTPYgBIoak",
+          "formattedAddress": "Mannerheimintie 40, 00260 Helsinki",
+          "location": {
+            "latitude": 60.1785706,
+            "longitude": 24.9303633
+          },
+          "googleMapsUri": "https://maps.google.com/?cid=12223130030155183232&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+          "displayName": {
+            "text": "Hesperianpuisto",
+            "languageCode": "en"
+          },
+          "primaryType": "city_park"
+        },
+        {
+          "id": "ChIJMw_NL78LkkYRh7AruYcRkeE",
+          "formattedAddress": "00140 Helsinki",
+          "location": {
+            "latitude": 60.155703100000004,
+            "longitude": 24.9556901
+          },
+          "googleMapsUri": "https://maps.google.com/?cid=16253791804781736071&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLlNlYXJjaFRleHQQAhgEIAA",
+          "displayName": {
+            "text": "Kaivopuisto",
+            "languageCode": "en"
+          },
+          "primaryType": "city_park"
+        }
+      ]
+    }
+  }
+}
