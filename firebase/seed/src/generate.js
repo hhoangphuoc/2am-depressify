@@ -184,6 +184,16 @@ export function makePatient(profileKey, options) {
   const at = (/** @type {number} */ d, /** @type {number} */ hour, /** @type {number} */ minute) =>
     zonedMillis(dateOf(d), hour, minute, DEMO_TIME_ZONE);
 
+  // The sharing stamp: every document is stamped with whether the Patient was sharing when it was
+  // saved. Demo Patients share throughout, except during a profile's sharing pause.
+  const pause = profile.sharingPause
+    ? {
+        from: at(profile.sharingPause.from.d, profile.sharingPause.from.hour, profile.sharingPause.from.minute),
+        to: at(profile.sharingPause.to.d, profile.sharingPause.to.hour, profile.sharingPause.to.minute),
+      }
+    : null;
+  const sharedAt = (/** @type {number} */ millis) => pause === null || millis < pause.from || millis >= pause.to;
+
   // Daily Signal records: 42 days ending today, compared with Baseline by the shared rule.
   const days = [];
   for (let d = DAILY_RECORDS - 1; d >= 0; d--) {
@@ -201,6 +211,7 @@ export function makePatient(profileKey, options) {
     if (baseline) day.values.sleepMinutes = Math.round(baseline.centre + target * baseline.spread);
   }
   const comparisons = dailyComparisons(days);
+  // The phone's morning job creates each day's record at about 07:10.
   /** @type {Entry<DailyDoc>[]} */
   const daily = days.map((day, i) => ({
     id: day.date,
@@ -210,6 +221,7 @@ export function makePatient(profileKey, options) {
       vsBaseline: comparisons[i].vsBaseline,
       composite: comparisons[i].composite,
       demoOverride: false,
+      sharedWithClinician: sharedAt(at(day.d, 7, 10)),
     },
   }));
   const valuesByD = new Map(days.map((day, i) => [day.d, { values: day.values, vsBaseline: comparisons[i].vsBaseline }]));
@@ -238,7 +250,7 @@ export function makePatient(profileKey, options) {
     const checkInId = `checkin-${date}`;
     checkIns.push({
       id: checkInId,
-      data: { id: checkInId, startedAtMillis, endedAtMillis, ...ratings, voiceCues, crisis: false },
+      data: { id: checkInId, startedAtMillis, endedAtMillis, ...ratings, voiceCues, crisis: false, sharedWithClinician: sharedAt(startedAtMillis) },
     });
 
     // Answer the previous Suggestion now, if the Patient accepted it.
@@ -269,6 +281,7 @@ export function makePatient(profileKey, options) {
         felt: null,
         objectiveChange: null,
         outcomeScore: null,
+        sharedWithClinician: sharedAt(startedAtMillis + 120_000),
       },
     });
 
@@ -279,11 +292,12 @@ export function makePatient(profileKey, options) {
       const theme = random.pick(THEMES[tone]);
       if (!themes.includes(theme)) themes.push(theme);
     }
+    const summaryAtMillis = endedAtMillis + random.int(4, 9) * 1000;
     summaries.push({
       id: checkInId,
       data: {
         checkInId,
-        createdAtMillis: endedAtMillis + random.int(4, 9) * 1000,
+        createdAtMillis: summaryAtMillis,
         ...ratings,
         sleepLine: sleepLine(valuesByD.get(d)?.values.sleepMinutes ?? null),
         themes,
@@ -291,13 +305,15 @@ export function makePatient(profileKey, options) {
         suggestion: status === "accepted" ? SUGGESTION_DETAILS[kind] : null,
         previousOutcome: previous ? previousOutcomeLine(previous) : null,
         quotes: low && random.chance(0.6) ? [random.pick(QUOTES)] : [],
+        sharedWithClinician: sharedAt(summaryAtMillis),
       },
     });
   }
 
   // Attention flags, raised by the phone's morning daily job on the first morning a rule holds. A
   // kind with an open flag is not raised again, and none is cleared, so the Patient's level is the
-  // highest of them and the reasons run from the highest level, newest first.
+  // highest of them and the reasons run from the highest level, newest first. Only flags raised
+  // while sharing count toward the level (a flag raised in a sharing pause never does).
   /** @type {Entry<Flag>[]} */
   const flags = [];
   for (let i = 0; i < days.length; i++) {
@@ -310,26 +326,36 @@ export function makePatient(profileKey, options) {
       composites: comparisons.slice(0, i + 1).map((c) => c.composite),
       moods: checkIns.filter((c) => (c.data.endedAtMillis ?? 0) < jobAtMillis).map((c) => c.data.mood),
     });
+    // The stamp is decided at the job's start; a pause starts and ends at 06:00, before any job.
+    const shared = sharedAt(jobAtMillis);
     for (const draft of drafts) {
-      if (flags.some((f) => f.data.kind === draft.kind && f.data.clearedAtMillis === null)) continue;
+      // A kind already open with the same stamp is not raised again: a flag the Clinician cannot
+      // see never stops one they can.
+      if (flags.some((f) => f.data.kind === draft.kind && f.data.clearedAtMillis === null && f.data.sharedWithClinician === shared)) continue;
       flags.push({
         id: `${draft.kind}-${date}`,
-        data: { ...draft, raisedAtMillis: jobAtMillis + random.int(0, 300) * 1000, clearedAtMillis: null },
+        data: { ...draft, raisedAtMillis: jobAtMillis + random.int(0, 300) * 1000, clearedAtMillis: null, sharedWithClinician: shared },
       });
     }
   }
   const rank = { green: 0, amber: 1, red: 2 };
   const open = flags
     .map((f) => f.data)
-    .filter((f) => f.clearedAtMillis === null)
+    .filter((f) => f.clearedAtMillis === null && f.sharedWithClinician)
     .sort((a, b) => rank[b.level] - rank[a.level] || b.raisedAtMillis - a.raisedAtMillis);
 
   const tmsEndDate = dateOf(TMS_END_DAYS_AGO);
   const consentMillis = at(TMS_END_DAYS_AGO - 1, 10, 0);
+  // Sharing last changed when the Patient shared again after a pause, if there was one.
+  const sharingMillis = pause?.to ?? consentMillis;
   /** @type {Entry<Consent>[]} */
   const consents = [...SIGNAL_KEYS, ...CONSENT_PURPOSES].map((subject) => ({
     id: subject,
-    data: { subject: /** @type {Consent["subject"]} */ (subject), granted: true, changedAtMillis: consentMillis },
+    data: {
+      subject: /** @type {Consent["subject"]} */ (subject),
+      granted: true,
+      changedAtMillis: subject === "sharing" ? sharingMillis : consentMillis,
+    },
   }));
 
   const visitDate = dateOf(VISIT_DAYS_AGO);
@@ -352,7 +378,7 @@ export function makePatient(profileKey, options) {
     healthSource: "synthetic",
     synthetic: true,
     sharingConsent: "granted",
-    sharingChangedAtMillis: consentMillis,
+    sharingChangedAtMillis: sharingMillis,
   };
 
   return { id: profile.id, profile: profile.key, patient, daily, consents, checkIns, summaries, suggestions, flags, visits };

@@ -50,7 +50,12 @@
  * @property {(d: number, random: Random) => Ratings} ratings
  * @property {readonly SuggestionKind[]} suggestionKinds weighted by repetition
  * @property {{ d: number, hour: number, minute: number }} lastSeen
+ * @property {{ from: Moment, to: Moment }} [sharingPause] a time in the past when the Patient did
+ *   not share: withdrew at `from` and shared again at `to`. What was saved in between is stamped
+ *   `sharedWithClinician: false`, so the Clinician never sees it.
  */
+
+/** @typedef {{ d: number, hour: number, minute: number }} Moment */
 
 /** @param {Random} random @param {number[]} weights index i is rating i + 1 */
 function weighted(random, weights) {
@@ -89,6 +94,9 @@ const steady = {
   }),
   suggestionKinds: ["walk", "walk", "nature", "nature", "social_call", "music", "daylight", "class_activity"],
   lastSeen: { d: 0, hour: 7, minute: 16 },
+  // Stopped sharing for three days early on, then shared again: those days' records stay hidden
+  // from the Clinician (a gap in the Signals and Summaries), the rest is visible.
+  sharingPause: { from: { d: 30, hour: 6, minute: 0 }, to: { d: 27, hour: 6, minute: 0 } },
 };
 
 // Declines over the last ten days: shorter sleep, fewer steps, more time at home, lower ratings.

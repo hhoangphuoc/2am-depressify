@@ -35,8 +35,19 @@ function entries(p) {
   );
 }
 
-/** @param {DemoPatient} p */
-const openFlags = (p) => p.flags.map((f) => f.data).filter((f) => f.clearedAtMillis === null);
+/** The open flags that count toward the level: those raised while sharing. @param {DemoPatient} p */
+const openFlags = (p) => p.flags.map((f) => f.data).filter((f) => f.clearedAtMillis === null && f.sharedWithClinician);
+
+/** Every document that carries the sharing stamp, with its collection and creation time. @param {DemoPatient} p */
+function stamped(p) {
+  return [
+    ...p.daily.map((e) => ({ name: "daily", id: e.id, shared: e.data.sharedWithClinician, at: zonedMillis(e.data.date, 7, 10) })),
+    ...p.checkIns.map((e) => ({ name: "checkIns", id: e.id, shared: e.data.sharedWithClinician, at: e.data.startedAtMillis })),
+    ...p.summaries.map((e) => ({ name: "summaries", id: e.id, shared: e.data.sharedWithClinician, at: e.data.createdAtMillis })),
+    ...p.suggestions.map((e) => ({ name: "suggestions", id: e.id, shared: e.data.sharedWithClinician, at: e.data.suggestedAtMillis })),
+    ...p.flags.map((e) => ({ name: "flags", id: e.id, shared: e.data.sharedWithClinician, at: e.data.raisedAtMillis })),
+  ];
+}
 
 describe("determinism", () => {
   test("the same inputs give byte-identical output", () => {
@@ -239,6 +250,43 @@ describe("every Demo Patient", () => {
       }
       assert.deepEqual(p.consents.map((c) => c.id).sort(), [...SIGNAL_KEYS, ...CONSENT_PURPOSES].sort());
     }
+  });
+});
+
+describe("the sharing stamp", () => {
+  test("every document in a stamped collection says whether the Patient was sharing when it was saved", () => {
+    for (const p of all) {
+      for (const { name, id, shared } of stamped(p)) assert.equal(typeof shared, "boolean", `${p.id} ${name}/${id}`);
+      for (const { data } of [...p.consents, ...p.visits]) assert.ok(!("sharedWithClinician" in data));
+      assert.ok(!("sharedWithClinician" in p.patient));
+    }
+  });
+
+  test("declining and sparse share throughout", () => {
+    for (const p of [declining, sparse]) {
+      assert.ok(stamped(p).every((d) => d.shared), p.id);
+      assert.equal(p.consents.find((c) => c.id === "sharing")?.data.changedAtMillis, p.patient.sharingChangedAtMillis);
+    }
+  });
+
+  test("steady stopped sharing for three days 30 days ago: what was saved then is hidden, the rest is shared", () => {
+    const from = zonedMillis(addDays(TODAY, -30), 6, 0);
+    const to = zonedMillis(addDays(TODAY, -27), 6, 0);
+    for (const d of stamped(steady)) assert.equal(d.shared, d.at < from || d.at >= to, `${d.name}/${d.id}`);
+    const hidden = stamped(steady).filter((d) => !d.shared);
+    assert.deepEqual(
+      hidden.filter((d) => d.name === "daily").map((d) => d.id),
+      [addDays(TODAY, -30), addDays(TODAY, -29), addDays(TODAY, -28)],
+    );
+    assert.ok(hidden.some((d) => d.name === "checkIns"), "no Check-in in the pause, so the demo shows no gap");
+    // A Check-in and its Summary are shown or hidden together.
+    for (const s of steady.summaries) {
+      assert.equal(s.data.sharedWithClinician, steady.checkIns.find((c) => c.id === s.id)?.data.sharedWithClinician);
+    }
+    // Sharing last changed when the Patient shared again.
+    assert.equal(steady.patient.sharingChangedAtMillis, to);
+    assert.equal(steady.consents.find((c) => c.id === "sharing")?.data.changedAtMillis, to);
+    assert.equal(steady.consents.find((c) => c.id === "steps")?.data.changedAtMillis, zonedMillis(addDays(TODAY, -41), 10, 0));
   });
 });
 

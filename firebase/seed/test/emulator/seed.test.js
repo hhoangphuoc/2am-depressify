@@ -14,7 +14,10 @@ import { patientListRows } from "../../../hosting/js/lib/list-row.js";
 import { newestOpenFlagAt } from "../../../hosting/js/lib/sort.js";
 import { demoToday, generateDemoPatients } from "../../src/generate.js";
 import { SEEDED_COLLECTIONS } from "../../src/firestore.js";
-import { clinicianListFilters } from "../../../hosting/js/lib/sharing.js";
+import { STAMPED_COLLECTIONS, clinicianListFilters, patientCollectionQuery } from "../../../hosting/js/lib/sharing.js";
+
+/** The npm SDK's functions, in the shape the dashboard's query helper takes. */
+const FS = { collection, query, where };
 
 // The dashboard's list query (#29): the rules reject it without the sharing filter.
 /** @param {string} email */
@@ -95,10 +98,28 @@ test("the Clinician's list query sees all three Demo Patients under the rules", 
   const list = await assertSucceeds(getDocs(query(collection(clinician, "patients"), ...listFilters(CLINICIAN))));
   const ids = list.docs.map((d) => d.id);
   for (const id of DEMO_IDS) assert.ok(ids.includes(id), `${id} missing from the Clinician's list`);
-  // The list also reads each Patient's flags, for the newest-flag order.
-  const flags = await assertSucceeds(getDocs(collection(clinician, "patients", "demo-declining", "flags")));
+  // The list also reads each Patient's flags, for the newest-flag order, through the dashboard's query.
+  const flags = await assertSucceeds(getDocs(patientCollectionQuery(FS, clinician, "demo-declining", "flags")));
   assert.ok(flags.size >= 3);
   assert.ok(flags.docs.some((d) => d.data().level === "red"));
+});
+
+test("the dashboard's queries leave out what demo-steady saved during its sharing pause", async () => {
+  const clinician = rules.authenticatedContext("clinician-uid", { email: CLINICIAN }).firestore();
+  const expected = generateDemoPatients({ today: demoToday(Date.now()), nowMillis: Date.now() }).find((p) => p.id === "demo-steady");
+  assert.ok(expected);
+  for (const name of STAMPED_COLLECTIONS) {
+    if (name === "digests") continue; // the seed writes none
+    const shown = await assertSucceeds(getDocs(patientCollectionQuery(FS, clinician, "demo-steady", name)));
+    const entries = /** @type {{ id: string, data: { sharedWithClinician: boolean } }[]} */ (expected[/** @type {"daily"} */ (name)]);
+    assert.deepEqual(
+      shown.docs.map((d) => d.id).sort(),
+      entries.filter((e) => e.data.sharedWithClinician).map((e) => e.id).sort(),
+      `demo-steady/${name}`,
+    );
+  }
+  const daily = await getDocs(patientCollectionQuery(FS, clinician, "demo-steady", "daily"));
+  assert.equal(daily.size, 39, "three days of the pause are hidden");
 });
 
 test("a signed-out visitor cannot read the Demo Patients", async () => {
@@ -111,7 +132,7 @@ test("the dashboard list orders them red, amber, green and re-sorts live when a 
   /** @type {Record<string, number | null>} */
   const latestFlagAt = {};
   for (const id of DEMO_IDS) {
-    const flags = await getDocs(collection(clinician, "patients", id, "flags"));
+    const flags = await getDocs(patientCollectionQuery(FS, clinician, id, "flags"));
     latestFlagAt[id] = newestOpenFlagAt(/** @type {any[]} */ (flags.docs.map((d) => d.data())));
   }
   /** @type {string[][]} */
@@ -144,6 +165,7 @@ test("the dashboard list orders them red, amber, green and re-sorts live when a 
     const raisedAtMillis = Date.now();
     await db.doc("patients/demo-steady/flags/inactive-live").set({
       level: "red", kind: "inactive", reason: "No steps and no screen use for a day.", raisedAtMillis, clearedAtMillis: null,
+      sharedWithClinician: true,
     });
     latestFlagAt["demo-steady"] = raisedAtMillis;
     await db.doc("patients/demo-steady").update({ flagLevel: "red", flagReasons: ["No steps and no screen use for a day."] });

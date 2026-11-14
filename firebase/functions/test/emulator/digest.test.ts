@@ -45,11 +45,11 @@ const today = dateInZone(nowMillis);
 type DemoPatient = ReturnType<typeof generateDemoPatients>[number];
 const demo = Object.fromEntries(generateDemoPatients({ today, nowMillis }).map((p: DemoPatient) => [p.profile, p])) as Record<string, DemoPatient>;
 
-/** The seeded Summaries whose Helsinki date falls between two dates, oldest first. */
+/** The seeded Summaries saved while sharing whose Helsinki date falls between two dates, oldest first. */
 function seededSummaries(profile: string, from: string, to: string): Summary[] {
   return demo[profile]!.summaries
     .map((entry) => entry.data as Summary)
-    .filter((s) => dateInZone(s.createdAtMillis) >= from && dateInZone(s.createdAtMillis) <= to)
+    .filter((s) => s.sharedWithClinician && dateInZone(s.createdAtMillis) >= from && dateInZone(s.createdAtMillis) <= to)
     .sort((a, b) => a.createdAtMillis - b.createdAtMillis);
 }
 
@@ -130,6 +130,7 @@ describe("Digest handlers with the Admin SDK on the Firestore emulator", () => {
       summaryCount: declining.length,
       text: MODEL_TEXT,
       generatedAtMillis: nowMillis,
+      sharedWithClinician: true,
     });
     // The declining Patient's week reached the model, every Summary of it.
     const sent = model.requests.map((r) => r.input).find((input) => declining.every((s) => s.themes.every((t) => input.includes(t)) && input.includes(dateInZone(s.createdAtMillis))));

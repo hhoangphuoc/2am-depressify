@@ -15,7 +15,7 @@ import { newRedFlags } from "../../../hosting/js/lib/banner.js";
 import { clearFlags, levelAfterClearing, reviewOf } from "../../../hosting/js/lib/clear.js";
 import { listViewModel } from "../../../hosting/js/lib/list-filter.js";
 import { patientListRows } from "../../../hosting/js/lib/list-row.js";
-import { clinicianListFilters } from "../../../hosting/js/lib/sharing.js";
+import { clinicianListFilters, patientCollectionQuery } from "../../../hosting/js/lib/sharing.js";
 
 const PROJECT_ID = process.env.GCLOUD_PROJECT || "demo-twoam";
 const EMULATOR = process.env.FIRESTORE_EMULATOR_HOST;
@@ -23,7 +23,7 @@ const CLINICIAN = "clinician@example.com";
 const DECLINING = "demo-declining";
 const seedDir = fileURLToPath(new URL("../../", import.meta.url));
 /** The Firestore functions the dashboard passes to clearFlags, here from the npm SDK. */
-const FIRESTORE = { collection, doc, getDocs, runTransaction };
+const FIRESTORE = { collection, query, where, doc, getDocs, runTransaction };
 
 if (!EMULATOR) throw new Error("FIRESTORE_EMULATOR_HOST is not set; run this inside firebase emulators:exec");
 const [host, port] = EMULATOR.split(":");
@@ -37,13 +37,14 @@ let rules;
 const firestoreAs = (email) => /** @type {any} */ (rules.authenticatedContext(`uid-${email}`, { email }).firestore());
 
 /**
- * One Patient's flags as the dashboard holds them.
+ * One Patient's flags as the dashboard holds them: through the dashboard's own query, with the
+ * sharing filter.
  * @param {any} db
  * @param {string} patientId
  * @returns {Promise<any[]>}
  */
 async function flagsOf(db, patientId) {
-  const snapshot = await getDocs(collection(db, "patients", patientId, "flags"));
+  const snapshot = await getDocs(patientCollectionQuery(FIRESTORE, db, patientId, "flags"));
   return snapshot.docs.map((d) => ({ ...d.data(), id: d.id }));
 }
 
@@ -73,7 +74,7 @@ test("the banner shows the declining Demo Patient's red flag, and search and the
   /** @type {Record<string, any[]>} */
   const flagsByPatient = {};
   for (const { id } of docs) flagsByPatient[id] = await flagsOf(db, id);
-  const rows = patientListRows(docs, {}, { nowMillis: Date.now() });
+  const rows = patientListRows(docs, {}, { nowMillis: Date.now() }, flagsByPatient);
 
   const unfiltered = listViewModel({ rows, flagsByPatient });
   assert.ok(unfiltered.banner, "no banner for the seeded red flag");
@@ -93,7 +94,8 @@ test("a red flag raised while the dashboard listens is new; the first snapshot i
   const detected = [];
   /** @type {() => void} */
   let onNew = () => {};
-  const stop = onSnapshot(collection(db, "patients", "demo-steady", "flags"), (snapshot) => {
+  const flagsQuery = /** @type {import("firebase/firestore").Query} */ (patientCollectionQuery(FIRESTORE, db, "demo-steady", "flags"));
+  const stop = onSnapshot(flagsQuery, (snapshot) => {
     const current = snapshot.docs.map((d) => ({ ...d.data(), id: d.id }));
     const fresh = newRedFlags(previous, current, { loadedAtMillis });
     previous = current;
@@ -113,6 +115,7 @@ test("a red flag raised while the dashboard listens is new; the first snapshot i
     const batch = admin.batch();
     batch.set(admin.doc("patients/demo-steady/flags/inactive-live"), {
       level: "red", kind: "inactive", reason: "No steps and no screen use for a day.", raisedAtMillis: Date.now(), clearedAtMillis: null,
+      sharedWithClinician: true,
     });
     batch.update(admin.doc("patients/demo-steady"), { flagLevel: "red", flagReasons: ["No steps and no screen use for a day."] });
     await batch.commit();
@@ -163,6 +166,7 @@ test("a reason raised after the review asks for a new review and writes nothing"
   const batch = admin.batch();
   batch.set(admin.doc(`patients/${DECLINING}/flags/crisis-live`), {
     level: "red", kind: "crisis", reason: "Spoke about not wanting to go on during the Check-in.", raisedAtMillis: Date.now(), clearedAtMillis: null,
+    sharedWithClinician: true,
   });
   batch.update(admin.doc(`patients/${DECLINING}`), { flagLevel: "red", flagReasons: ["Spoke about not wanting to go on during the Check-in.", ...patient.flagReasons] });
   await batch.commit();
@@ -192,4 +196,23 @@ test("another Clinician cannot clear the flag", async () => {
   await assertFails(
     clearFlags(FIRESTORE, firestoreAs("other-clinician@example.com"), { patientId: DECLINING, flagIds: [open.id], reviewed, nowMillis: Date.now() }),
   );
+});
+
+test("a flag raised while the Patient was not sharing is never shown and never counts", async () => {
+  const db = firestoreAs(CLINICIAN);
+  // A flag stamped false, as the phone writes it while sharing is off; the record is left alone.
+  await admin.doc(`patients/${DECLINING}/flags/drift-hidden`).set({
+    level: "red", kind: "inactive", reason: "Raised while the Patient was not sharing.", raisedAtMillis: Date.now(), clearedAtMillis: null,
+    sharedWithClinician: false,
+  });
+  const flags = await flagsOf(db, DECLINING);
+  assert.ok(flags.every((f) => f.id !== "drift-hidden"), "the dashboard's query returned an unshared flag");
+  const patient = await patientOf(db, DECLINING);
+  const rows = patientListRows([{ id: DECLINING, data: patient }], {}, { nowMillis: Date.now() }, { [DECLINING]: flags });
+  assert.ok(rows[0].reasons.every((r) => !r.includes("not sharing")));
+  // Clearing what is visible works, and the hidden flag stays as it was.
+  const open = flags.find((f) => f.clearedAtMillis === null);
+  assert.ok(open);
+  await clearFlags(FIRESTORE, db, { patientId: DECLINING, flagIds: [open.id], reviewed: reviewOf(patient, flags), nowMillis: Date.now() });
+  assert.equal((await admin.doc(`patients/${DECLINING}/flags/drift-hidden`).get()).data()?.clearedAtMillis, null);
 });
