@@ -2,7 +2,7 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { API_REVISION, buildArtworkRequest, buildMusicRequest, fetchMusicClient, generateMusicCoverHandler, generateMusicHandler, INTERACTIONS_URL, parseMusic, type MusicClient } from "../src/music";
+import { API_REVISION, buildArtworkRequest, buildMusicRequest, FALLBACK_MOOD, fetchMusicClient, generateMusicCoverHandler, generateMusicHandler, INTERACTIONS_URL, parseMusic, type MusicClient } from "../src/music";
 import { FakeCheckInStore, PATIENT_ID, verifiedToken } from "./fakes";
 
 const recorded = JSON.parse(readFileSync(join(__dirname, "..", "..", "..", "fixtures", "spike", "music", "lyria-3.5.json"), "utf8"));
@@ -10,18 +10,21 @@ const DATA = { patientId: PATIENT_ID, mood: " tired and a bit tense after a long
 const imageBlock = { type: "image", mime_type: "image/jpeg", data: "/9j/2Q==" };
 const imageResponse = (block: unknown = imageBlock) => ({ status: "completed", steps: [{ type: "model_output", content: [block] }] });
 
-/** Returns `body`, or throws it when it is an Error, and records what was sent. */
-function music(body: unknown = recorded.response.body) {
+/** Returns each `body` in turn (the last one repeats), throwing those that are Errors, and records what was sent. */
+function music(...bodies: unknown[]) {
+  if (bodies.length === 0) bodies = [recorded.response.body];
   const sent: unknown[] = [];
   const client: MusicClient = {
     async createInteraction(request) {
       sent.push(request);
+      const body = bodies[Math.min(sent.length, bodies.length) - 1];
       if (body instanceof Error) throw body;
       return body;
     },
   };
   return { client, sent };
 }
+const refused = () => Object.assign(new Error("refused"), { status: 400, code: "prohibited_content" });
 const call = (data: unknown, uid: string | null = PATIENT_ID, fake = music()) =>
   generateMusicHandler({ data, auth: uid ? { uid, token: verifiedToken(`${uid}@example.com`) } : undefined }, { store: new FakeCheckInStore(), music: fake.client });
 const coverCall = (data: unknown, uid: string | null = PATIENT_ID, fake = music(imageResponse())) =>
@@ -125,5 +128,29 @@ describe("generateMusic", () => {
     const message = "Could not make the music. Try again.";
     await expect(call(DATA, PATIENT_ID, music(Object.assign(new Error("failed for tired"), { status: 429 })))).rejects.toMatchObject({ code: "unavailable", message });
     await expect(call(DATA, PATIENT_ID, music({ steps: [] }))).rejects.toMatchObject({ code: "unavailable", message });
+  });
+
+  it("retries a refused mood once with the fixed fallback mood", async () => {
+    const fake = music(refused(), recorded.response.body);
+    expect(await call(DATA, PATIENT_ID, fake)).toEqual(parseMusic(recorded.response.body));
+    expect(fake.sent).toEqual([buildMusicRequest(DATA.mood.trim()), buildMusicRequest(FALLBACK_MOOD)]);
+  });
+
+  it("gives up after the fallback, and never retries an outage or quota error", async () => {
+    const twice = music(refused());
+    await expect(call(DATA, PATIENT_ID, twice)).rejects.toMatchObject({ code: "unavailable" });
+    expect(twice.sent).toHaveLength(2);
+    const quota = music(Object.assign(new Error("quota"), { status: 429 }));
+    await expect(call(DATA, PATIENT_ID, quota)).rejects.toMatchObject({ code: "unavailable" });
+    expect(quota.sent).toHaveLength(1);
+  });
+
+  it("keeps only the provider's error code from a failed reply, never its message", async () => {
+    const reply = (body: string) => fetchMusicClient("test-only-key", async () => new Response(body, { status: 400 }));
+    const error = { message: "Input blocked: the prompt quoted here", code: "prohibited_content" };
+    await expect(reply(JSON.stringify({ error })).createInteraction({})).rejects.toEqual(
+      Object.assign(new Error("Music generation failed"), { status: 400, code: "prohibited_content" }));
+    await expect(reply(JSON.stringify({ error: { code: "has the prompt in it" } })).createInteraction({})).rejects.toMatchObject({ status: 400, code: null });
+    await expect(reply("not json").createInteraction({})).rejects.toMatchObject({ status: 400, code: null });
   });
 });

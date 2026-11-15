@@ -22,6 +22,8 @@ export const INTERACTIONS_URL = "https://generativelanguage.googleapis.com/v1bet
 /** The API revision the music docs use. */
 export const API_REVISION = "2026-05-20";
 export const MOOD_MAX_CHARS = 200;
+/** Used for one retry when Lyria refuses the Companion's mood line (HTTP 400), for example over an artist's name. */
+export const FALLBACK_MOOD = "tired and low, wanting something gentle";
 /** Generation took about 25 s in the recorded call. */
 const MUSIC_TIMEOUT_MS = 90_000;
 const ARTWORK_MAX_BASE64_CHARS = 4 * 1024 * 1024;
@@ -125,11 +127,20 @@ export function fetchMusicClient(apiKey: string, fetchImpl: typeof fetch = fetch
         body: JSON.stringify(body),
         signal: AbortSignal.timeout(MUSIC_TIMEOUT_MS),
       });
-      // Never read the error body: it may quote the request.
-      if (!response.ok) throw Object.assign(new Error("Music generation failed"), { status: response.status });
+      // Keep only the short error code ("prohibited_content"): the rest of the body may quote the request.
+      if (!response.ok) throw Object.assign(new Error("Music generation failed"), { status: response.status, code: await errorCodeOf(response) });
       return response.json();
     },
   };
+}
+
+async function errorCodeOf(response: Response): Promise<string | null> {
+  try {
+    const code = ((await response.json()) as { error?: { code?: unknown } } | null)?.error?.code;
+    return typeof code === "string" && /^[a-z_]{1,40}$/.test(code) ? code : null;
+  } catch {
+    return null;
+  }
 }
 
 export interface MusicDeps {
@@ -152,23 +163,27 @@ async function checkedMood(name: string, call: IntakeCall, deps: MusicDeps): Pro
   return request;
 }
 
-/** Makes one clip; writes nothing. */
+/** Makes one clip; writes nothing. A refused mood is retried once with FALLBACK_MOOD, so the Patient still gets music. */
 export async function generateMusicHandler(call: IntakeCall, deps: MusicDeps): Promise<MusicClip> {
   const { patientId, mood } = await checkedMood("generateMusic", call, deps);
-  let clip: MusicClip | null;
-  try {
-    clip = parseMusic(await deps.music.createInteraction(buildMusicRequest(mood)));
-  } catch (error) {
-    // Never log the error or the mood.
-    logger.warn("generateMusic: the model call failed", { patientId, status: statusOf(error) });
-    throw new HttpsError("unavailable", "Could not make the music. Try again.");
-  }
-  if (!clip) {
+  for (const attempt of [mood, FALLBACK_MOOD]) {
+    const fallback = attempt !== mood;
+    let clip: MusicClip | null;
+    try {
+      clip = parseMusic(await deps.music.createInteraction(buildMusicRequest(attempt)));
+    } catch (error) {
+      // Never log the mood or the error message.
+      const status = statusOf(error);
+      logger.warn("generateMusic: the model call failed", { patientId, status, code: (error as { code?: unknown }).code ?? null, fallback });
+      // Only a refused prompt is worth a second try; an outage or quota error would fail again.
+      if (status === 400) continue;
+      break;
+    }
+    if (clip) return clip;
     // A prompt the safety filters block comes back without audio.
-    logger.warn("generateMusic: no audio came back", { patientId });
-    throw new HttpsError("unavailable", "Could not make the music. Try again.");
+    logger.warn("generateMusic: no audio came back", { patientId, fallback });
   }
-  return clip;
+  throw new HttpsError("unavailable", "Could not make the music. Try again.");
 }
 
 /** Makes the cover for the same mood; writes nothing. The cover is optional, so failures answer without one. */

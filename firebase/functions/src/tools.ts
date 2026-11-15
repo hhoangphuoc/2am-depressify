@@ -69,7 +69,7 @@ export const LIVE_TOOL_DECLARATIONS: readonly FunctionDeclaration[] = (
     {
       name: "suggest_music",
       description: "Start making about a minute of calm instrumental music for the person, matched to how they feel. It is ready on their screen in about half a minute, with a play button. Call when you suggest music, then tell them it is on its way. Never say it has finished or describe how it sounds.",
-      parameters: { type: "OBJECT", properties: { mood: { type: "STRING", description: "How they feel, in their own plain terms, for example 'tired and tense after a long week'. No names." } }, required: ["mood"] },
+      parameters: { type: "OBJECT", properties: { mood: { type: "STRING", description: "How they feel, in their own plain terms, for example 'tired and tense after a long week'. No names of people, artists, bands or songs: the music model refuses them." } }, required: ["mood"] },
     },
     {
       name: "find_places",
