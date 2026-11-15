@@ -1,8 +1,103 @@
 # Depressify
 
-A wellbeing companion for the time between Visits: a Kotlin Multiplatform Patient app (Android and iOS), a Firebase backend, and a plain web Clinician dashboard. The design is in [docs/context/system-design.md](docs/context/system-design.md), terms are in [GLOSSARY.md](GLOSSARY.md), and the Firestore data contract is in [docs/firestore-schema.md](docs/firestore-schema.md).
+Depressify is a wellbeing companion for the time between visits after TMS (transcranial magnetic stimulation). The patient has a short spoken Check-in with an AI Companion, the phone compares sleep and activity with the patient's own Baseline, and the clinician sees who needs attention and why.
+
+It has three parts: a Kotlin Multiplatform Patient app (Android and iOS), a web dashboard for clinicians, and a Firebase backend in the EU that uses Gemini and Google Maps Platform.
+
+<table>
+  <tr>
+    <td align="center"><a href="docs/demo/media/demo.mp4"><img src="docs/demo/media/demo.gif" width="200" alt="Demo: a spoken Check-in with the Companion, from Today to the Summary"></a></td>
+    <td align="center"><img src="docs/demo/media/today.png" width="200" alt="Today: the Check-in button, the Voice Orb and Suggestions for the day"></td>
+    <td align="center"><img src="docs/demo/media/check-in.png" width="200" alt="Spoken Check-in: the Companion asks how the last Suggestion went"></td>
+    <td align="center"><img src="docs/demo/media/summary.png" width="200" alt="Summary: ratings and the next small step"></td>
+  </tr>
+  <tr>
+    <td align="center"><a href="docs/demo/media/demo.mp4"><b>Demo video</b></a><br><sub>Preview at 1.5x speed. Open it for the full video with sound.</sub></td>
+    <td align="center"><b>Today</b><br><sub>Check in by voice or by typing.</sub></td>
+    <td align="center"><b>Check-in</b><br><sub>About 3 minutes with the Companion.</sub></td>
+    <td align="center"><b>Summary</b><br><sub>The same one the clinician sees.</sub></td>
+  </tr>
+</table>
+
+## Try the demo
+
+| | Link | How |
+|---|---|---|
+| Patient app | [Open in Appetize](https://appetize.io/app/b_ptt5iysslx2dflhupsyl3vs6uy) | Select **Pixel 11 Pro** and **Android 17**, then start the session. |
+| Clinician dashboard | [junction26hel-7400.web.app](https://junction26hel-7400.web.app/) | Sign in with a Clinician account. |
+
+In the Patient app:
+
+1. On **Today**, tap **Check in** to talk with the Companion, or **Type** on days when talking is too much.
+2. The Companion asks how the last Suggestion went, then offers one small step. Answer **That works** or ask for something **Smaller**.
+3. Tap **Finish**, rate your mood, energy and sleep, and read your Summary.
+4. **History** shows recent Check-ins and the last 7 days. **Settings** has the Signals you share, quiet hours, and sharing with the clinician.
+
+## How it works
+
+Depressify closes one loop: sense, respond, learn.
+
+**1. Sense.** With consent, given signal by signal, the app reads:
+
+- sleep, steps, heart rate and HRV from a Galaxy Watch through Health Connect;
+- time at home and late-night screen time;
+- the patient's calendar and the local weather.
+
+Each signal is compared with the patient's own 14-day Baseline, never with other people. A night without the watch is a gap, not zero sleep. Only daily totals leave the phone.
+
+**2. Respond.** The patient taps the Voice Orb for a 3-minute spoken Check-in with an AI Companion on Gemini Live, or types instead. The Companion already knows the patient's day:
+
+> "You slept two hours less than usual. It's dry until four and there's a park nine minutes away. Would a short walk feel doable?"
+
+It is calm, asks one question at a time and ends with one small Suggestion. During the Check-in it can:
+
+- find nearby places with walking times, shown as pins on a Google map;
+- check the weather;
+- compose a minute of calming music with Lyria 3.5;
+- note a flat tone or sighs as observations, never as a diagnosis.
+
+Gentle Nudges come at most once a day, never during quiet hours.
+
+**3. Learn.** At the next Check-in the Companion asks: did it help? The patient's answer and the day's change in steps against their Baseline give one Outcome score, with the patient's own report counting most. The kinds of Suggestion that help this person rise to the top, and one Suggestion in five still tries something new.
+
+## For clinicians
+
+The dashboard sorts patients by an Attention flag, always with written reasons and never a score. After each Check-in, Gemini's Decisions API answers three calibrated yes/no questions: is there a crisis, is there marked decline, and did the patient try the last Suggestion.
+
+| Level | Raised by | Result |
+|---|---|---|
+| Amber | Decline or hopelessness, low moods in a row, sleep well below Baseline | Patient moves up the list |
+| Red | Crisis, a sharp break, or a phone silent for 24 hours | Banner on the dashboard and an email to the clinician |
+
+Each patient page shows a timeline since TMS with mood and PHQ scores, Summaries of the Check-ins, signal trends against the patient's Baseline, what seems to help, and a weekly Digest. Gemini also turns a pasted clinical report into short highlights for the Companion; the report itself is never stored.
+
+**Crisis.** If the Companion hears signs of self-harm risk, the patient immediately sees one-tap buttons to call for help, and the clinician is alerted. The app never dials by itself and never counsels.
+
+## Privacy by design
+
+- Audio and transcripts are never stored. The transcript becomes a Summary in memory and is then dropped, and every Gemini call runs with storage off.
+- Clinicians see Summaries, not conversations, and the patient reads the same Summary.
+- Patients choose what to share and can stop at any time; a paused period stays private. Patients never see the flag.
+- The phone connects with a single-use token locked to the model, the instructions and the tools, so API keys never reach the device.
+- Data is hosted in the EU. The Companion never diagnoses or gives treatment advice.
+
+## Tech
+
+| Area | Stack |
+|---|---|
+| Patient app | Kotlin and Compose Multiplatform, with a shared pure-Kotlin core |
+| Voice | Gemini Live over a Ktor WebSocket, with 9 tools |
+| Summaries and flags | Gemini Interactions API (structured output), Gemini Decisions API |
+| Music | Lyria 3.5 and Nano Banana |
+| Context | Maps agent tools, Places API, embedded Google Maps |
+| Backend | Firebase: Firestore, Auth, Functions, Hosting, Trigger Email |
+| Dashboard | Plain JavaScript with live Firestore updates |
+
+The rest of this README is the technical guide: the repository layout, setup, builds, tests and deployment.
 
 ## Layout
+
+The design is in [docs/context/system-design.md](docs/context/system-design.md), terms are in [GLOSSARY.md](GLOSSARY.md), and the Firestore data contract is in [docs/firestore-schema.md](docs/firestore-schema.md).
 
 | Path | What it is |
 |---|---|
